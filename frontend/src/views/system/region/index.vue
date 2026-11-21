@@ -57,6 +57,10 @@
           <span class="stat-card__value">{{ stats?.districtCount ?? '—' }}</span>
         </div>
         <div class="stat-card">
+          <span class="stat-card__label">乡级</span>
+          <span class="stat-card__value">{{ stats?.townshipCount ?? '—' }}</span>
+        </div>
+        <div class="stat-card">
           <span class="stat-card__label">数据版本</span>
           <span class="stat-card__value stat-card__value--text">{{ stats?.version || '—' }}</span>
         </div>

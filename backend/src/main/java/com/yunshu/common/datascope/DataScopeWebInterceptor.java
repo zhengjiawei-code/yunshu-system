@@ -1,6 +1,7 @@
 package com.yunshu.common.datascope;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.yunshu.modules.auth.service.AuthService;
 import com.yunshu.modules.auth.service.CurrentUserResolver;
 import com.yunshu.modules.auth.service.PermissionService;
 import com.yunshu.modules.system.dept.entity.SysDept;
@@ -27,6 +28,7 @@ import java.util.Set;
 /**
  * 每个请求解析登录态 -> 数据权限上下文；未登录请求不设置上下文，业务表查询由拦截器 fail-closed。
  * 超管（id=1 或 admin 角色）为全部数据；客户账号不适用数据范围，按仅本人（最严格）处理。
+ * 数据范围锚点 = 当前机构（会话）→ 无则回落主机构；档位语义不变。
  */
 @Slf4j
 @Component
@@ -34,6 +36,7 @@ import java.util.Set;
 public class DataScopeWebInterceptor implements HandlerInterceptor {
 
     private final CurrentUserResolver currentUserResolver;
+    private final AuthService authService;
     private final SysUserMapper userMapper;
     private final SysDeptMapper deptMapper;
     private final PermissionService permissionService;
@@ -57,9 +60,10 @@ public class DataScopeWebInterceptor implements HandlerInterceptor {
             return true;
         }
         if (permissionService.isSuperAdmin(user)) {
-            // 超管不受数据范围限制，但保留主机构用于新增数据时的归属填充
+            // 超管不受数据范围限制，但保留当前机构用于新增数据时的归属填充
+            Long anchor = authService.anchorDeptId(user, currentUserResolver.bearer(request));
             DataScopeContext.set(DataScopeContext.of(user.getId(), user.getUsername(),
-                    user.getDeptId(), DataScopeContext.SCOPE_ALL, Set.of()));
+                    anchor, DataScopeContext.SCOPE_ALL, Set.of()));
             return true;
         }
 
@@ -76,10 +80,12 @@ public class DataScopeWebInterceptor implements HandlerInterceptor {
             }
         }
 
+        // 锚点：当前机构（会话）→ 无则回落主机构
+        Long anchor = authService.anchorDeptId(user, currentUserResolver.bearer(request));
         Set<Long> subtree = scope == DataScopeContext.SCOPE_SUBTREE
-                ? subtreeOf(user.getDeptId())
+                ? subtreeOf(anchor)
                 : Set.of();
-        DataScopeContext.set(DataScopeContext.of(user.getId(), user.getUsername(), user.getDeptId(), scope, subtree));
+        DataScopeContext.set(DataScopeContext.of(user.getId(), user.getUsername(), anchor, scope, subtree));
         return true;
     }
 

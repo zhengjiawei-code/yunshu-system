@@ -19,6 +19,9 @@ tmp/
 *.orig
 *.rej
 
+# 数据库备份（含业务数据，仅留本地）
+backups/
+
 # 历史过程记录：正文含旧项目明文口令，不入库（家伟 2026-11-21 裁决）
 2026-11-13/initial-spec/work/mem_early.txt
 2026-11-13/initial-spec/work/mem_mid.txt

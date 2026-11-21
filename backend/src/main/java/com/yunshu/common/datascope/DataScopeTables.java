@@ -25,6 +25,10 @@ public final class DataScopeTables {
             "sys_region",
             "sys_region_sync_log",
             "sys_dept_apply_company",
+            "sys_carrier",
+            "sys_route",
+            "sys_route_transfer",
+            "sys_route_company",
             "flyway_schema_history"
     );
 

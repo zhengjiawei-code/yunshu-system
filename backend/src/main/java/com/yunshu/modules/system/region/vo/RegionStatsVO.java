@@ -20,6 +20,9 @@ public class RegionStatsVO {
 
     private Integer districtCount;
 
+    @Schema(description = "乡级数量（路由目的地可用，机构地址仍只支持省/市/区县三级）")
+    private Integer townshipCount;
+
     private String version;
 
     private String source;

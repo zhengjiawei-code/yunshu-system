@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getAuthInfo, login } from '@/api/auth'
+import { getAuthInfo, login, switchCurrentOrg } from '@/api/auth'
 import type { MenuNode, UserInfo } from '@/types/menu'
 
 const TOKEN_KEY = 'yunshu_token'
@@ -26,7 +26,12 @@ export const useUserStore = defineStore('user', {
     displayName: (state) => state.user?.realName || state.user?.username || '',
     avatarText(): string {
       return this.displayName.slice(0, 1).toUpperCase() || '?'
-    }
+    },
+    /** 当前机构（数据范围锚点），默认主机构 */
+    currentOrgId: (state) => state.user?.currentOrgId ?? null,
+    currentOrgName: (state) => state.user?.currentOrgName || state.user?.deptName || '',
+    /** 可切换机构：主机构 ∪ sys_user_org，由服务端下发 */
+    loginableOrgs: (state) => state.user?.authOrgs || []
   },
   actions: {
     async login(username: string, password: string) {
@@ -45,6 +50,11 @@ export const useUserStore = defineStore('user', {
     },
     hasPerm(perm: string) {
       return this.roles.includes('admin') || this.perms.includes(perm)
+    },
+    /** 切换当前机构：服务端校验越界，成功后重拉用户信息（当前机构名） */
+    async switchOrg(orgId: number) {
+      await switchCurrentOrg(orgId)
+      await this.fetchAuthInfo()
     },
     logout() {
       this.token = ''

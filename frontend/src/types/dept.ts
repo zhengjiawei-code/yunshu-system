@@ -88,6 +88,29 @@ export interface DeptPage {
   total: number
 }
 
+/** 管理范围树节点：GET /depts/manage-scope */
+export interface ManageScopeNode {
+  id: number
+  parentId: number
+  deptName: string
+  deptCode: string
+  deptType: DeptType
+  isLeaf: boolean
+  status: boolean
+  sortOrder: number
+  children?: ManageScopeNode[]
+}
+
+/** 管理范围：总部全部；分公司=本公司子树∪适用末端网点 */
+export interface ManageScope {
+  scopeType: 'HQ' | 'COMPANY' | 'NONE'
+  companyId?: number
+  companyName?: string
+  tree: ManageScopeNode[]
+  sharedLeaves: ManageScopeNode[]
+  total: number
+}
+
 /** 保存载荷：基础信息与授权分开保存，未携带的授权开关由后端保留原值 */
 export interface DeptSavePayload {
   parentId: number

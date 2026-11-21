@@ -27,4 +27,8 @@ public interface SysDeptMapper extends BaseMapper<SysDept> {
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach>"
             + "</script>")
     List<Map<String, Object>> selectUserNames(@Param("ids") Collection<Long> ids);
+
+    /** 按真实姓名模糊匹配用户ID，供“修改人”列表筛选使用 */
+    @Select("SELECT id FROM sys_user WHERE deleted = 0 AND real_name LIKE CONCAT('%', #{name}, '%')")
+    List<Long> selectUserIdsByName(@Param("name") String name);
 }

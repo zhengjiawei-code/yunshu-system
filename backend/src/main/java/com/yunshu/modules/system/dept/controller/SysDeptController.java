@@ -4,8 +4,10 @@ import com.yunshu.common.result.ApiResult;
 import com.yunshu.modules.system.dept.dto.DeptQuery;
 import com.yunshu.modules.system.dept.dto.DeptSaveRequest;
 import com.yunshu.modules.system.dept.service.SysDeptService;
+import com.yunshu.modules.system.dept.service.UserOrgService;
 import com.yunshu.modules.system.dept.vo.DeptPageVO;
 import com.yunshu.modules.system.dept.vo.DeptVO;
+import com.yunshu.modules.system.dept.vo.ManageScopeVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +35,7 @@ import java.util.List;
 public class SysDeptController {
 
     private final SysDeptService deptService;
+    private final UserOrgService userOrgService;
 
     @Operation(summary = "查询机构树（全量，含禁用）")
     @GetMapping("/tree")
@@ -78,6 +81,16 @@ public class SysDeptController {
             @Parameter(description = "机构类型过滤：1总部 2公司 3部门 4分拨中心 5网点")
             @RequestParam(required = false) Integer type) {
         return ApiResult.ok(deptService.options(type));
+    }
+
+    @Operation(summary = "登录人管理范围（总部全部；分公司=本公司子树∪适用末端网点；忽略客户端 companyId）")
+    @GetMapping("/manage-scope")
+    public ApiResult<ManageScopeVO> manageScope(
+            @Parameter(description = "机构类型过滤，如 4,5；为空返回全部类型")
+            @RequestParam(required = false) List<Integer> types,
+            @Parameter(description = "机构名称关键词")
+            @RequestParam(required = false) String keyword) {
+        return ApiResult.ok(userOrgService.manageScope(types, keyword));
     }
 
     @Operation(summary = "同级排序（二期拖拽预留）")

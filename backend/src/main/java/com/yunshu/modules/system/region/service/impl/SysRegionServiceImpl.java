@@ -130,6 +130,7 @@ public class SysRegionServiceImpl implements SysRegionService {
         vo.setProvinceCount((int) all.stream().filter(item -> Objects.equals(item.getLevel(), 1)).count());
         vo.setCityCount((int) all.stream().filter(item -> Objects.equals(item.getLevel(), 2)).count());
         vo.setDistrictCount((int) all.stream().filter(item -> Objects.equals(item.getLevel(), 3)).count());
+        vo.setTownshipCount((int) all.stream().filter(item -> Objects.equals(item.getLevel(), 4)).count());
         vo.setOnlineSyncEnabled(onlineSyncEnabled);
         all.stream()
                 .filter(item -> item.getSyncTime() != null)

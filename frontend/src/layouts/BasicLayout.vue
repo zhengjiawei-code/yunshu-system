@@ -59,6 +59,8 @@
             @click="handleRefresh"
           />
           <span class="header__divider" />
+          <org-switcher @switched="handleOrgSwitched" />
+          <span class="header__divider" />
           <el-dropdown trigger="click" @command="handleCommand">
             <button type="button" class="user-chip">
               <span class="user-chip__avatar">{{ userStore.avatarText }}</span>
@@ -67,7 +69,10 @@
             </button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">
+                <el-dropdown-item command="profile">
+                  <el-icon><User /></el-icon>个人中心
+                </el-dropdown-item>
+                <el-dropdown-item divided command="logout">
                   <el-icon><SwitchButton /></el-icon>退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>
@@ -86,6 +91,8 @@
         </router-view>
       </el-main>
     </el-container>
+
+    <profile-dialog v-model="profileVisible" />
   </el-container>
 </template>
 
@@ -93,12 +100,15 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Expand, Fold, HomeFilled, Refresh, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown, Expand, Fold, HomeFilled, Refresh, SwitchButton, User } from '@element-plus/icons-vue'
+import { logoutApi } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
 import { useTagsStore } from '@/stores/tags'
 import SidebarItem from './components/SidebarItem.vue'
 import TagsView from './components/TagsView.vue'
 import Breadcrumb from './components/Breadcrumb.vue'
+import OrgSwitcher from './components/OrgSwitcher.vue'
+import ProfileDialog from './components/ProfileDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -107,6 +117,7 @@ const tagsStore = useTagsStore()
 
 const isCollapse = ref(false)
 const refreshKey = ref(0)
+const profileVisible = ref(false)
 
 const activeMenu = computed(() => route.path)
 
@@ -114,7 +125,16 @@ function handleRefresh() {
   refreshKey.value += 1
 }
 
+/** 切换机构后：重建当前页（含 keep-alive 缓存），标签页保留；不重算菜单权限 */
+function handleOrgSwitched() {
+  refreshKey.value += 1
+}
+
 async function handleCommand(command: string) {
+  if (command === 'profile') {
+    profileVisible.value = true
+    return
+  }
   if (command !== 'logout') return
   try {
     await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
@@ -124,6 +144,11 @@ async function handleCommand(command: string) {
     })
   } catch {
     return
+  }
+  try {
+    await logoutApi()
+  } catch {
+    // 会话已失效时忽略，本地继续清理
   }
   userStore.logout()
   tagsStore.reset()

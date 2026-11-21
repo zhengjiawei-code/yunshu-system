@@ -20,6 +20,11 @@ spring:
           username: ${YUNSHU_DB_USER:root}
           password: ${YUNSHU_DB_PASSWORD:}
           driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      # 全国四级区划 JSON 约 3-4MB，导入/预检需放行；避免调大后无上限
+      max-file-size: 20MB
+      max-request-size: 20MB
   flyway:
     enabled: true
     # 独立数据源，避免动态数据源路由影响迁移执行

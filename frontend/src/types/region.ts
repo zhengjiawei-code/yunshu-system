@@ -10,6 +10,7 @@ export interface RegionStats {
   provinceCount: number
   cityCount: number
   districtCount: number
+  townshipCount?: number
   version?: string
   source?: string
   lastSyncTime?: string

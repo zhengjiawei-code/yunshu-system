@@ -40,8 +40,13 @@ export interface UserInfo {
   deptName?: string | null
   /** 1=内部员工 2=客户 */
   userType?: 1 | 2
+  phone?: string | null
+  email?: string | null
   /** 主机构 + 额外可登录机构；客户为空 */
   authOrgs?: AuthOrg[]
+  /** 当前机构（数据范围锚点），默认主机构 */
+  currentOrgId?: number | null
+  currentOrgName?: string | null
 }
 
 export interface AuthInfo {

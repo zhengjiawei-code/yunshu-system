@@ -30,6 +30,10 @@ sys_dept
 sys_region
 sys_region_sync_log
 sys_dept_apply_company
+sys_carrier
+sys_route
+sys_route_transfer
+sys_route_company
 flyway_schema_history
 ```
 
@@ -49,18 +53,28 @@ flyway_schema_history
 | `sys_region` | 区划基础数据 | 平台共享，所有登录人可读；导入/同步仅总部 |
 | `sys_region_sync_log` | 区划任务日志 | 平台共享，日志列表按需展示；`triggered_by` 由服务层显式写入 |
 | `sys_dept_apply_company` | 末端网点适用分公司 | 跨公司关系数据；机构选择器与管理范围按登录人所属公司显式计算，`create_by` 由服务层显式写入 |
+| `sys_carrier` | 承运商主数据 | **豁免表可见性由服务层负责**：`SysCarrierServiceImpl` 按管理范围（总部全部；分公司=本公司子树 ∪ 适用本公司末端网点）显式过滤 `dept_id`；详情/编辑/删除先做可见性校验，失败返回 403 文案且不泄露记录是否存在；被路由引用禁止删除 |
+| `sys_route` | 短驳/干线共享路由 | **豁免表可见性由服务层负责**：`SysRouteServiceImpl` 列表/详情/导出统一按 `owner_company_id=本公司 OR 授权(本公司) OR 授权(0)` 过滤；编辑仅 owner；删除需无其他授权；禁止裸 `selectById` |
+| `sys_route_transfer` | 外转/直达共享路由 | **豁免表可见性由服务层负责**：同 `sys_route`，开单匹配另按授权关系过滤，`apply_dept_id` 只作业务字段、`dept_id` 仅审计锚点 |
+| `sys_route_company` | 路由授权关系 | **豁免表可见性由服务层负责**：授权读取/写入仅总部（取消授权允许分公司删本公司行）；`grant_by` 由服务层显式写入；无 `dept_id`，不豁免会被追加不存在列 |
 
 后续新增同类表（路由、承运商、路由授权）在同一小节登记后方可加入豁免清单。
 
 ## 3. 四档规则
 
-锚点：当前登录用户的**主机构 `sys_user.dept_id`**。可登录机构（`sys_user_org`）只影响登录范围，不参与数据范围；本期不做切换机构。
+锚点：**当前机构 `currentOrgId`（会话）→ 无则回落用户主机构 `sys_user.dept_id`**。
+
+- 当前机构默认取用户主机构；切换后立即生效，档位语义不变。
+- 切换范围仅限「主机构 ∪ `sys_user_org`」，越界由服务端拒绝，客户端不得传任意机构 id。
+- 当前机构被收回授权/停用后，请求按主机构回落，避免旧会话越权。
+- 退出登录、切换用户、会话失效时当前机构随会话一并销毁。
+- 菜单与按钮权限不随机构变化（角色不绑机构），只有数据范围变化。
 
 | 档位 | 含义 | 追加条件 |
 |---|---|---|
 | 1 | 全部数据 | 无 |
-| 3 | 本机构 | `dept_id = 当前用户主机构` |
-| 4 | 本机构及以下（默认） | `dept_id IN (主机构 + 全部子孙机构)` |
+| 3 | 本机构 | `dept_id = 当前机构（缺省主机构）` |
+| 4 | 本机构及以下（默认） | `dept_id IN (当前机构 + 全部子孙机构)` |
 | 5 | 仅本人 | `create_by = 当前用户ID` |
 | 2 | 自定义机构（预留未实现） | 用户模块已拒绝写入；历史脏数据按 5 处理 |
 
@@ -82,7 +96,7 @@ DataScopeContext.runAsSystem(() -> businessService.rebuildStatistics());
 
 ### 5.1 新增自动填充
 
-`DataScopeMetaObjectHandler` 对非豁免表生效：`dept_id` 取上下文主机构，`create_by/update_by` 取当前用户；缺上下文或主机构为空直接抛错。
+`DataScopeMetaObjectHandler` 对非豁免表生效：`dept_id` 取上下文当前机构（缺省主机构），`create_by/update_by` 取当前用户；缺上下文或锚点为空直接抛错。
 
 **实体必须声明填充注解，否则 MyBatis-Plus 不会触发填充**：
 
@@ -154,4 +168,5 @@ dataScopeGuard.assertReadable(entity.getDeptId(), entity.getCreateBy()); // 详�
 
 - 子查询与 UNION 全部拒绝，复杂报表需拆查询或单独评审。
 - 客户域数据规则未接入，当前客户账号按仅本人处理。
-- 不做机构切换；数据范围只按主机构锚定。
+- 机构切换只改数据范围锚点（当前机构→缺省主机构），不改菜单/按钮权限；切换后前端重建页面缓存，但标签页保留。
+- 当前机构仅限「主机构 ∪ sys_user_org」；授权被收回或机构停用时按主机构回落。

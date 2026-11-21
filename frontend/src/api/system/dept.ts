@@ -1,5 +1,13 @@
 import request from '@/utils/request'
-import type { DeptNode, DeptPage, DeptQuery, DeptRow, DeptSavePayload, DeptType } from '@/types/dept'
+import type {
+  DeptNode,
+  DeptPage,
+  DeptQuery,
+  DeptRow,
+  DeptSavePayload,
+  DeptType,
+  ManageScope
+} from '@/types/dept'
 
 const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 
@@ -371,4 +379,13 @@ export async function sortDepts(ids: number[]): Promise<void> {
 export async function getDeptOptions(type?: DeptType): Promise<DeptNode[]> {
   if (useMock) return clone(mockTree)
   return request({ url: '/v1/system/depts/options', method: 'get', params: type ? { type } : undefined })
+}
+
+/** GET /api/v1/system/depts/manage-scope —— 登录人管理范围（服务端计算，客户端不传 companyId） */
+export async function getManageScope(types?: number[], keyword?: string): Promise<ManageScope> {
+  return request({
+    url: '/v1/system/depts/manage-scope',
+    method: 'get',
+    params: { types: types?.length ? types.join(',') : undefined, keyword }
+  })
 }
