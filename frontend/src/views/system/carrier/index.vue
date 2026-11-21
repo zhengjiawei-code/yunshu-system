@@ -17,7 +17,7 @@
           <el-button @click="resetFilters">重置</el-button>
           <el-button :icon="Download" @click="handleExport">导出</el-button>
 
-          <el-popover placement="bottom-end" :width="440" trigger="click">
+          <el-popover placement="bottom-end" :width="560" trigger="click">
             <template #reference>
               <el-button :icon="Setting">列设置</el-button>
             </template>
@@ -81,7 +81,10 @@
                   v-if="col('carrierCode').filterType !== 'none'"
                   v-model="filters.carrierCode"
                   :type="col('carrierCode').filterType"
+                  :filter-mode="col('carrierCode').filterMode"
+                  :text-mode="textModes.carrierCode"
                   :options="col('carrierCode').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.carrierCode = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -104,7 +107,10 @@
                   v-if="col('carrierName').filterType !== 'none'"
                   v-model="filters.carrierName"
                   :type="col('carrierName').filterType"
+                  :filter-mode="col('carrierName').filterMode"
+                  :text-mode="textModes.carrierName"
                   :options="col('carrierName').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.carrierName = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -124,7 +130,10 @@
                   v-if="col('contact').filterType !== 'none'"
                   v-model="filters.contact"
                   :type="col('contact').filterType"
+                  :filter-mode="col('contact').filterMode"
+                  :text-mode="textModes.contact"
                   :options="col('contact').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.contact = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -144,7 +153,10 @@
                   v-if="col('phone').filterType !== 'none'"
                   v-model="filters.phone"
                   :type="col('phone').filterType"
+                  :filter-mode="col('phone').filterMode"
+                  :text-mode="textModes.phone"
                   :options="col('phone').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.phone = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -164,6 +176,7 @@
                   v-if="col('deptName').filterType !== 'none'"
                   v-model="filters.deptId"
                   :type="col('deptName').filterType"
+                  :select-multiple="col('deptName').selectMultiple === true"
                   :options="deptOptions"
                   @change="onFilterChange"
                 />
@@ -186,6 +199,7 @@
                   v-if="col('status').filterType !== 'none'"
                   v-model="filters.status"
                   :type="col('status').filterType"
+                  :select-multiple="col('status').selectMultiple === true"
                   :options="col('status').filterOptions"
                   @change="onFilterChange"
                 />
@@ -217,7 +231,10 @@
                   v-if="col('updateByName').filterType !== 'none'"
                   v-model="filters.updateByName"
                   :type="col('updateByName').filterType"
+                  :filter-mode="col('updateByName').filterMode"
+                  :text-mode="textModes.updateByName"
                   :options="col('updateByName').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.updateByName = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -241,7 +258,10 @@
                   v-if="col('remark').filterType !== 'none'"
                   v-model="filters.remark"
                   :type="col('remark').filterType"
+                  :filter-mode="col('remark').filterMode"
+                  :text-mode="textModes.remark"
                   :options="col('remark').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.remark = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -286,6 +306,7 @@ import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteCarrier, getCarrierPage } from '@/api/system/carrier'
 import { getManageScope } from '@/api/system/dept'
 import { useColumnConfig } from '@/composables/useColumnConfig'
+import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import ColumnFilter from '@/components/base/ColumnFilter.vue'
@@ -337,7 +358,8 @@ const {
   load: loadColumnConfig,
   save: saveColumnConfig,
   reset: resetColumnConfig,
-  defaultFilters
+  defaultFiltersRaw,
+  filterModesParam
 } = useColumnConfig('system:carrier', schema)
 
 const tableRef = ref<InstanceType<typeof SmartTable>>()
@@ -354,8 +376,8 @@ const filters = reactive<{
   carrierName: string
   contact: string
   phone: string
-  deptId: number | undefined
-  status: boolean | undefined
+  deptId: number | number[] | undefined
+  status: boolean | boolean[] | undefined
   updateByName: string
   remark: string
 }>({
@@ -368,6 +390,23 @@ const filters = reactive<{
   updateByName: '',
   remark: ''
 })
+
+/** 文本列运行时匹配方式：由表头多模式控件写入 */
+const textModes = reactive<Record<string, TextMatchMode>>({})
+
+const FILTER_FIELD_MAP: Record<string, string> = {
+  carrierCode: 'carrierCode',
+  carrierName: 'carrierName',
+  contact: 'contact',
+  phone: 'phone',
+  updateByName: 'updateByName',
+  remark: 'remark'
+}
+
+function buildFilterModes(): string | undefined {
+  const modes = filterModesParam(FILTER_FIELD_MAP, textModes)
+  return Object.keys(modes).length ? JSON.stringify(modes) : undefined
+}
 
 const sortState = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({
   sortBy: undefined,
@@ -398,6 +437,7 @@ function buildQuery(pageNum = page.value, size = pageSize.value): CarrierQuery {
     status: isVisible('status') ? filters.status : undefined,
     updateByName: isVisible('updateByName') ? filters.updateByName.trim() || undefined : undefined,
     remark: isVisible('remark') ? filters.remark.trim() || undefined : undefined,
+    filterModes: buildFilterModes(),
     sortBy: sortState.sortBy,
     sortOrder: sortState.sortOrder,
     pageNum,
@@ -510,22 +550,45 @@ async function handleColumnReset() {
 
 /** 首次进入按默认查询值自动带出筛选；默认机构已失效时忽略并提示 */
 function applyDefaultFilters() {
-  const defaults = defaultFilters()
-  if (defaults.carrierCode != null) filters.carrierCode = String(defaults.carrierCode)
-  if (defaults.carrierName != null) filters.carrierName = String(defaults.carrierName)
-  if (defaults.contact != null) filters.contact = String(defaults.contact)
-  if (defaults.phone != null) filters.phone = String(defaults.phone)
-  if (defaults.updateByName != null) filters.updateByName = String(defaults.updateByName)
-  if (defaults.remark != null) filters.remark = String(defaults.remark)
-  if (defaults.deptId != null) {
-    const deptId = Number(defaults.deptId)
-    if (deptOptions.value.some((item) => item.value === deptId)) {
-      filters.deptId = deptId
+  const defaults = defaultFiltersRaw()
+  applyTextDefault('carrierCode', defaults.carrierCode, (value) => (filters.carrierCode = value))
+  applyTextDefault('carrierName', defaults.carrierName, (value) => (filters.carrierName = value))
+  applyTextDefault('contact', defaults.contact, (value) => (filters.contact = value))
+  applyTextDefault('phone', defaults.phone, (value) => (filters.phone = value))
+  applyTextDefault('updateByName', defaults.updateByName, (value) => (filters.updateByName = value))
+  applyTextDefault('remark', defaults.remark, (value) => (filters.remark = value))
+
+  const deptIds = toValueList(defaults.deptName).map((item) => Number(item))
+  if (deptIds.length) {
+    const valid = deptIds.filter((id) => deptOptions.value.some((item) => item.value === id))
+    if (valid.length) {
+      filters.deptId = valid.length === 1 ? valid[0] : valid
     } else {
       ElMessage.warning('默认查询机构已删除或不在管理范围，已忽略该默认值')
     }
   }
-  if (typeof defaults.status === 'boolean') filters.status = defaults.status
+
+  const statuses = toValueList(defaults.status).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (statuses.length) filters.status = statuses
+}
+
+function toValueList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (value === null || value === undefined || value === '') return []
+  return [value]
+}
+
+function applyTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) textModes[key] = item.mode
+    return
+  }
+  setter(String(value))
 }
 
 /** 合计：仅展示总条数（标准列表口径） */

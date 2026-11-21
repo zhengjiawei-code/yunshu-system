@@ -59,23 +59,24 @@ export interface DeptQuery {
   rootId?: number
   deptName?: string
   deptCode?: string
-  deptType?: DeptType
-  deptNature?: DeptNature
-  parentId?: number
+  deptType?: DeptType | DeptType[]
+  deptNature?: DeptNature | DeptNature[]
+  parentId?: number | number[]
   leader?: string
   phone?: string
-  isLeaf?: boolean
-  status?: boolean
+  isLeaf?: boolean | boolean[]
+  status?: boolean | boolean[]
   provinceCode?: string
   cityCode?: string
   districtCode?: string
-  applyCompanyId?: number
+  applyCompanyId?: number | number[]
   createByName?: string
   updateByName?: string
   createTimeStart?: string
   createTimeEnd?: string
   updateTimeStart?: string
   updateTimeEnd?: string
+  filterModes?: string
   /** 服务端排序字段（白名单），空表示默认 sort_order asc, id asc */
   sortBy?: string
   sortOrder?: 'asc' | 'desc'

@@ -21,7 +21,7 @@
               <div class="action-right">
                 <el-button @click="resetRouteFilters">重置</el-button>
                 <el-button :icon="Download" @click="handleRouteExport">导出</el-button>
-                <el-popover placement="bottom-end" :width="440" trigger="click">
+                <el-popover placement="bottom-end" :width="560" trigger="click">
                   <template #reference>
                     <el-button :icon="Setting">列设置</el-button>
                   </template>
@@ -79,7 +79,10 @@
                         v-if="routeCol('routeCode').filterType !== 'none'"
                         v-model="routeFilters.routeCode"
                         :type="routeCol('routeCode').filterType"
+                        :filter-mode="routeCol('routeCode').filterMode"
+                        :text-mode="routeTextModes.routeCode"
                         :options="routeCol('routeCode').filterOptions"
+                        @update:mode="(mode) => (routeTextModes.routeCode = mode)"
                         @change="onRouteTextFilter"
                       />
                     </div>
@@ -95,7 +98,10 @@
                         v-if="routeCol('routeName').filterType !== 'none'"
                         v-model="routeFilters.routeName"
                         :type="routeCol('routeName').filterType"
+                        :filter-mode="routeCol('routeName').filterMode"
+                        :text-mode="routeTextModes.routeName"
                         :options="routeCol('routeName').filterOptions"
+                        @update:mode="(mode) => (routeTextModes.routeName = mode)"
                         @change="onRouteTextFilter"
                       />
                     </div>
@@ -110,6 +116,7 @@
                         v-if="routeCol('routeCategory').filterType !== 'none'"
                         v-model="routeFilters.routeCategory"
                         :type="routeCol('routeCategory').filterType"
+                        :select-multiple="routeCol('routeCategory').selectMultiple === true"
                         :options="routeCol('routeCategory').filterOptions"
                         @change="onRouteFilterChange"
                       />
@@ -128,6 +135,7 @@
                         v-if="routeCol('originDeptName').filterType !== 'none'"
                         v-model="routeFilters.originDeptId"
                         :type="routeCol('originDeptName').filterType"
+                        :select-multiple="routeCol('originDeptName').selectMultiple === true"
                         :options="deptFilterOptions"
                         @change="onRouteFilterChange"
                       />
@@ -144,6 +152,7 @@
                         v-if="routeCol('destDeptName').filterType !== 'none'"
                         v-model="routeFilters.destDeptId"
                         :type="routeCol('destDeptName').filterType"
+                        :select-multiple="routeCol('destDeptName').selectMultiple === true"
                         :options="deptFilterOptions"
                         @change="onRouteFilterChange"
                       />
@@ -153,34 +162,139 @@
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.warehouseArea" prop="warehouseArea" label="库区" min-width="120">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">库区</span>
+                      <column-filter
+                        v-if="routeCol('warehouseArea').filterType !== 'none'"
+                        v-model="routeFilters.warehouseArea"
+                        :type="routeCol('warehouseArea').filterType"
+                        :filter-mode="routeCol('warehouseArea').filterMode"
+                        :text-mode="routeTextModes.warehouseArea"
+                        @update:mode="(mode) => (routeTextModes.warehouseArea = mode)"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ row.warehouseArea || '—' }}</template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.mileage" prop="mileage" label="里程(km)" min-width="110" align="right" sortable="custom">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">里程(km)</span>
+                      <column-filter
+                        v-if="routeCol('mileage').filterType !== 'none'"
+                        v-model="routeFilters.mileageRange"
+                        :type="routeCol('mileage').filterType"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ formatNumber(row.mileage) }}</template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.transitHours" prop="transitHours" label="时效(小时)" min-width="110" align="right" sortable="custom">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">时效(小时)</span>
+                      <column-filter
+                        v-if="routeCol('transitHours').filterType !== 'none'"
+                        v-model="routeFilters.transitHoursRange"
+                        :type="routeCol('transitHours').filterType"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ formatNumber(row.transitHours) }}</template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.contactName" prop="contactName" label="线路联系人" min-width="130">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">线路联系人</span>
+                      <column-filter
+                        v-if="routeCol('contactName').filterType !== 'none'"
+                        v-model="routeFilters.contactName"
+                        :type="routeCol('contactName').filterType"
+                        :filter-mode="routeCol('contactName').filterMode"
+                        :text-mode="routeTextModes.contactName"
+                        @update:mode="(mode) => (routeTextModes.contactName = mode)"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ row.contactName || '—' }}</template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.contactPhone" prop="contactPhone" label="联系电话" min-width="140">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">联系电话</span>
+                      <column-filter
+                        v-if="routeCol('contactPhone').filterType !== 'none'"
+                        v-model="routeFilters.contactPhone"
+                        :type="routeCol('contactPhone').filterType"
+                        :filter-mode="routeCol('contactPhone').filterMode"
+                        :text-mode="routeTextModes.contactPhone"
+                        @update:mode="(mode) => (routeTextModes.contactPhone = mode)"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ row.contactPhone || '—' }}</template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.serviceName" prop="serviceName" label="线路客服" min-width="120">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">线路客服</span>
+                      <column-filter
+                        v-if="routeCol('serviceName').filterType !== 'none'"
+                        v-model="routeFilters.serviceName"
+                        :type="routeCol('serviceName').filterType"
+                        :filter-mode="routeCol('serviceName').filterMode"
+                        :text-mode="routeTextModes.serviceName"
+                        @update:mode="(mode) => (routeTextModes.serviceName = mode)"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ row.serviceName || '—' }}</template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.servicePhone" prop="servicePhone" label="客服电话" min-width="140">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">客服电话</span>
+                      <column-filter
+                        v-if="routeCol('servicePhone').filterType !== 'none'"
+                        v-model="routeFilters.servicePhone"
+                        :type="routeCol('servicePhone').filterType"
+                        :filter-mode="routeCol('servicePhone').filterMode"
+                        :text-mode="routeTextModes.servicePhone"
+                        @update:mode="(mode) => (routeTextModes.servicePhone = mode)"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ row.servicePhone || '—' }}</template>
                 </el-table-column>
 
-                <el-table-column v-if="routeColumnState.ownerCompanyName" prop="ownerCompanyName" label="创建公司" min-width="150" sortable="custom">
+                <el-table-column v-if="routeColumnState.ownerCompanyName" prop="ownerCompanyName" label="创建公司" min-width="170" sortable="custom">
+                  <template #header>
+                    <div class="col-head">
+                      <span class="col-head__label">创建公司</span>
+                      <column-filter
+                        v-if="routeCol('ownerCompanyName').filterType !== 'none'"
+                        v-model="routeFilters.ownerCompanyIds"
+                        :type="routeCol('ownerCompanyName').filterType"
+                        :options="companyFilterOptions"
+                        :select-multiple="routeCol('ownerCompanyName').selectMultiple === true"
+                        @change="onRouteFilterChange"
+                      />
+                    </div>
+                  </template>
                   <template #default="{ row }">{{ row.ownerCompanyName || '—' }}</template>
                 </el-table-column>
 
@@ -192,6 +306,7 @@
                         v-if="routeCol('status').filterType !== 'none'"
                         v-model="routeFilters.status"
                         :type="routeCol('status').filterType"
+                        :select-multiple="routeCol('status').selectMultiple === true"
                         :options="routeCol('status').filterOptions"
                         @change="onRouteFilterChange"
                       />
@@ -242,7 +357,7 @@
                 <el-button v-if="isHq" @click="openBatchGrant('transfer')">批量授权</el-button>
                 <el-button @click="resetTransferFilters">重置</el-button>
                 <el-button :icon="Download" @click="handleTransferExport">导出</el-button>
-                <el-popover placement="bottom-end" :width="440" trigger="click">
+                <el-popover placement="bottom-end" :width="560" trigger="click">
                   <template #reference>
                     <el-button :icon="Setting">列设置</el-button>
                   </template>
@@ -265,7 +380,7 @@
                   <span class="pane-title">区划库</span>
                   <div class="pane-header__actions">
                     <span class="pane-sub">共 {{ regionTotal }} 条</span>
-                    <el-popover placement="bottom-end" :width="440" trigger="click">
+                    <el-popover placement="bottom-end" :width="560" trigger="click">
                       <template #reference>
                         <el-button size="small" :icon="Setting">列设置</el-button>
                       </template>
@@ -307,6 +422,7 @@
                             v-if="regionCol('level').filterType !== 'none'"
                             v-model="regionFilters.level"
                             :type="regionCol('level').filterType"
+                            :select-multiple="regionCol('level').selectMultiple === true"
                             :options="regionCol('level').filterOptions"
                             @change="reloadRegionFromFirstPage"
                           />
@@ -352,7 +468,10 @@
                             v-if="regionCol('districtName').filterType !== 'none'"
                             v-model="regionFilters.districtKeyword"
                             :type="regionCol('districtName').filterType"
+                            :filter-mode="regionCol('districtName').filterMode"
+                            :text-mode="regionTextModes.districtKeyword"
                             :options="regionCol('districtName').filterOptions"
+                            @update:mode="(mode) => (regionTextModes.districtKeyword = mode)"
                             @change="onRegionFilterInput"
                           />
                         </div>
@@ -366,7 +485,10 @@
                             v-if="regionCol('townName').filterType !== 'none'"
                             v-model="regionFilters.townKeyword"
                             :type="regionCol('townName').filterType"
+                            :filter-mode="regionCol('townName').filterMode"
+                            :text-mode="regionTextModes.townKeyword"
                             :options="regionCol('townName').filterOptions"
+                            @update:mode="(mode) => (regionTextModes.townKeyword = mode)"
                             @change="onRegionFilterInput"
                           />
                         </div>
@@ -381,6 +503,7 @@
                             v-if="regionCol('configured').filterType !== 'none'"
                             v-model="regionFilters.configured"
                             :type="regionCol('configured').filterType"
+                            :select-multiple="regionCol('configured').selectMultiple === true"
                             :options="regionCol('configured').filterOptions"
                             @change="reloadRegionFromFirstPage"
                           />
@@ -487,7 +610,10 @@
                             v-if="col('routeCode').filterType !== 'none'"
                             v-model="transferFilters.routeCode"
                             :type="col('routeCode').filterType"
+                            :filter-mode="col('routeCode').filterMode"
+                            :text-mode="transferTextModes.routeCode"
                             :options="col('routeCode').filterOptions"
+                            @update:mode="(mode) => (transferTextModes.routeCode = mode)"
                             @change="onTransferTextFilter"
                           />
                         </div>
@@ -503,7 +629,10 @@
                             v-if="col('routeName').filterType !== 'none'"
                             v-model="transferFilters.routeName"
                             :type="col('routeName').filterType"
+                            :filter-mode="col('routeName').filterMode"
+                            :text-mode="transferTextModes.routeName"
                             :options="col('routeName').filterOptions"
+                            @update:mode="(mode) => (transferTextModes.routeName = mode)"
                             @change="onTransferTextFilter"
                           />
                         </div>
@@ -518,8 +647,11 @@
                             v-if="col('regionFullName').filterType !== 'none'"
                             v-model="transferFilters.regionCode"
                             :type="col('regionFullName').filterType"
+                            :filter-mode="col('regionFullName').filterMode"
+                            :text-mode="transferTextModes.regionFullName"
                             :options="col('regionFullName').filterOptions"
                             placeholder="编码/名称"
+                            @update:mode="(mode) => (transferTextModes.regionFullName = mode)"
                             @change="onTransferTextFilter"
                           />
                         </div>
@@ -534,6 +666,7 @@
                             v-if="col('regionLevel').filterType !== 'none'"
                             v-model="transferFilters.regionLevel"
                             :type="col('regionLevel').filterType"
+                            :select-multiple="col('regionLevel').selectMultiple === true"
                             :options="col('regionLevel').filterOptions"
                             @change="onTransferFilterChange"
                           />
@@ -552,6 +685,7 @@
                             v-if="col('transferType').filterType !== 'none'"
                             v-model="transferFilters.transferType"
                             :type="col('transferType').filterType"
+                            :select-multiple="col('transferType').selectMultiple === true"
                             :options="col('transferType').filterOptions"
                             @change="onTransferFilterChange"
                           />
@@ -579,6 +713,7 @@
                             v-if="col('carrierName').filterType !== 'none'"
                             v-model="transferFilters.carrierId"
                             :type="col('carrierName').filterType"
+                            :select-multiple="col('carrierName').selectMultiple === true"
                             :options="carrierFilterOptions"
                             @change="onTransferFilterChange"
                           />
@@ -599,6 +734,7 @@
                             v-if="col('status').filterType !== 'none'"
                             v-model="transferFilters.status"
                             :type="col('status').filterType"
+                            :select-multiple="col('status').selectMultiple === true"
                             :options="col('status').filterOptions"
                             @change="onTransferFilterChange"
                           />
@@ -619,7 +755,10 @@
                             v-if="col('updateByName').filterType !== 'none'"
                             v-model="transferFilters.updateByName"
                             :type="col('updateByName').filterType"
+                            :filter-mode="col('updateByName').filterMode"
+                            :text-mode="transferTextModes.updateByName"
                             :options="col('updateByName').filterOptions"
+                            @update:mode="(mode) => (transferTextModes.updateByName = mode)"
                             @change="onTransferTextFilter"
                           />
                         </div>
@@ -637,6 +776,7 @@
                             v-if="col('grantScope').filterType !== 'none'"
                             v-model="transferFilters.grantScope"
                             :type="col('grantScope').filterType"
+                            :select-multiple="col('grantScope').selectMultiple === true"
                             :options="col('grantScope').filterOptions"
                             @change="onTransferFilterChange"
                           />
@@ -654,7 +794,20 @@
                       </template>
                     </el-table-column>
 
-                    <el-table-column v-if="transferColumnState.ownerCompanyName" prop="ownerCompanyName" label="创建公司" min-width="140" sortable="custom">
+                    <el-table-column v-if="transferColumnState.ownerCompanyName" prop="ownerCompanyName" label="创建公司" min-width="170" sortable="custom">
+                      <template #header>
+                        <div class="col-head">
+                          <span class="col-head__label">创建公司</span>
+                          <column-filter
+                            v-if="col('ownerCompanyName').filterType !== 'none'"
+                            v-model="transferFilters.ownerCompanyIds"
+                            :type="col('ownerCompanyName').filterType"
+                            :options="companyFilterOptions"
+                            :select-multiple="col('ownerCompanyName').selectMultiple === true"
+                            @change="onTransferFilterChange"
+                          />
+                        </div>
+                      </template>
                       <template #default="{ row }">{{ row.ownerCompanyName || '—' }}</template>
                     </el-table-column>
 
@@ -777,6 +930,7 @@ import ColumnFilter from '@/components/base/ColumnFilter.vue'
 import ColumnSetting from '@/components/base/ColumnSetting.vue'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
+import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import RouteFormDrawer from './components/RouteFormDrawer.vue'
 import TransferFormDrawer from './components/TransferFormDrawer.vue'
 import RouteGrantDialog from './components/RouteGrantDialog.vue'
@@ -799,15 +953,14 @@ const routeSchema = reactive<ColumnDef[]>([
   },
   { key: 'originDeptName', label: '始发网点', prop: 'originDeptName', filterType: 'select', filterOptions: [] },
   { key: 'destDeptName', label: '到达网点', prop: 'destDeptName', filterType: 'select', filterOptions: [] },
-  // 以下字段后端未提供对应筛选参数，保持无筛选，避免出现无效控件
-  { key: 'warehouseArea', label: '库区', prop: 'warehouseArea', filterType: 'none' },
-  { key: 'mileage', label: '里程', prop: 'mileage', filterType: 'none', align: 'right' },
-  { key: 'transitHours', label: '时效', prop: 'transitHours', filterType: 'none', align: 'right' },
-  { key: 'contactName', label: '线路联系人', prop: 'contactName', filterType: 'none' },
-  { key: 'contactPhone', label: '联系电话', prop: 'contactPhone', filterType: 'none' },
-  { key: 'serviceName', label: '线路客服', prop: 'serviceName', filterType: 'none' },
-  { key: 'servicePhone', label: '客服电话', prop: 'servicePhone', filterType: 'none' },
-  { key: 'ownerCompanyName', label: '创建公司', prop: 'ownerCompanyName', filterType: 'none' },
+  { key: 'warehouseArea', label: '库区', prop: 'warehouseArea', filterType: 'text', filterMode: 'single' },
+  { key: 'mileage', label: '里程', prop: 'mileage', filterType: 'numberrange', align: 'right' },
+  { key: 'transitHours', label: '时效', prop: 'transitHours', filterType: 'numberrange', align: 'right' },
+  { key: 'contactName', label: '线路联系人', prop: 'contactName', filterType: 'text', filterMode: 'single' },
+  { key: 'contactPhone', label: '联系电话', prop: 'contactPhone', filterType: 'text', filterMode: 'single' },
+  { key: 'serviceName', label: '线路客服', prop: 'serviceName', filterType: 'text', filterMode: 'single' },
+  { key: 'servicePhone', label: '客服电话', prop: 'servicePhone', filterType: 'text', filterMode: 'single' },
+  { key: 'ownerCompanyName', label: '创建公司', prop: 'ownerCompanyName', filterType: 'select', selectMultiple: true, filterOptions: [] },
   {
     key: 'status',
     label: '状态',
@@ -879,7 +1032,7 @@ const transferSchema = reactive<ColumnDef[]>([
       { label: '部分', value: 'PARTIAL' }
     ]
   },
-  { key: 'ownerCompanyName', label: '创建公司', prop: 'ownerCompanyName', filterType: 'none' },
+  { key: 'ownerCompanyName', label: '创建公司', prop: 'ownerCompanyName', filterType: 'select', selectMultiple: true, filterOptions: [] },
   {
     key: 'operation',
     label: '操作',
@@ -931,7 +1084,8 @@ const {
   load: loadRouteColumnConfig,
   save: saveRouteColumnConfig,
   reset: resetRouteColumnConfig,
-  defaultFilters: routeDefaultFilters
+  defaultFiltersRaw: routeDefaultFilters,
+  filterModesParam: routeFilterModesParam
 } = useColumnConfig('system:route', routeSchema)
 
 const routeColumnState = computed(
@@ -953,7 +1107,8 @@ const {
   load: loadTransferColumnConfig,
   save: saveTransferColumnConfig,
   reset: resetTransferColumnConfig,
-  defaultFilters: transferDefaultFilters
+  defaultFiltersRaw: transferDefaultFilters,
+  filterModesParam: transferFilterModesParam
 } = useColumnConfig('system:route-transfer', transferSchema)
 
 const transferColumnState = computed(
@@ -975,12 +1130,53 @@ const {
   sortableMap: regionSortableMap,
   load: loadRegionColumnConfig,
   save: saveRegionColumnConfig,
-  reset: resetRegionColumnConfig
+  reset: resetRegionColumnConfig,
+  defaultFiltersRaw: regionDefaultFilters,
+  filterModesParam: regionFilterModesParam
 } = useColumnConfig('system:route-library', regionSchema)
 
 const activeTab = ref<'route' | 'transfer'>('route')
 const isHq = ref(false)
 const scopeTree = ref<ManageScopeNode[]>([])
+
+/** 文本筛选列 key → 后端字段名，用于生成 filterModes */
+const ROUTE_TEXT_FIELDS: Record<string, string> = {
+  routeCode: 'routeCode',
+  routeName: 'routeName',
+  warehouseArea: 'warehouseArea',
+  contactName: 'contactName',
+  contactPhone: 'contactPhone',
+  serviceName: 'serviceName',
+  servicePhone: 'servicePhone'
+}
+
+/** 表头当前选择的文本匹配方式；默认模糊，切换列设置的单/多模式后由控件接管 */
+const routeTextModes = reactive<Record<string, TextMatchMode>>({
+  routeCode: 'like',
+  routeName: 'like',
+  warehouseArea: 'like',
+  contactName: 'like',
+  contactPhone: 'like',
+  serviceName: 'like',
+  servicePhone: 'like'
+})
+
+/** 创建公司候选：管理范围树中的总部/公司节点 */
+const companyFilterOptions = computed(() => {
+  const result: Array<{ label: string; value: number }> = []
+  const seen = new Set<number>()
+  const walk = (nodes: ManageScopeNode[]) => {
+    nodes.forEach((node) => {
+      if ((node.deptType === 1 || node.deptType === 2) && !seen.has(node.id)) {
+        seen.add(node.id)
+        result.push({ label: node.deptName, value: node.id })
+      }
+      if (node.children?.length) walk(node.children)
+    })
+  }
+  walk(scopeTree.value)
+  return result
+})
 
 const routeTableRef = ref<InstanceType<typeof SmartTable>>()
 const routeRows = ref<RouteRecord[]>([])
@@ -991,10 +1187,18 @@ const routeLoading = ref(false)
 const routeFilters = reactive<{
   routeCode: string
   routeName: string
-  routeCategory: 1 | 2 | undefined
-  originDeptId: number | undefined
-  destDeptId: number | undefined
-  status: boolean | undefined
+  routeCategory: 1 | 2 | Array<1 | 2> | undefined
+  originDeptId: number | number[] | undefined
+  destDeptId: number | number[] | undefined
+  warehouseArea: string
+  mileageRange: [number | undefined, number | undefined]
+  transitHoursRange: [number | undefined, number | undefined]
+  contactName: string
+  contactPhone: string
+  serviceName: string
+  servicePhone: string
+  ownerCompanyIds: number[]
+  status: boolean | boolean[] | undefined
   grantScope: 'ALL' | 'PARTIAL' | undefined
 }>({
   routeCode: '',
@@ -1002,6 +1206,14 @@ const routeFilters = reactive<{
   routeCategory: undefined,
   originDeptId: undefined,
   destDeptId: undefined,
+  warehouseArea: '',
+  mileageRange: [undefined, undefined],
+  transitHoursRange: [undefined, undefined],
+  contactName: '',
+  contactPhone: '',
+  serviceName: '',
+  servicePhone: '',
+  ownerCompanyIds: [],
   status: undefined,
   grantScope: undefined
 })
@@ -1020,12 +1232,13 @@ const transferFilters = reactive<{
   routeCode: string
   routeName: string
   regionCode: string
-  regionLevel: 2 | 3 | 4 | undefined
-  transferType: 1 | 2 | undefined
-  carrierId: number | undefined
-  status: boolean | undefined
-  grantScope: 'ALL' | 'PARTIAL' | undefined
+  regionLevel: 2 | 3 | 4 | Array<2 | 3 | 4> | undefined
+  transferType: 1 | 2 | Array<1 | 2> | undefined
+  carrierId: number | number[] | undefined
+  status: boolean | boolean[] | undefined
+  grantScope: 'ALL' | 'PARTIAL' | Array<'ALL' | 'PARTIAL'> | undefined
   updateByName: string
+  ownerCompanyIds: number[]
 }>({
   routeCode: '',
   routeName: '',
@@ -1035,9 +1248,26 @@ const transferFilters = reactive<{
   carrierId: undefined,
   status: undefined,
   grantScope: undefined,
-  updateByName: ''
+  updateByName: '',
+  ownerCompanyIds: []
 })
 const transferSort = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({})
+
+/** 外转/直达文本筛选列 key → 后端字段名 */
+const TRANSFER_TEXT_FIELDS: Record<string, string> = {
+  routeCode: 'routeCode',
+  routeName: 'routeName',
+  regionFullName: 'regionFullName',
+  updateByName: 'updateByName'
+}
+
+/** 表头当前选择的文本匹配方式 */
+const transferTextModes = reactive<Record<string, TextMatchMode>>({
+  routeCode: 'like',
+  routeName: 'like',
+  regionFullName: 'like',
+  updateByName: 'like'
+})
 
 const regionRows = ref<RegionLibraryRecord[]>([])
 const regionTableRef = ref<InstanceType<typeof SmartTable>>()
@@ -1047,12 +1277,12 @@ const regionPageSize = ref(20)
 const regionLoading = ref(false)
 const regionSort = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({})
 const regionFilters = reactive<{
-  level: 2 | 3 | 4 | undefined
+  level: 2 | 3 | 4 | Array<2 | 3 | 4> | undefined
   provinceCode: string | undefined
   cityCode: string | undefined
   districtKeyword: string
   townKeyword: string
-  configured: boolean | undefined
+  configured: boolean | boolean[] | undefined
 }>({
   level: undefined,
   provinceCode: undefined,
@@ -1060,6 +1290,18 @@ const regionFilters = reactive<{
   districtKeyword: '',
   townKeyword: '',
   configured: undefined
+})
+
+/** 区划库文本筛选列 key → 后端参数名 */
+const REGION_TEXT_FIELDS: Record<string, string> = {
+  districtKeyword: 'districtKeyword',
+  townKeyword: 'townKeyword'
+}
+
+/** 表头当前选择的文本匹配方式 */
+const regionTextModes = reactive<Record<string, TextMatchMode>>({
+  districtKeyword: 'like',
+  townKeyword: 'like'
 })
 const provinceFilterOptions = ref<Array<{ label: string; value: string }>>([])
 const cityFilterOptions = ref<Array<{ label: string; value: string }>>([])
@@ -1172,6 +1414,7 @@ function downloadCsv(name: string, header: string[], body: string[][]) {
 /* ---------------- Tab1 ---------------- */
 
 function buildRouteQuery(pageNum = routePage.value, size = routePageSize.value): RouteQuery {
+  const modes = routeFilterModesParam(ROUTE_TEXT_FIELDS, routeTextModes)
   return {
     routeCode: routeColumnState.value.routeCode
       ? routeFilters.routeCode.trim() || undefined
@@ -1182,6 +1425,29 @@ function buildRouteQuery(pageNum = routePage.value, size = routePageSize.value):
     routeCategory: routeColumnState.value.routeCategory ? routeFilters.routeCategory : undefined,
     originDeptId: routeColumnState.value.originDeptName ? routeFilters.originDeptId : undefined,
     destDeptId: routeColumnState.value.destDeptName ? routeFilters.destDeptId : undefined,
+    warehouseArea: routeColumnState.value.warehouseArea
+      ? routeFilters.warehouseArea.trim() || undefined
+      : undefined,
+    mileageMin: routeColumnState.value.mileage ? routeFilters.mileageRange[0] : undefined,
+    mileageMax: routeColumnState.value.mileage ? routeFilters.mileageRange[1] : undefined,
+    transitHoursMin: routeColumnState.value.transitHours ? routeFilters.transitHoursRange[0] : undefined,
+    transitHoursMax: routeColumnState.value.transitHours ? routeFilters.transitHoursRange[1] : undefined,
+    contactName: routeColumnState.value.contactName
+      ? routeFilters.contactName.trim() || undefined
+      : undefined,
+    contactPhone: routeColumnState.value.contactPhone
+      ? routeFilters.contactPhone.trim() || undefined
+      : undefined,
+    serviceName: routeColumnState.value.serviceName
+      ? routeFilters.serviceName.trim() || undefined
+      : undefined,
+    servicePhone: routeColumnState.value.servicePhone
+      ? routeFilters.servicePhone.trim() || undefined
+      : undefined,
+    ownerCompanyIds: routeColumnState.value.ownerCompanyName
+      ? routeFilters.ownerCompanyIds.join(',') || undefined
+      : undefined,
+    filterModes: Object.keys(modes).length ? JSON.stringify(modes) : undefined,
     status: routeColumnState.value.status ? routeFilters.status : undefined,
     grantScope: routeFilters.grantScope,
     sortBy: routeSort.sortBy,
@@ -1274,14 +1540,79 @@ async function resetRouteColumns() {
 
 function applyRouteDefaultFilters() {
   const defaults = routeDefaultFilters()
-  if (defaults.routeCode != null) routeFilters.routeCode = String(defaults.routeCode)
-  if (defaults.routeName != null) routeFilters.routeName = String(defaults.routeName)
-  if (defaults.routeCategory === 1 || defaults.routeCategory === 2) {
-    routeFilters.routeCategory = defaults.routeCategory
+  applyTextDefault('routeCode', defaults.routeCode, (value) => (routeFilters.routeCode = value))
+  applyTextDefault('routeName', defaults.routeName, (value) => (routeFilters.routeName = value))
+  applyTextDefault(
+    'warehouseArea',
+    defaults.warehouseArea,
+    (value) => (routeFilters.warehouseArea = value)
+  )
+  applyTextDefault('contactName', defaults.contactName, (value) => (routeFilters.contactName = value))
+  applyTextDefault(
+    'contactPhone',
+    defaults.contactPhone,
+    (value) => (routeFilters.contactPhone = value)
+  )
+  applyTextDefault('serviceName', defaults.serviceName, (value) => (routeFilters.serviceName = value))
+  applyTextDefault(
+    'servicePhone',
+    defaults.servicePhone,
+    (value) => (routeFilters.servicePhone = value)
+  )
+
+  const categories = toValueList(defaults.routeCategory).filter(
+    (item): item is 1 | 2 => item === 1 || item === 2
+  )
+  if (categories.length) {
+    routeFilters.routeCategory = categories.length === 1 ? categories[0] : categories
   }
-  if (defaults.originDeptName != null) routeFilters.originDeptId = Number(defaults.originDeptName)
-  if (defaults.destDeptName != null) routeFilters.destDeptId = Number(defaults.destDeptName)
-  if (typeof defaults.status === 'boolean') routeFilters.status = defaults.status
+
+  const origins = toValueList(defaults.originDeptName).map((item) => Number(item))
+  if (origins.length) {
+    routeFilters.originDeptId = origins.length === 1 ? origins[0] : origins
+  }
+
+  const dests = toValueList(defaults.destDeptName).map((item) => Number(item))
+  if (dests.length) {
+    routeFilters.destDeptId = dests.length === 1 ? dests[0] : dests
+  }
+
+  if (Array.isArray(defaults.mileage)) {
+    routeFilters.mileageRange = [Number(defaults.mileage[0]) || undefined, Number(defaults.mileage[1]) || undefined]
+  }
+  if (Array.isArray(defaults.transitHours)) {
+    routeFilters.transitHoursRange = [
+      Number(defaults.transitHours[0]) || undefined,
+      Number(defaults.transitHours[1]) || undefined
+    ]
+  }
+  if (Array.isArray(defaults.ownerCompanyName)) {
+    routeFilters.ownerCompanyIds = defaults.ownerCompanyName.map(Number).filter(Number.isFinite)
+  }
+
+  const statuses = toValueList(defaults.status).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (statuses.length) {
+    routeFilters.status = statuses.length === 1 ? statuses[0] : statuses
+  }
+}
+
+function toValueList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (value === null || value === undefined || value === '') return []
+  return [value]
+}
+
+function applyTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) routeTextModes[key] = item.mode
+    return
+  }
+  setter(String(value))
 }
 
 async function handleRouteExport() {
@@ -1345,6 +1676,11 @@ async function handleRouteDelete(row: RouteRecord) {
 
 /* ---------------- Tab2 ---------------- */
 
+function buildTransferFilterModes(): string | undefined {
+  const modes = transferFilterModesParam(TRANSFER_TEXT_FIELDS, transferTextModes)
+  return Object.keys(modes).length ? JSON.stringify(modes) : undefined
+}
+
 function buildTransferQuery(pageNum = transferPage.value, size = transferPageSize.value): TransferQuery {
   return {
     routeCode: transferColumnState.value.routeCode
@@ -1365,6 +1701,10 @@ function buildTransferQuery(pageNum = transferPage.value, size = transferPageSiz
     updateByName: transferColumnState.value.updateByName
       ? transferFilters.updateByName.trim() || undefined
       : undefined,
+    ownerCompanyIds: transferColumnState.value.ownerCompanyName
+      ? transferFilters.ownerCompanyIds.join(',') || undefined
+      : undefined,
+    filterModes: buildTransferFilterModes(),
     sortBy: transferSort.sortBy,
     sortOrder: transferSort.sortOrder,
     pageNum,
@@ -1436,14 +1776,21 @@ function onTransferSelection(rows: TransferRecord[]) {
 }
 
 function hasRegionLibraryFilter(): boolean {
-  return !!(
-    regionFilters.level ||
-    regionFilters.provinceCode ||
-    regionFilters.cityCode ||
-    regionFilters.districtKeyword.trim() ||
-    regionFilters.townKeyword.trim() ||
-    regionFilters.configured !== undefined
+  const filled = (value: unknown) =>
+    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== ''
+  return (
+    filled(regionFilters.level) ||
+    filled(regionFilters.provinceCode) ||
+    filled(regionFilters.cityCode) ||
+    regionFilters.districtKeyword.trim() !== '' ||
+    regionFilters.townKeyword.trim() !== '' ||
+    filled(regionFilters.configured)
   )
+}
+
+function buildRegionFilterModes(): string | undefined {
+  const modes = regionFilterModesParam(REGION_TEXT_FIELDS, regionTextModes)
+  return Object.keys(modes).length ? JSON.stringify(modes) : undefined
 }
 
 async function loadRegionLibrary() {
@@ -1467,6 +1814,7 @@ async function loadRegionLibrary() {
       cityCode: regionFilters.cityCode,
       districtKeyword: regionFilters.districtKeyword.trim() || undefined,
       townKeyword: regionFilters.townKeyword.trim() || undefined,
+      filterModes: buildRegionFilterModes(),
       sortBy: regionSort.sortBy,
       sortOrder: regionSort.sortOrder,
       pageNum: regionPage.value,
@@ -1729,21 +2077,112 @@ async function resetTransferColumns() {
 
 function applyTransferDefaultFilters() {
   const defaults = transferDefaultFilters()
-  if (defaults.routeCode != null) transferFilters.routeCode = String(defaults.routeCode)
-  if (defaults.routeName != null) transferFilters.routeName = String(defaults.routeName)
-  if (defaults.regionFullName != null) transferFilters.regionCode = String(defaults.regionFullName)
-  if (defaults.regionLevel === 2 || defaults.regionLevel === 3 || defaults.regionLevel === 4) {
-    transferFilters.regionLevel = defaults.regionLevel
+  applyTransferTextDefault(
+    'routeCode',
+    defaults.routeCode,
+    (value) => (transferFilters.routeCode = value)
+  )
+  applyTransferTextDefault(
+    'routeName',
+    defaults.routeName,
+    (value) => (transferFilters.routeName = value)
+  )
+  applyTransferTextDefault(
+    'regionFullName',
+    defaults.regionFullName,
+    (value) => (transferFilters.regionCode = value)
+  )
+  applyTransferTextDefault(
+    'updateByName',
+    defaults.updateByName,
+    (value) => (transferFilters.updateByName = value)
+  )
+
+  const levels = toValueList(defaults.regionLevel).filter(
+    (item): item is 2 | 3 | 4 => item === 2 || item === 3 || item === 4
+  )
+  if (levels.length) {
+    transferFilters.regionLevel = levels.length === 1 ? levels[0] : levels
   }
-  if (defaults.transferType === 1 || defaults.transferType === 2) {
-    transferFilters.transferType = defaults.transferType
+
+  const types = toValueList(defaults.transferType).filter(
+    (item): item is 1 | 2 => item === 1 || item === 2
+  )
+  if (types.length) {
+    transferFilters.transferType = types.length === 1 ? types[0] : types
   }
-  if (defaults.carrierName != null) transferFilters.carrierId = Number(defaults.carrierName)
-  if (typeof defaults.status === 'boolean') transferFilters.status = defaults.status
-  if (defaults.grantScope === 'ALL' || defaults.grantScope === 'PARTIAL') {
-    transferFilters.grantScope = defaults.grantScope
+
+  const carriers = toValueList(defaults.carrierName).map((item) => Number(item))
+  if (carriers.length) {
+    transferFilters.carrierId = carriers.length === 1 ? carriers[0] : carriers
   }
-  if (defaults.updateByName != null) transferFilters.updateByName = String(defaults.updateByName)
+
+  const statuses = toValueList(defaults.status).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (statuses.length) {
+    transferFilters.status = statuses.length === 1 ? statuses[0] : statuses
+  }
+
+  const scopes = toValueList(defaults.grantScope).filter(
+    (item): item is 'ALL' | 'PARTIAL' => item === 'ALL' || item === 'PARTIAL'
+  )
+  if (scopes.length) {
+    transferFilters.grantScope = scopes.length === 1 ? scopes[0] : scopes
+  }
+}
+
+function applyTransferTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) transferTextModes[key] = item.mode
+    return
+  }
+  setter(String(value))
+}
+
+function applyRegionDefaultFilters() {
+  const defaults = regionDefaultFilters()
+  applyRegionTextDefault(
+    'districtKeyword',
+    defaults.districtName,
+    (value) => (regionFilters.districtKeyword = value)
+  )
+  applyRegionTextDefault(
+    'townKeyword',
+    defaults.townName,
+    (value) => (regionFilters.townKeyword = value)
+  )
+
+  const levels = toValueList(defaults.level).filter(
+    (item): item is 2 | 3 | 4 => item === 2 || item === 3 || item === 4
+  )
+  if (levels.length) {
+    regionFilters.level = levels.length === 1 ? levels[0] : levels
+  }
+
+  const configureds = toValueList(defaults.configured).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (configureds.length) {
+    regionFilters.configured = configureds.length === 1 ? configureds[0] : configureds
+  }
+
+  if (defaults.provinceName != null) regionFilters.provinceCode = String(defaults.provinceName)
+  if (defaults.cityName != null) regionFilters.cityCode = String(defaults.cityName)
+}
+
+function applyRegionTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) regionTextModes[key] = item.mode
+    return
+  }
+  setter(String(value))
 }
 
 function onRegionStatesUpdate(next: ColumnItemState[]) {
@@ -1883,6 +2322,7 @@ onMounted(async () => {
   const carrierColumn = transferSchema.find((item) => item.key === 'carrierName')
   if (carrierColumn) carrierColumn.filterOptions = carrierFilterOptions.value
   applyTransferDefaultFilters()
+  applyRegionDefaultFilters()
   await loadRoutes()
 })
 </script>

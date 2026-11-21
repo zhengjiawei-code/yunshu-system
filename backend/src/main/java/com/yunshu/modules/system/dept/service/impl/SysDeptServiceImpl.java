@@ -4,6 +4,7 @@ import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
+import com.yunshu.common.filter.TextFilterMode;
 import com.yunshu.modules.system.dept.dto.DeptQuery;
 import com.yunshu.modules.system.dept.dto.DeptSaveRequest;
 import com.yunshu.modules.system.dept.entity.SysDept;
@@ -20,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -105,18 +107,23 @@ public class SysDeptServiceImpl implements SysDeptService {
         LocalDateTime createEnd = parseEnd(query.getCreateTimeEnd());
         LocalDateTime updateStart = parseStart(query.getUpdateTimeStart());
         LocalDateTime updateEnd = parseEnd(query.getUpdateTimeEnd());
+        Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
 
         List<SysDept> filtered = descendants.stream()
-                .filter(item -> name == null || item.getDeptName().toLowerCase().contains(name.toLowerCase()))
-                .filter(item -> code == null || item.getDeptCode().toLowerCase().contains(code.toLowerCase()))
-                .filter(item -> leader == null || (item.getLeader() != null
-                        && item.getLeader().toLowerCase().contains(leader.toLowerCase())))
-                .filter(item -> phone == null || (item.getPhone() != null
-                        && item.getPhone().toLowerCase().contains(phone.toLowerCase())))
+                .filter(item -> TextFilterMode.match(item.getDeptName(), name,
+                        TextFilterMode.modeOf(modes, "deptName")))
+                .filter(item -> TextFilterMode.match(item.getDeptCode(), code,
+                        TextFilterMode.modeOf(modes, "deptCode")))
+                .filter(item -> TextFilterMode.match(item.getLeader(), leader,
+                        TextFilterMode.modeOf(modes, "leader")))
+                .filter(item -> TextFilterMode.match(item.getPhone(), phone,
+                        TextFilterMode.modeOf(modes, "phone")))
                 .filter(item -> createByName == null || !userTableReady
-                        || containsIgnoreCase(nameOf(userNames, item.getCreateBy()), createByName))
+                        || TextFilterMode.match(nameOf(userNames, item.getCreateBy()), createByName,
+                        TextFilterMode.modeOf(modes, "createByName")))
                 .filter(item -> updateByName == null || !userTableReady
-                        || containsIgnoreCase(nameOf(userNames, item.getUpdateBy()), updateByName))
+                        || TextFilterMode.match(nameOf(userNames, item.getUpdateBy()), updateByName,
+                        TextFilterMode.modeOf(modes, "updateByName")))
                 .filter(item -> createStart == null
                         || (item.getCreateTime() != null && !item.getCreateTime().isBefore(createStart)))
                 .filter(item -> createEnd == null
@@ -125,22 +132,23 @@ public class SysDeptServiceImpl implements SysDeptService {
                         || (item.getUpdateTime() != null && !item.getUpdateTime().isBefore(updateStart)))
                 .filter(item -> updateEnd == null
                         || (item.getUpdateTime() != null && !item.getUpdateTime().isAfter(updateEnd)))
-                .filter(item -> query.getDeptType() == null
-                        || Objects.equals(item.getDeptType(), query.getDeptType()))
-                .filter(item -> query.getDeptNature() == null
-                        || Objects.equals(item.getDeptNature(), query.getDeptNature()))
-                .filter(item -> query.getParentId() == null
-                        || Objects.equals(item.getParentId(), query.getParentId()))
-                .filter(item -> query.getIsLeaf() == null
-                        || Objects.equals(Boolean.TRUE.equals(item.getIsLeaf()), query.getIsLeaf()))
-                .filter(item -> query.getStatus() == null
-                        || Objects.equals(item.getStatus(), query.getStatus()))
+                .filter(item -> CollectionUtils.isEmpty(query.getDeptType())
+                        || query.getDeptType().contains(item.getDeptType()))
+                .filter(item -> CollectionUtils.isEmpty(query.getDeptNature())
+                        || query.getDeptNature().contains(item.getDeptNature()))
+                .filter(item -> CollectionUtils.isEmpty(query.getParentId())
+                        || query.getParentId().contains(item.getParentId()))
+                .filter(item -> CollectionUtils.isEmpty(query.getIsLeaf())
+                        || query.getIsLeaf().contains(Boolean.TRUE.equals(item.getIsLeaf())))
+                .filter(item -> CollectionUtils.isEmpty(query.getStatus())
+                        || query.getStatus().contains(item.getStatus()))
                 .filter(item -> provinceCode == null || provinceCode.equals(item.getProvinceCode()))
                 .filter(item -> cityCode == null || cityCode.equals(item.getCityCode()))
                 .filter(item -> districtCode == null || districtCode.equals(item.getDistrictCode()))
-                .filter(item -> query.getApplyCompanyId() == null
+                .filter(item -> CollectionUtils.isEmpty(query.getApplyCompanyId())
                         || (Boolean.TRUE.equals(item.getIsLeaf())
-                        && applyCompanies.getOrDefault(item.getId(), List.of()).contains(query.getApplyCompanyId())))
+                        && applyCompanies.getOrDefault(item.getId(), List.of()).stream()
+                        .anyMatch(query.getApplyCompanyId()::contains)))
                 .sorted(buildComparator(query, map, userNames, regionNames, applyCompanies))
                 .toList();
 
@@ -733,10 +741,6 @@ public class SysDeptServiceImpl implements SysDeptService {
     /** 安全取姓名：create_by/update_by 为 null 或 Map 不可变空集时都不会抛 NPE */
     private String nameOf(Map<Long, String> names, Long userId) {
         return userId == null ? null : names.get(userId);
-    }
-
-    private boolean containsIgnoreCase(String source, String keyword) {
-        return source != null && source.toLowerCase().contains(keyword.toLowerCase());
     }
 
     private LocalDateTime parseStart(String value) {

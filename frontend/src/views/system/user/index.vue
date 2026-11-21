@@ -19,7 +19,7 @@
           <el-button class="tool-reset" @click="resetFilters">重置</el-button>
           <el-button class="tool-export" :icon="Download" @click="handleExport">导出</el-button>
 
-          <el-popover placement="bottom-end" :width="440" trigger="click">
+          <el-popover placement="bottom-end" :width="560" trigger="click">
             <template #reference>
               <el-button :icon="Setting">列设置</el-button>
             </template>
@@ -83,7 +83,10 @@
                   v-if="col('username').filterType !== 'none'"
                   v-model="filters.username"
                   :type="col('username').filterType"
+                  :filter-mode="col('username').filterMode"
+                  :text-mode="textModes.username"
                   :options="col('username').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.username = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -106,7 +109,10 @@
                   v-if="col('realName').filterType !== 'none'"
                   v-model="filters.realName"
                   :type="col('realName').filterType"
+                  :filter-mode="col('realName').filterMode"
+                  :text-mode="textModes.realName"
                   :options="col('realName').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.realName = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -122,7 +128,10 @@
                   v-if="col('phone').filterType !== 'none'"
                   v-model="filters.phone"
                   :type="col('phone').filterType"
+                  :filter-mode="col('phone').filterMode"
+                  :text-mode="textModes.phone"
                   :options="col('phone').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.phone = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -140,7 +149,10 @@
                   v-if="col('email').filterType !== 'none'"
                   v-model="filters.email"
                   :type="col('email').filterType"
+                  :filter-mode="col('email').filterMode"
+                  :text-mode="textModes.email"
                   :options="col('email').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.email = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -161,6 +173,7 @@
                   v-if="col('deptName').filterType !== 'none'"
                   v-model="filters.deptId"
                   :type="col('deptName').filterType"
+                  :select-multiple="col('deptName').selectMultiple === true"
                   :options="deptOptions"
                   @change="onFilterChange"
                 />
@@ -211,6 +224,7 @@
                   v-if="col('roleNames').filterType !== 'none'"
                   v-model="filters.roleId"
                   :type="col('roleNames').filterType"
+                  :select-multiple="col('roleNames').selectMultiple === true"
                   :options="roleFilterOptions"
                   @change="onFilterChange"
                 />
@@ -232,6 +246,7 @@
                   v-if="col('directPerm').filterType !== 'none'"
                   v-model="filters.hasDirectPerm"
                   :type="col('directPerm').filterType"
+                  :select-multiple="col('directPerm').selectMultiple === true"
                   :options="col('directPerm').filterOptions"
                   @change="onFilterChange"
                 />
@@ -264,6 +279,7 @@
                   v-if="col('status').filterType !== 'none'"
                   v-model="filters.status"
                   :type="col('status').filterType"
+                  :select-multiple="col('status').selectMultiple === true"
                   :options="col('status').filterOptions"
                   @change="onFilterChange"
                 />
@@ -292,7 +308,10 @@
                   v-if="col('updateByName').filterType !== 'none'"
                   v-model="filters.updateByName"
                   :type="col('updateByName').filterType"
+                  :filter-mode="col('updateByName').filterMode"
+                  :text-mode="textModes.updateByName"
                   :options="col('updateByName').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.updateByName = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -386,6 +405,7 @@ import { deleteUser, getUserPage, resetUserPassword, changeUserStatus } from '@/
 import { getDeptOptions } from '@/api/system/dept'
 import { getRoleOptions } from '@/api/system/role'
 import { useColumnConfig } from '@/composables/useColumnConfig'
+import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import SmartTable from '@/components/base/SmartTable.vue'
 import ColumnFilter from '@/components/base/ColumnFilter.vue'
 import ColumnSetting from '@/components/base/ColumnSetting.vue'
@@ -467,7 +487,8 @@ const {
   load: loadColumnConfig,
   save: saveColumnConfig,
   reset: resetColumnConfig,
-  defaultFilters
+  defaultFiltersRaw,
+  filterModesParam
 } = useColumnConfig('system:user', schema)
 
 const userTableRef = ref<InstanceType<typeof SmartTable>>()
@@ -492,10 +513,10 @@ const filters = reactive<{
   realName: string
   phone: string
   email: string
-  deptId?: number
-  roleId?: number
-  hasDirectPerm?: boolean
-  status?: boolean
+  deptId?: number | number[]
+  roleId?: number | number[]
+  hasDirectPerm?: boolean | boolean[]
+  status?: boolean | boolean[]
   updateByName: string
   updateRange: string[]
 }>({
@@ -510,6 +531,22 @@ const filters = reactive<{
   updateByName: '',
   updateRange: []
 })
+
+/** 文本列运行时匹配方式：由表头多模式控件写入，随 buildQuery 一起提交 */
+const textModes = reactive<Record<string, TextMatchMode>>({})
+
+const FILTER_FIELD_MAP: Record<string, string> = {
+  username: 'username',
+  realName: 'realName',
+  phone: 'phone',
+  email: 'email',
+  updateByName: 'updateByName'
+}
+
+function buildFilterModes(): string | undefined {
+  const modes = filterModesParam(FILTER_FIELD_MAP, textModes)
+  return Object.keys(modes).length ? JSON.stringify(modes) : undefined
+}
 
 /** 服务端排序状态：sortBy 为空表示默认 id asc */
 const sortState = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({
@@ -560,6 +597,7 @@ function buildQuery(pageNum = page.value, size = pageSize.value): UserQuery {
       : undefined,
     updateTimeStart: isVisible('updateTime') ? filters.updateRange[0] || undefined : undefined,
     updateTimeEnd: isVisible('updateTime') ? filters.updateRange[1] || undefined : undefined,
+    filterModes: buildFilterModes(),
     sortBy: sortState.sortBy,
     sortOrder: sortState.sortOrder,
     pageNum,
@@ -674,33 +712,63 @@ async function handleColumnReset() {
 
 /** 首次进入按默认查询值自动带出筛选；默认机构/角色失效时忽略并提示 */
 function applyDefaultFilters() {
-  const defaults = defaultFilters()
-  if (defaults.username != null) filters.username = String(defaults.username)
-  if (defaults.realName != null) filters.realName = String(defaults.realName)
-  if (defaults.phone != null) filters.phone = String(defaults.phone)
-  if (defaults.email != null) filters.email = String(defaults.email)
-  if (defaults.updateByName != null) filters.updateByName = String(defaults.updateByName)
-  if (typeof defaults.hasDirectPerm === 'boolean') filters.hasDirectPerm = defaults.hasDirectPerm
-  if (typeof defaults.status === 'boolean') filters.status = defaults.status
-  if (defaults.deptId != null) {
-    const deptId = Number(defaults.deptId)
-    if (deptOptions.value.some((item) => item.value === deptId)) {
-      filters.deptId = deptId
+  const defaults = defaultFiltersRaw()
+  applyTextDefault('username', defaults.username, (value) => (filters.username = value))
+  applyTextDefault('realName', defaults.realName, (value) => (filters.realName = value))
+  applyTextDefault('phone', defaults.phone, (value) => (filters.phone = value))
+  applyTextDefault('email', defaults.email, (value) => (filters.email = value))
+  applyTextDefault('updateByName', defaults.updateByName, (value) => (filters.updateByName = value))
+
+  const directPerms = toValueList(defaults.directPerm).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (directPerms.length) filters.hasDirectPerm = directPerms
+
+  const statuses = toValueList(defaults.status).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (statuses.length) filters.status = statuses
+
+  const deptIds = toValueList(defaults.deptName).map((item) => Number(item))
+  if (deptIds.length) {
+    const valid = deptIds.filter((id) => deptOptions.value.some((item) => item.value === id))
+    if (valid.length) {
+      filters.deptId = valid.length === 1 ? valid[0] : valid
     } else {
       ElMessage.warning('默认查询机构已删除或不在管理范围，已忽略该默认值')
     }
   }
-  if (defaults.roleId != null) {
-    const roleId = Number(defaults.roleId)
-    if (roleOptions.value.some((item) => item.id === roleId)) {
-      filters.roleId = roleId
+
+  const roleIds = toValueList(defaults.roleNames).map((item) => Number(item))
+  if (roleIds.length) {
+    const valid = roleIds.filter((id) => roleOptions.value.some((item) => item.id === id))
+    if (valid.length) {
+      filters.roleId = valid.length === 1 ? valid[0] : valid
     } else {
       ElMessage.warning('默认查询角色已删除，已忽略该默认值')
     }
   }
+
   if (Array.isArray(defaults.updateTime)) {
     filters.updateRange = defaults.updateTime.map((item) => String(item))
   }
+}
+
+function toValueList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (value === null || value === undefined || value === '') return []
+  return [value]
+}
+
+function applyTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) textModes[key] = item.mode
+    return
+  }
+  setter(String(value))
 }
 
 function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {

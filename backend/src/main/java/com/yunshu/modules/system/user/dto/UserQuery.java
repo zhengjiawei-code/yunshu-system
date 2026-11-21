@@ -1,14 +1,17 @@
 package com.yunshu.modules.system.user.dto;
 
+import com.yunshu.common.query.BaseListQuery;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * 用户列表查询参数：筛选、排序与分页均走服务端。
  */
 @Data
 @Schema(description = "用户列表查询参数")
-public class UserQuery {
+public class UserQuery extends BaseListQuery {
 
     @Schema(description = "用户名，模糊匹配")
     private String username;
@@ -22,17 +25,17 @@ public class UserQuery {
     @Schema(description = "邮箱，模糊匹配")
     private String email;
 
-    @Schema(description = "所属机构ID")
-    private Long deptId;
+    @Schema(description = "所属机构ID：可多选，命中任意一个")
+    private List<Long> deptId;
 
-    @Schema(description = "角色ID：筛选拥有该角色的用户")
-    private Long roleId;
+    @Schema(description = "角色ID：可多选，筛选拥有任意一个角色的用户")
+    private List<Long> roleId;
 
-    @Schema(description = "是否有直接授权（额外授权或显式禁止）")
-    private Boolean hasDirectPerm;
+    @Schema(description = "是否有直接授权：可多选，命中任意一种")
+    private List<Boolean> hasDirectPerm;
 
-    @Schema(description = "状态：true 启用 / false 禁用")
-    private Boolean status;
+    @Schema(description = "状态：可多选，true 启用 / false 禁用")
+    private List<Boolean> status;
 
     @Schema(description = "最后修改人姓名，模糊匹配")
     private String updateByName;

@@ -3,6 +3,7 @@ package com.yunshu.modules.system.role.service.impl;
 import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.yunshu.common.exception.BizException;
+import com.yunshu.common.filter.TextFilterMode;
 import com.yunshu.modules.auth.service.PermissionService;
 import com.yunshu.modules.system.menu.entity.SysMenu;
 import com.yunshu.modules.system.menu.mapper.SysMenuMapper;
@@ -59,14 +60,18 @@ public class SysRoleServiceImpl implements SysRoleService {
         String updateByName = trim(query.getUpdateByName());
         LocalDateTime updateStart = parseStart(query.getUpdateTimeStart());
         LocalDateTime updateEnd = parseEnd(query.getUpdateTimeEnd());
+        Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
 
         List<SysRole> filtered = all.stream()
-                .filter(item -> name == null || item.getRoleName().toLowerCase().contains(name.toLowerCase()))
-                .filter(item -> code == null || item.getRoleCode().toLowerCase().contains(code.toLowerCase()))
-                .filter(item -> desc == null || (item.getRoleDesc() != null
-                        && item.getRoleDesc().toLowerCase().contains(desc.toLowerCase())))
+                .filter(item -> TextFilterMode.match(item.getRoleName(), name,
+                        TextFilterMode.modeOf(modes, "roleName")))
+                .filter(item -> TextFilterMode.match(item.getRoleCode(), code,
+                        TextFilterMode.modeOf(modes, "roleCode")))
+                .filter(item -> TextFilterMode.match(item.getRoleDesc(), desc,
+                        TextFilterMode.modeOf(modes, "roleDesc")))
                 .filter(item -> updateByName == null || !userTableReady
-                        || containsIgnoreCase(nameOf(userNames, item.getUpdateBy()), updateByName))
+                        || TextFilterMode.match(nameOf(userNames, item.getUpdateBy()), updateByName,
+                        TextFilterMode.modeOf(modes, "updateByName")))
                 .filter(item -> updateStart == null
                         || (item.getUpdateTime() != null && !item.getUpdateTime().isBefore(updateStart)))
                 .filter(item -> updateEnd == null

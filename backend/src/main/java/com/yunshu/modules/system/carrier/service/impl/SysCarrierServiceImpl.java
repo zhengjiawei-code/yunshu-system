@@ -4,6 +4,7 @@ import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
+import com.yunshu.common.filter.TextFilterMode;
 import com.yunshu.modules.system.carrier.dto.CarrierQuery;
 import com.yunshu.modules.system.carrier.dto.CarrierSaveRequest;
 import com.yunshu.modules.system.carrier.entity.SysCarrier;
@@ -17,6 +18,7 @@ import com.yunshu.modules.system.dept.service.UserOrgService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -58,17 +60,26 @@ public class SysCarrierServiceImpl implements SysCarrierService {
         String phone = trim(query.getPhone());
         String updateByName = trim(query.getUpdateByName());
         String remark = trim(query.getRemark());
+        Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
 
         List<SysCarrier> filtered = visible.stream()
-                .filter(item -> code == null || contains(item.getCarrierCode(), code))
-                .filter(item -> name == null || contains(item.getCarrierName(), name))
-                .filter(item -> contact == null || contains(item.getContact(), contact))
-                .filter(item -> phone == null || contains(item.getPhone(), phone))
+                .filter(item -> TextFilterMode.match(item.getCarrierCode(), code,
+                        TextFilterMode.modeOf(modes, "carrierCode")))
+                .filter(item -> TextFilterMode.match(item.getCarrierName(), name,
+                        TextFilterMode.modeOf(modes, "carrierName")))
+                .filter(item -> TextFilterMode.match(item.getContact(), contact,
+                        TextFilterMode.modeOf(modes, "contact")))
+                .filter(item -> TextFilterMode.match(item.getPhone(), phone,
+                        TextFilterMode.modeOf(modes, "phone")))
                 .filter(item -> updateByName == null
-                        || contains(nameOf(userNames, item.getUpdateBy()), updateByName))
-                .filter(item -> remark == null || contains(item.getRemark(), remark))
-                .filter(item -> query.getDeptId() == null || Objects.equals(item.getDeptId(), query.getDeptId()))
-                .filter(item -> query.getStatus() == null || Objects.equals(item.getStatus(), query.getStatus()))
+                        || TextFilterMode.match(nameOf(userNames, item.getUpdateBy()), updateByName,
+                        TextFilterMode.modeOf(modes, "updateByName")))
+                .filter(item -> TextFilterMode.match(item.getRemark(), remark,
+                        TextFilterMode.modeOf(modes, "remark")))
+                .filter(item -> CollectionUtils.isEmpty(query.getDeptId())
+                        || query.getDeptId().contains(item.getDeptId()))
+                .filter(item -> CollectionUtils.isEmpty(query.getStatus())
+                        || query.getStatus().contains(item.getStatus()))
                 .sorted(buildComparator(query, depts, userNames))
                 .toList();
 

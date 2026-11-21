@@ -5,6 +5,11 @@ import {
   resetColumnConfig,
   saveColumnConfig
 } from '@/api/system/columnConfig'
+import {
+  isTextMatchMode,
+  type TextMatchMode,
+  DEFAULT_TEXT_MATCH_MODE
+} from '@/utils/textFilter'
 
 /** 筛选控件类型：全平台统一枚举，新增类型必须同步 ColumnFilter 与规范文档 */
 export type FilterType =
@@ -15,6 +20,9 @@ export type FilterType =
   | 'date'
   | 'daterange'
   | 'numberrange'
+
+/** 文本列查询模式：单模式固定模糊；多模式可在表头选择六种匹配方式 */
+export type FilterMode = 'single' | 'multi'
 
 export interface ColumnOption {
   label: string
@@ -35,6 +43,10 @@ export interface ColumnDef {
   sortable?: boolean
   /** 默认筛选控件类型，默认 text */
   filterType?: FilterType
+  /** 文本列默认查询模式，默认 single */
+  filterMode?: FilterMode | null
+  /** 下拉列默认是否多选，默认 false */
+  selectMultiple?: boolean | null
   /** 下拉类筛选项 */
   filterOptions?: ColumnOption[]
   /** 默认查询值：首次进入页面自动带出 */
@@ -51,6 +63,8 @@ export interface ColumnItemState {
   visible: boolean
   sortable: boolean
   filterType: FilterType
+  filterMode?: FilterMode | null
+  selectMultiple?: boolean | null
   defaultFilter?: unknown
 }
 
@@ -59,16 +73,124 @@ export interface ColumnConfigPayload {
   columns: ColumnItemState[]
 }
 
-const CONFIG_VERSION = 1
+/** 文本列运行时匹配方式：键为列 key，值为本次查询选择的模式 */
+export type RuntimeTextModes = Partial<Record<string, TextMatchMode>>
 
-function defaultState(def: ColumnDef): ColumnItemState {
+const CONFIG_VERSION = 2
+const DATE_TYPES: FilterType[] = ['date', 'daterange']
+
+function isDateType(type: FilterType): boolean {
+  return DATE_TYPES.includes(type)
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function schemaTypeOf(def: ColumnDef): FilterType {
+  return def.filterType || 'text'
+}
+
+/** 默认查询值里的匹配方式；多模式默认值结构为 { mode, value } */
+function defaultMatchModeOf(value: unknown): TextMatchMode {
+  if (isPlainObject(value) && isTextMatchMode(value.mode)) {
+    return value.mode
+  }
+  return DEFAULT_TEXT_MATCH_MODE
+}
+
+function modeValueOf(value: unknown): unknown {
+  if (isPlainObject(value) && 'value' in value) {
+    return value.value
+  }
+  return value
+}
+
+/**
+ * v1 → v2 内存迁移 + 非法配置归一。
+ *
+ * v1 允许用户改筛选类型；v2 起控件类型只跟随页面 schema，用户只能关闭筛选。
+ * 日期类型不提供任何筛选配置项，历史默认值在这里清空。
+ */
+function normalizeState(def: ColumnDef, saved?: Partial<ColumnItemState> | null): ColumnItemState {
+  const targetType = schemaTypeOf(def)
+  const savedType = saved?.filterType
+  let filterType: FilterType = targetType
+  if (savedType === 'none') {
+    filterType = 'none'
+  } else if (savedType === 'multiselect' && targetType === 'select') {
+    filterType = 'select'
+  }
+
+  let filterMode: FilterMode | null = null
+  if (filterType === 'text') {
+    if (saved?.filterMode === 'multi' || saved?.filterMode === 'single') {
+      filterMode = saved.filterMode
+    } else {
+      filterMode = def.filterMode === 'multi' ? 'multi' : 'single'
+    }
+  }
+
+  let selectMultiple: boolean | null = null
+  if (filterType === 'select') {
+    if (typeof saved?.selectMultiple === 'boolean') {
+      selectMultiple = saved.selectMultiple
+    } else if (savedType === 'multiselect') {
+      selectMultiple = true
+    } else if (def.selectMultiple === true) {
+      selectMultiple = true
+    } else {
+      selectMultiple = Array.isArray(saved?.defaultFilter)
+    }
+  }
+
+  let defaultFilter = saved?.defaultFilter
+  if (filterType === 'none' || isDateType(filterType)) {
+    defaultFilter = null
+  } else if (filterType === 'text') {
+    if (filterMode === 'multi') {
+      if (isPlainObject(defaultFilter)) {
+        defaultFilter = {
+          mode: defaultMatchModeOf(defaultFilter),
+          value: typeof defaultFilter.value === 'string' ? defaultFilter.value : ''
+        }
+      } else if (typeof defaultFilter === 'string' && defaultFilter !== '') {
+        defaultFilter = { mode: DEFAULT_TEXT_MATCH_MODE, value: defaultFilter }
+      } else if (defaultFilter === undefined || defaultFilter === null) {
+        defaultFilter = null
+      } else {
+        defaultFilter = { mode: DEFAULT_TEXT_MATCH_MODE, value: String(defaultFilter) }
+      }
+    } else if (isPlainObject(defaultFilter)) {
+      defaultFilter = defaultFilter.value ?? null
+    }
+  } else if (filterType === 'select') {
+    if (selectMultiple) {
+      if (Array.isArray(defaultFilter)) {
+        // 保持数组
+      } else if (defaultFilter === undefined || defaultFilter === null || defaultFilter === '') {
+        defaultFilter = null
+      } else {
+        defaultFilter = [defaultFilter]
+      }
+    } else if (Array.isArray(defaultFilter)) {
+      defaultFilter = defaultFilter[0] ?? null
+    }
+  }
+
   return {
     key: def.key,
-    visible: true,
-    sortable: def.sortable !== false,
-    filterType: def.filterType || 'text',
-    defaultFilter: def.defaultFilter
+    visible: saved?.visible !== false,
+    sortable: saved?.sortable !== false,
+    filterType,
+    filterMode,
+    selectMultiple,
+    defaultFilter
   }
+}
+
+function defaultState(def: ColumnDef): ColumnItemState {
+  return normalizeState(def, null)
 }
 
 /**
@@ -91,14 +213,7 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
       const def = defs.get(item.key)
       if (!def || seen.has(item.key)) continue
       seen.add(item.key)
-      const fallback = defaultState(def)
-      result.push({
-        key: item.key,
-        visible: item.visible !== false,
-        sortable: item.sortable !== false,
-        filterType: item.filterType || fallback.filterType,
-        defaultFilter: item.defaultFilter
-      })
+      result.push(normalizeState(def, item))
     }
     for (const def of configurable.value) {
       if (!seen.has(def.key)) result.push(defaultState(def))
@@ -169,16 +284,51 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
       // 配置里出现未知列时给出兜底，避免模板报错
       return { key, label: key, filterType: 'none' }
     }
+    const filterType = state?.filterType ?? schemaTypeOf(def)
     return {
       ...def,
       sortable: state?.sortable ?? def.sortable !== false,
-      filterType: state?.filterType ?? def.filterType ?? 'text',
+      filterType,
+      filterMode: filterType === 'text' ? state?.filterMode ?? def.filterMode ?? 'single' : null,
+      selectMultiple: filterType === 'select' ? state?.selectMultiple ?? def.selectMultiple ?? false : null,
       defaultFilter: state?.defaultFilter
     }
   }
 
   function isVisible(key: string): boolean {
     return stateOf(key)?.visible !== false
+  }
+
+  /** 文本列当前查询模式；非文本列返回 null */
+  function filterModeOf(key: string): FilterMode | null {
+    const state = stateOf(key)
+    if (!state || state.filterType !== 'text') return null
+    return state.filterMode === 'multi' ? 'multi' : 'single'
+  }
+
+  /**
+   * 生成列表查询的 filterModes 参数（对象）。
+   *
+   * @param keyFieldMap 列 key → 后端字段名；未配置的列不参与
+   * @param runtimeModes 本次查询在表头选择的匹配方式（列 key → 模式），缺省取默认值的 mode
+   *
+   * 第一段页面尚未接入，返回对象由第二段 buildQuery 决定是否 JSON.stringify。
+   */
+  function filterModesParam(
+    keyFieldMap: Record<string, string>,
+    runtimeModes: RuntimeTextModes = {}
+  ): Record<string, TextMatchMode> {
+    const result: Record<string, TextMatchMode> = {}
+    states.value.forEach((item) => {
+      if (!item.visible || item.filterType !== 'text' || item.filterMode !== 'multi') return
+      const field = keyFieldMap[item.key]
+      if (!field) return
+      const mode = runtimeModes[item.key] ?? defaultMatchModeOf(item.defaultFilter)
+      if (mode !== DEFAULT_TEXT_MATCH_MODE) {
+        result[field] = mode
+      }
+    })
+    return result
   }
 
   /** 可见列顺序（传给 SmartTable 做真实渲染顺序调整） */
@@ -207,13 +357,44 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
     return def.prop || def.elKey || key
   }
 
-  /** 默认查询值：仅取可见且有值的列 */
+  /**
+   * 默认查询值（完整结构）：文本多模式返回 { mode, value }，下拉多选返回数组。
+   * 供已完成筛选接入的页面使用；未接入的页面继续用 defaultFilters() 的兼容展开。
+   */
+  function defaultFiltersRaw(): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    states.value
+      .filter((item) => item.visible)
+      .forEach((item) => {
+        const value = item.defaultFilter
+        if (value !== undefined && value !== null && value !== '') {
+          result[item.key] = value
+        }
+      })
+    return result
+  }
+
+  /**
+   * 默认查询值：仅取可见且有值的列。
+   *
+   * 第一段页面仍按单值/单选的旧协议接收，因此这里做兼容展开：
+   * 文本多模式只返回 value，下拉多选只返回第一个值。
+   * 第二段页面接入后改用 filterModesParam + 完整默认值结构。
+   */
   function defaultFilters(): Record<string, unknown> {
     const result: Record<string, unknown> = {}
     states.value
-      .filter((item) => item.visible && item.defaultFilter !== undefined && item.defaultFilter !== null && item.defaultFilter !== '')
+      .filter((item) => item.visible)
       .forEach((item) => {
-        result[item.key] = item.defaultFilter
+        let value = item.defaultFilter
+        if (item.filterType === 'text' && item.filterMode === 'multi') {
+          value = modeValueOf(item.defaultFilter)
+        } else if (item.filterType === 'select' && item.selectMultiple && Array.isArray(value)) {
+          value = value[0]
+        }
+        if (value !== undefined && value !== null && value !== '') {
+          result[item.key] = value
+        }
       })
     return result
   }
@@ -230,9 +411,12 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
     reset,
     col,
     isVisible,
+    filterModeOf,
+    filterModesParam,
     columnOrder,
     hiddenKeys,
     sortableMap,
-    defaultFilters
+    defaultFilters,
+    defaultFiltersRaw
   }
 }

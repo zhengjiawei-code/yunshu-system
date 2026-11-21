@@ -1,5 +1,6 @@
 package com.yunshu.modules.system.role.dto;
 
+import com.yunshu.common.query.BaseListQuery;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -8,7 +9,7 @@ import lombok.Data;
  */
 @Data
 @Schema(description = "角色列表查询参数")
-public class RoleQuery {
+public class RoleQuery extends BaseListQuery {
 
     @Schema(description = "角色名称，模糊匹配")
     private String roleName;

@@ -35,7 +35,8 @@ public class SysMenuController {
     @GetMapping("/tree")
     public ApiResult<List<MenuVO>> tree(
             @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false) String sortOrder) {
+            @RequestParam(required = false) String sortOrder,
+            @RequestParam(required = false) String filterModes) {
         return ApiResult.ok(menuService.tree(sortBy, sortOrder));
     }
 

@@ -1,10 +1,13 @@
 package com.yunshu.modules.system.route.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
+import com.yunshu.common.filter.TextFilterMode;
 import com.yunshu.modules.system.carrier.entity.SysCarrier;
 import com.yunshu.modules.system.carrier.mapper.SysCarrierMapper;
 import com.yunshu.modules.system.dept.entity.SysDept;
@@ -43,6 +46,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -102,17 +106,35 @@ public class SysRouteServiceImpl implements SysRouteService {
 
         String code = trim(query.getRouteCode());
         String name = trim(query.getRouteName());
+        Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
+        Set<Long> ownerCompanyIds = parseIds(query.getOwnerCompanyIds());
         List<SysRoute> filtered = routeMapper.selectList(Wrappers.<SysRoute>lambdaQuery()).stream()
                 .filter(item -> visibleRoute(item, org, granted))
-                .filter(item -> code == null || contains(item.getRouteCode(), code))
-                .filter(item -> name == null || contains(item.getRouteName(), name))
-                .filter(item -> query.getRouteCategory() == null
-                        || Objects.equals(query.getRouteCategory(), item.getRouteCategory()))
-                .filter(item -> query.getOriginDeptId() == null
-                        || Objects.equals(query.getOriginDeptId(), item.getOriginDeptId()))
-                .filter(item -> query.getDestDeptId() == null
-                        || Objects.equals(query.getDestDeptId(), item.getDestDeptId()))
-                .filter(item -> query.getStatus() == null || Objects.equals(query.getStatus(), item.getStatus()))
+                .filter(item -> TextFilterMode.match(item.getRouteCode(), code,
+                        TextFilterMode.modeOf(modes, "routeCode")))
+                .filter(item -> TextFilterMode.match(item.getRouteName(), name,
+                        TextFilterMode.modeOf(modes, "routeName")))
+                .filter(item -> CollectionUtils.isEmpty(query.getRouteCategory())
+                        || query.getRouteCategory().contains(item.getRouteCategory()))
+                .filter(item -> CollectionUtils.isEmpty(query.getOriginDeptId())
+                        || query.getOriginDeptId().contains(item.getOriginDeptId()))
+                .filter(item -> CollectionUtils.isEmpty(query.getDestDeptId())
+                        || query.getDestDeptId().contains(item.getDestDeptId()))
+                .filter(item -> CollectionUtils.isEmpty(query.getStatus())
+                        || query.getStatus().contains(item.getStatus()))
+                .filter(item -> TextFilterMode.match(item.getWarehouseArea(), trim(query.getWarehouseArea()),
+                        TextFilterMode.modeOf(modes, "warehouseArea")))
+                .filter(item -> inRange(item.getMileage(), query.getMileageMin(), query.getMileageMax()))
+                .filter(item -> inRange(item.getTransitHours(), query.getTransitHoursMin(), query.getTransitHoursMax()))
+                .filter(item -> TextFilterMode.match(item.getContactName(), trim(query.getContactName()),
+                        TextFilterMode.modeOf(modes, "contactName")))
+                .filter(item -> TextFilterMode.match(item.getContactPhone(), trim(query.getContactPhone()),
+                        TextFilterMode.modeOf(modes, "contactPhone")))
+                .filter(item -> TextFilterMode.match(item.getServiceName(), trim(query.getServiceName()),
+                        TextFilterMode.modeOf(modes, "serviceName")))
+                .filter(item -> TextFilterMode.match(item.getServicePhone(), trim(query.getServicePhone()),
+                        TextFilterMode.modeOf(modes, "servicePhone")))
+                .filter(item -> ownerCompanyIds.isEmpty() || ownerCompanyIds.contains(item.getOwnerCompanyId()))
                 .filter(item -> grantFilterMatch(query.getGrantScope(), grants.get(item.getId())))
                 .sorted(buildRouteComparator(query, depts, grants))
                 .toList();
@@ -276,34 +298,41 @@ public class SysRouteServiceImpl implements SysRouteService {
         String name = trim(query.getRouteName());
         String region = trim(query.getRegionCode());
         String modifyName = trim(query.getUpdateByName());
-        Set<Long> modifyUserIds = null;
-        if (modifyName != null) {
-            modifyUserIds = new HashSet<>(deptMapper.selectUserIdsByName(modifyName));
-            if (modifyUserIds.isEmpty()) {
-                return emptyTransferPage();
-            }
-        }
-        Set<Long> modifyFilter = modifyUserIds;
+        Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
+        Set<Long> ownerCompanyIds = parseIds(query.getOwnerCompanyIds());
 
-        List<SysRouteTransfer> candidates = transferMapper.selectList(Wrappers.<SysRouteTransfer>lambdaQuery())
-                .stream()
+        List<SysRouteTransfer> allTransfers = transferMapper.selectList(Wrappers.<SysRouteTransfer>lambdaQuery());
+        // 修改人姓名筛选需要先按姓名解析，再由匹配方式决定命中范围
+        Map<Long, String> updateNames = modifyName == null ? Map.of()
+                : resolveUserNames(allTransfers.stream().map(SysRouteTransfer::getUpdateBy)
+                .filter(Objects::nonNull).collect(Collectors.toSet()));
+
+        List<SysRouteTransfer> candidates = allTransfers.stream()
                 .filter(item -> visibleTransfer(item, org, granted))
-                .filter(item -> code == null || contains(item.getRouteCode(), code))
-                .filter(item -> name == null || contains(item.getRouteName(), name))
-                .filter(item -> query.getTransferType() == null
-                        || Objects.equals(query.getTransferType(), item.getTransferType()))
-                .filter(item -> query.getRegionLevel() == null
-                        || Objects.equals(query.getRegionLevel(), item.getRegionLevel()))
+                .filter(item -> TextFilterMode.match(item.getRouteCode(), code,
+                        TextFilterMode.modeOf(modes, "routeCode")))
+                .filter(item -> TextFilterMode.match(item.getRouteName(), name,
+                        TextFilterMode.modeOf(modes, "routeName")))
+                .filter(item -> CollectionUtils.isEmpty(query.getTransferType())
+                        || query.getTransferType().contains(item.getTransferType()))
+                .filter(item -> CollectionUtils.isEmpty(query.getRegionLevel())
+                        || query.getRegionLevel().contains(item.getRegionLevel()))
                 .filter(item -> query.getApplyDeptId() == null
                         || Objects.equals(query.getApplyDeptId(), item.getApplyDeptId()))
-                .filter(item -> query.getCarrierId() == null
-                        || Objects.equals(query.getCarrierId(), item.getCarrierId()))
-                .filter(item -> query.getStatus() == null || Objects.equals(query.getStatus(), item.getStatus()))
-                .filter(item -> region == null || contains(item.getRegionCode(), region)
-                        || contains(item.getRegionFullName(), region))
-                .filter(item -> modifyFilter == null
-                        || (item.getUpdateBy() != null && modifyFilter.contains(item.getUpdateBy())))
-                .filter(item -> grantFilterMatch(query.getGrantScope(), grants.get(item.getId())))
+                .filter(item -> CollectionUtils.isEmpty(query.getCarrierId())
+                        || query.getCarrierId().contains(item.getCarrierId()))
+                .filter(item -> CollectionUtils.isEmpty(query.getStatus())
+                        || query.getStatus().contains(item.getStatus()))
+                .filter(item -> ownerCompanyIds.isEmpty() || ownerCompanyIds.contains(item.getOwnerCompanyId()))
+                .filter(item -> region == null
+                        || TextFilterMode.match(item.getRegionCode(), region,
+                        TextFilterMode.modeOf(modes, "regionFullName"))
+                        || TextFilterMode.match(item.getRegionFullName(), region,
+                        TextFilterMode.modeOf(modes, "regionFullName")))
+                .filter(item -> modifyName == null
+                        || TextFilterMode.match(updateNames.get(item.getUpdateBy()), modifyName,
+                        TextFilterMode.modeOf(modes, "updateByName")))
+                .filter(item -> grantScopeMatch(query.getGrantScope(), grants.get(item.getId())))
                 .collect(Collectors.toList());
 
         Set<Long> carrierIds = candidates.stream().map(SysRouteTransfer::getCarrierId)
@@ -359,11 +388,11 @@ public class SysRouteServiceImpl implements SysRouteService {
 
     @Override
     @DS("slave")
-    public RegionLibraryPageVO regionLibrary(Long applyDeptId, String keyword, Integer level,
-                                             Boolean configured, String parentCode,
+    public RegionLibraryPageVO regionLibrary(Long applyDeptId, String keyword, List<Integer> levelList,
+                                             List<Boolean> configuredList, String parentCode,
                                              String provinceCode, String cityCode,
                                              String districtKeyword, String townKeyword,
-                                             String sortBy, String sortOrder,
+                                             String filterModes, String sortBy, String sortOrder,
                                              long pageNum, long pageSize) {
         UserOrgService.UserOrg org = userOrgService.current();
         Set<Long> scope = userOrgService.manageDeptIds(org);
@@ -374,13 +403,18 @@ public class SysRouteServiceImpl implements SysRouteService {
         String cityPrefix = trim(cityCode);
         String districtKw = trim(districtKeyword);
         String townKw = trim(townKeyword);
-        if (kw == null && level == null && parent == null && provincePrefix == null && cityPrefix == null
-                && districtKw == null && townKw == null && configured == null) {
+        boolean hasLevel = !CollectionUtils.isEmpty(levelList);
+        boolean hasConfigured = !CollectionUtils.isEmpty(configuredList);
+        if (kw == null && !hasLevel && parent == null && provincePrefix == null && cityPrefix == null
+                && districtKw == null && townKw == null && !hasConfigured) {
             throw new BizException("请输入筛选条件后再查询区划");
         }
-        if (level != null && (level < 2 || level > 4)) {
+        if (hasLevel && levelList.stream().anyMatch(item -> item == null || item < 2 || item > 4)) {
             throw new BizException("区划级别仅支持市、区县、乡级");
         }
+        Map<String, TextFilterMode> modes = TextFilterMode.parse(filterModes);
+        boolean wantConfigured = configuredList != null && configuredList.contains(Boolean.TRUE);
+        boolean wantUnconfigured = configuredList != null && configuredList.contains(Boolean.FALSE);
 
         // 当前网点下本公司可见的路由 -> 区划配置状态；配置筛选必须在分页前落到 SQL，否则总数不准
         Set<Long> granted = authorizedRouteIds(SCOPE_TRANSFER, org);
@@ -393,7 +427,7 @@ public class SysRouteServiceImpl implements SysRouteService {
         Set<String> configuredCodes = configuredRoutes.keySet();
 
         RegionLibraryPageVO result = new RegionLibraryPageVO();
-        if (Boolean.TRUE.equals(configured) && configuredCodes.isEmpty()) {
+        if (wantConfigured && !wantUnconfigured && configuredCodes.isEmpty()) {
             result.setRecords(List.of());
             result.setTotal(0);
             return result;
@@ -401,21 +435,23 @@ public class SysRouteServiceImpl implements SysRouteService {
 
         long safePageNum = Math.max(1, pageNum);
         long safePageSize = Math.min(200, Math.max(1, pageSize));
-        var wrapper = Wrappers.<SysRegion>lambdaQuery()
+        LambdaQueryWrapper<SysRegion> wrapper = Wrappers.<SysRegion>lambdaQuery()
                 .eq(SysRegion::getStatus, 1)
                 .ge(SysRegion::getLevel, 2)
                 .le(SysRegion::getLevel, 4)
-                .eq(level != null, SysRegion::getLevel, level)
+                .in(hasLevel, SysRegion::getLevel, hasLevel ? levelList : List.of())
                 .eq(parent != null, SysRegion::getParentCode, parent)
                 .likeRight(provincePrefix != null && provincePrefix.length() >= 2,
                         SysRegion::getCode, provincePrefix == null ? "" : provincePrefix.substring(0, 2))
                 .likeRight(cityPrefix != null && cityPrefix.length() >= 4,
                         SysRegion::getCode, cityPrefix == null ? "" : cityPrefix.substring(0, 4))
-                .like(districtKw != null, SysRegion::getFullName, districtKw)
-                .like(townKw != null, SysRegion::getName, townKw)
                 .and(kw != null, q -> q.like(SysRegion::getCode, kw)
                         .or().like(SysRegion::getName, kw)
                         .or().like(SysRegion::getFullName, kw));
+        applyRegionTextCondition(wrapper, SysRegion::getFullName, districtKw,
+                TextFilterMode.modeOf(modes, "districtKeyword"));
+        applyRegionTextCondition(wrapper, SysRegion::getName, townKw,
+                TextFilterMode.modeOf(modes, "townKeyword"));
         // 服务端排序：仅开放 level/name，其他字段忽略并回落编码升序
         boolean desc = "desc".equalsIgnoreCase(trim(sortOrder));
         String sortField = trim(sortBy);
@@ -425,9 +461,9 @@ public class SysRouteServiceImpl implements SysRouteService {
             wrapper.orderBy(true, !desc, SysRegion::getName);
         }
         wrapper.orderByAsc(SysRegion::getCode);
-        if (Boolean.TRUE.equals(configured)) {
+        if (wantConfigured && !wantUnconfigured) {
             wrapper.in(SysRegion::getCode, configuredCodes);
-        } else if (Boolean.FALSE.equals(configured) && !configuredCodes.isEmpty()) {
+        } else if (!wantConfigured && wantUnconfigured && !configuredCodes.isEmpty()) {
             wrapper.notIn(SysRegion::getCode, configuredCodes);
         }
 
@@ -1139,6 +1175,28 @@ public class SysRouteServiceImpl implements SysRouteService {
         companyMapper.insert(row);
     }
 
+    /** 区划库两列需要把匹配方式落到 SQL，避免先分页再过滤导致总数不准 */
+    private void applyRegionTextCondition(LambdaQueryWrapper<SysRegion> wrapper,
+                                          SFunction<SysRegion, String> column,
+                                          String keyword, TextFilterMode mode) {
+        if (keyword == null) {
+            return;
+        }
+        switch (mode == null ? TextFilterMode.LIKE : mode) {
+            case EXACT -> wrapper.eq(column, keyword);
+            case NE -> wrapper.ne(column, keyword);
+            case LEFT -> wrapper.likeRight(column, keyword);
+            case RIGHT -> wrapper.likeLeft(column, keyword);
+            case BATCH -> {
+                List<String> values = TextFilterMode.batchValues(keyword);
+                if (!values.isEmpty()) {
+                    wrapper.in(column, values);
+                }
+            }
+            default -> wrapper.like(column, keyword);
+        }
+    }
+
     private boolean grantFilterMatch(String grantScope, List<SysRouteCompany> rows) {
         if (!StringUtils.hasText(grantScope)) {
             return true;
@@ -1146,6 +1204,16 @@ public class SysRouteServiceImpl implements SysRouteService {
         boolean all = rows != null && rows.stream()
                 .anyMatch(item -> Objects.equals(0L, item.getCompanyDeptId()));
         return "ALL".equalsIgnoreCase(grantScope) ? all : !all;
+    }
+
+    /** 授权范围多选：ALL=授权全部，PARTIAL=按公司授权 */
+    private boolean grantScopeMatch(List<String> grantScopes, List<SysRouteCompany> rows) {
+        if (CollectionUtils.isEmpty(grantScopes)) {
+            return true;
+        }
+        boolean all = rows != null && rows.stream()
+                .anyMatch(item -> Objects.equals(0L, item.getCompanyDeptId()));
+        return grantScopes.contains(all ? "ALL" : "PARTIAL");
     }
 
     private int requireScope(Integer routeScope) {
@@ -1661,6 +1729,36 @@ public class SysRouteServiceImpl implements SysRouteService {
 
     private boolean contains(String source, String keyword) {
         return source != null && source.toLowerCase().contains(keyword.toLowerCase());
+    }
+
+    /** 逗号分隔 ID：空值返回空集合，非法片段忽略 */
+    private Set<Long> parseIds(String value) {
+        if (!StringUtils.hasText(value)) {
+            return Set.of();
+        }
+        Set<Long> result = new LinkedHashSet<>();
+        for (String part : value.split(",")) {
+            try {
+                if (StringUtils.hasText(part)) {
+                    result.add(Long.parseLong(part.trim()));
+                }
+            } catch (NumberFormatException ignored) {
+                // 非法 ID 不参与过滤
+            }
+        }
+        return result;
+    }
+
+    /** 数值区间；边界为空表示不限，值本身为空时仅在无边界约束下命中 */
+    private boolean inRange(BigDecimal value, BigDecimal min, BigDecimal max) {
+        if (min == null && max == null) {
+            return true;
+        }
+        if (value == null) {
+            return false;
+        }
+        return (min == null || value.compareTo(min) >= 0)
+                && (max == null || value.compareTo(max) <= 0);
     }
 
     private LocalDateTime parseStart(String value) {

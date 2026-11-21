@@ -34,10 +34,22 @@ export interface RouteRecord {
 export interface RouteQuery {
   routeCode?: string
   routeName?: string
-  routeCategory?: 1 | 2
-  originDeptId?: number
-  destDeptId?: number
-  status?: boolean
+  routeCategory?: 1 | 2 | Array<1 | 2>
+  originDeptId?: number | number[]
+  destDeptId?: number | number[]
+  warehouseArea?: string
+  mileageMin?: number
+  mileageMax?: number
+  transitHoursMin?: number
+  transitHoursMax?: number
+  contactName?: string
+  contactPhone?: string
+  serviceName?: string
+  servicePhone?: string
+  ownerCompanyIds?: string
+  /** 文本列匹配模式 JSON：{ field: 'exact' | 'ne' | 'like' | 'left' | 'right' | 'batch' } */
+  filterModes?: string
+  status?: boolean | boolean[]
   grantScope?: 'ALL' | 'PARTIAL'
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
@@ -97,14 +109,16 @@ export interface TransferRecord {
 export interface TransferQuery {
   routeCode?: string
   routeName?: string
-  transferType?: 1 | 2
+  transferType?: 1 | 2 | Array<1 | 2>
   applyDeptId?: number
   regionCode?: string
-  regionLevel?: 2 | 3 | 4
-  carrierId?: number
-  status?: boolean
-  grantScope?: 'ALL' | 'PARTIAL'
+  regionLevel?: 2 | 3 | 4 | Array<2 | 3 | 4>
+  carrierId?: number | number[]
+  status?: boolean | boolean[]
+  grantScope?: 'ALL' | 'PARTIAL' | Array<'ALL' | 'PARTIAL'>
   updateByName?: string
+  ownerCompanyIds?: string
+  filterModes?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   pageNum?: number
@@ -134,13 +148,14 @@ export interface RegionLibraryRecord {
 export interface RegionLibraryQuery {
   applyDeptId?: number
   keyword?: string
-  level?: 2 | 3 | 4
-  configured?: boolean
+  level?: 2 | 3 | 4 | Array<2 | 3 | 4>
+  configured?: boolean | boolean[]
   parentCode?: string
   provinceCode?: string
   cityCode?: string
   districtKeyword?: string
   townKeyword?: string
+  filterModes?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   pageNum?: number

@@ -17,7 +17,7 @@
           <el-button class="tool-reset" @click="resetFilters">重置</el-button>
           <el-button class="tool-export" :icon="Download" @click="handleExport">导出</el-button>
 
-          <el-popover placement="bottom-end" :width="440" trigger="click">
+          <el-popover placement="bottom-end" :width="560" trigger="click">
             <template #reference>
               <el-button :icon="Setting">列设置</el-button>
             </template>
@@ -81,7 +81,10 @@
                   v-if="col('roleName').filterType !== 'none'"
                   v-model="filters.roleName"
                   :type="col('roleName').filterType"
+                  :filter-mode="col('roleName').filterMode"
+                  :text-mode="textModes.roleName"
                   :options="col('roleName').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.roleName = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -104,7 +107,10 @@
                   v-if="col('roleCode').filterType !== 'none'"
                   v-model="filters.roleCode"
                   :type="col('roleCode').filterType"
+                  :filter-mode="col('roleCode').filterMode"
+                  :text-mode="textModes.roleCode"
                   :options="col('roleCode').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.roleCode = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -127,7 +133,10 @@
                   v-if="col('roleDesc').filterType !== 'none'"
                   v-model="filters.roleDesc"
                   :type="col('roleDesc').filterType"
+                  :filter-mode="col('roleDesc').filterMode"
+                  :text-mode="textModes.roleDesc"
                   :options="col('roleDesc').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.roleDesc = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -148,7 +157,10 @@
                   v-if="col('updateByName').filterType !== 'none'"
                   v-model="filters.updateByName"
                   :type="col('updateByName').filterType"
+                  :filter-mode="col('updateByName').filterMode"
+                  :text-mode="textModes.updateByName"
                   :options="col('updateByName').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.updateByName = mode)"
                   @change="onTextFilter"
                 />
               </div>
@@ -240,6 +252,7 @@ import type { RoleQuery, RoleRecord } from '@/types/role'
 import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteRole, getRolePage } from '@/api/system/role'
 import { useColumnConfig } from '@/composables/useColumnConfig'
+import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import SmartTable from '@/components/base/SmartTable.vue'
 import ColumnFilter from '@/components/base/ColumnFilter.vue'
 import ColumnSetting from '@/components/base/ColumnSetting.vue'
@@ -282,7 +295,8 @@ const {
   load: loadColumnConfig,
   save: saveColumnConfig,
   reset: resetColumnConfig,
-  defaultFilters
+  defaultFiltersRaw,
+  filterModesParam
 } = useColumnConfig('system:role', schema)
 
 const roleTableRef = ref<InstanceType<typeof SmartTable>>()
@@ -305,6 +319,21 @@ const filters = reactive<{
   updateByName: '',
   updateRange: []
 })
+
+/** 文本列运行时匹配方式：由表头多模式控件写入 */
+const textModes = reactive<Record<string, TextMatchMode>>({})
+
+const FILTER_FIELD_MAP: Record<string, string> = {
+  roleName: 'roleName',
+  roleCode: 'roleCode',
+  roleDesc: 'roleDesc',
+  updateByName: 'updateByName'
+}
+
+function buildFilterModes(): string | undefined {
+  const modes = filterModesParam(FILTER_FIELD_MAP, textModes)
+  return Object.keys(modes).length ? JSON.stringify(modes) : undefined
+}
 
 /** 服务端排序状态：sortBy 为空表示默认 id asc */
 const sortState = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({
@@ -350,6 +379,7 @@ function buildQuery(pageNum = page.value, size = pageSize.value): RoleQuery {
       : undefined,
     updateTimeStart: isVisible('updateTime') ? filters.updateRange[0] || undefined : undefined,
     updateTimeEnd: isVisible('updateTime') ? filters.updateRange[1] || undefined : undefined,
+    filterModes: buildFilterModes(),
     sortBy: sortState.sortBy,
     sortOrder: sortState.sortOrder,
     pageNum,
@@ -432,14 +462,25 @@ async function handleColumnReset() {
 
 /** 首次进入按默认查询值自动带出筛选 */
 function applyDefaultFilters() {
-  const defaults = defaultFilters()
-  if (defaults.roleName != null) filters.roleName = String(defaults.roleName)
-  if (defaults.roleCode != null) filters.roleCode = String(defaults.roleCode)
-  if (defaults.roleDesc != null) filters.roleDesc = String(defaults.roleDesc)
-  if (defaults.updateByName != null) filters.updateByName = String(defaults.updateByName)
+  const defaults = defaultFiltersRaw()
+  applyTextDefault('roleName', defaults.roleName, (value) => (filters.roleName = value))
+  applyTextDefault('roleCode', defaults.roleCode, (value) => (filters.roleCode = value))
+  applyTextDefault('roleDesc', defaults.roleDesc, (value) => (filters.roleDesc = value))
+  applyTextDefault('updateByName', defaults.updateByName, (value) => (filters.updateByName = value))
   if (Array.isArray(defaults.updateTime)) {
     filters.updateRange = defaults.updateTime.map((item) => String(item))
   }
+}
+
+function applyTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) textModes[key] = item.mode
+    return
+  }
+  setter(String(value))
 }
 
 function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {

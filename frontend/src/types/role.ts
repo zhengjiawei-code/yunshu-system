@@ -22,6 +22,7 @@ export interface RoleQuery {
   updateByName?: string
   updateTimeStart?: string
   updateTimeEnd?: string
+  filterModes?: string
   /** 服务端排序字段（白名单），空表示默认 id asc */
   sortBy?: string
   sortOrder?: 'asc' | 'desc'

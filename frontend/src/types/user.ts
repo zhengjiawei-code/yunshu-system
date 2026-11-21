@@ -39,13 +39,14 @@ export interface UserQuery {
   realName?: string
   phone?: string
   email?: string
-  deptId?: number
-  roleId?: number
-  hasDirectPerm?: boolean
-  status?: boolean
+  deptId?: number | number[]
+  roleId?: number | number[]
+  hasDirectPerm?: boolean | boolean[]
+  status?: boolean | boolean[]
   updateByName?: string
   updateTimeStart?: string
   updateTimeEnd?: string
+  filterModes?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   pageNum?: number

@@ -20,7 +20,7 @@
           <el-button class="tool-reset" @click="resetFilters">重置</el-button>
           <el-button :icon="Refresh" :loading="loading" @click="loadData">刷新</el-button>
 
-          <el-popover placement="bottom-end" :width="440" trigger="click">
+          <el-popover placement="bottom-end" :width="560" trigger="click">
             <template #reference>
               <el-button :icon="Setting">列设置</el-button>
             </template>
@@ -77,7 +77,10 @@
                   v-if="col('menuName').filterType !== 'none'"
                   v-model="filters.menuName"
                   :type="col('menuName').filterType"
+                  :filter-mode="col('menuName').filterMode"
+                  :text-mode="textModes.menuName"
                   :options="col('menuName').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.menuName = mode)"
                   @change="onFilterChange"
                 />
               </div>
@@ -106,6 +109,7 @@
                   v-if="col('menuType').filterType !== 'none'"
                   v-model="filters.menuType"
                   :type="col('menuType').filterType"
+                  :select-multiple="col('menuType').selectMultiple === true"
                   :options="col('menuType').filterOptions"
                   @change="onFilterChange"
                 />
@@ -129,7 +133,10 @@
                   v-if="col('routePath').filterType !== 'none'"
                   v-model="filters.routePath"
                   :type="col('routePath').filterType"
+                  :filter-mode="col('routePath').filterMode"
+                  :text-mode="textModes.routePath"
                   :options="col('routePath').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.routePath = mode)"
                   @change="onFilterChange"
                 />
               </div>
@@ -150,7 +157,10 @@
                   v-if="col('component').filterType !== 'none'"
                   v-model="filters.component"
                   :type="col('component').filterType"
+                  :filter-mode="col('component').filterMode"
+                  :text-mode="textModes.component"
                   :options="col('component').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.component = mode)"
                   @change="onFilterChange"
                 />
               </div>
@@ -166,7 +176,10 @@
                   v-if="col('perms').filterType !== 'none'"
                   v-model="filters.perms"
                   :type="col('perms').filterType"
+                  :filter-mode="col('perms').filterMode"
+                  :text-mode="textModes.perms"
                   :options="col('perms').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.perms = mode)"
                   @change="onFilterChange"
                 />
               </div>
@@ -190,7 +203,10 @@
                   v-if="col('terminalType').filterType !== 'none'"
                   v-model="filters.terminalType"
                   :type="col('terminalType').filterType"
+                  :filter-mode="col('terminalType').filterMode"
+                  :text-mode="textModes.terminalType"
                   :options="col('terminalType').filterOptions"
+                  @update:mode="(mode: TextMatchMode) => (textModes.terminalType = mode)"
                   @change="onFilterChange"
                 />
               </div>
@@ -233,6 +249,7 @@
                   v-if="col('visible').filterType !== 'none'"
                   v-model="filters.visible"
                   :type="col('visible').filterType"
+                  :select-multiple="col('visible').selectMultiple === true"
                   :options="col('visible').filterOptions"
                   @change="onFilterChange"
                 />
@@ -262,6 +279,7 @@
                   v-if="col('status').filterType !== 'none'"
                   v-model="filters.status"
                   :type="col('status').filterType"
+                  :select-multiple="col('status').selectMultiple === true"
                   :options="col('status').filterOptions"
                   @change="onFilterChange"
                 />
@@ -377,6 +395,7 @@ import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteMenu, getMenuTree, sortMenus } from '@/api/system/menu'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { resolveIcon } from '@/utils/icon'
+import { matchByMode, isTextMatchMode, splitBatchValues, BATCH_LIMIT, type TextMatchMode } from '@/utils/textFilter'
 import { collectExpandKeys, filterTree } from '@/utils/tree'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
@@ -454,7 +473,7 @@ const {
   load: loadColumnConfig,
   save: saveColumnConfig,
   reset: resetColumnConfig,
-  defaultFilters
+  defaultFiltersRaw
 } = useColumnConfig('system:menu', schema)
 
 const menuTableRef = ref<InstanceType<typeof SmartTable>>()
@@ -464,14 +483,14 @@ const expandRowKeys = ref<number[]>([])
 
 const filters = reactive<{
   menuName: string
-  menuType: number | '' | undefined
+  menuType: number | number[] | '' | undefined
   routePath: string
   component: string
   perms: string
   terminalType: string
   sortRange: [number | undefined, number | undefined]
-  visible: boolean | '' | undefined
-  status: boolean | '' | undefined
+  visible: boolean | boolean[] | '' | undefined
+  status: boolean | boolean[] | '' | undefined
   updateRange: string[]
 }>({
   menuName: '',
@@ -485,6 +504,9 @@ const filters = reactive<{
   status: '',
   updateRange: []
 })
+
+/** 文本列运行时匹配方式：由表头多模式控件写入 */
+const textModes = reactive<Record<string, TextMatchMode>>({})
 
 /** 服务端排序状态：菜单是树表，排序只作用于同级节点 */
 const sortState = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({
@@ -505,19 +527,25 @@ function handleSortChange({ prop, order }: { prop?: string; order?: 'ascending' 
 
 /** 下拉清空时 Element Plus 可能给 undefined，这里统一归一化 */
 const normalized = computed(() => ({
-  menuName: filters.menuName.trim().toLowerCase(),
-  routePath: filters.routePath.trim().toLowerCase(),
-  component: filters.component.trim().toLowerCase(),
-  perms: filters.perms.trim().toLowerCase(),
-  terminalType: filters.terminalType.trim().toLowerCase(),
-  menuType: filters.menuType === '' || filters.menuType === undefined ? null : filters.menuType,
-  visible: filters.visible === '' || filters.visible === undefined ? null : filters.visible,
-  status: filters.status === '' || filters.status === undefined ? null : filters.status,
+  menuName: filters.menuName.trim(),
+  routePath: filters.routePath.trim(),
+  component: filters.component.trim(),
+  perms: filters.perms.trim(),
+  terminalType: filters.terminalType.trim(),
+  menuType: toValueArray(filters.menuType),
+  visible: toValueArray(filters.visible),
+  status: toValueArray(filters.status),
   sortMin: filters.sortRange[0] ?? null,
   sortMax: filters.sortRange[1] ?? null,
   updateStart: filters.updateRange[0] || null,
   updateEnd: filters.updateRange[1] || null
 }))
+
+function toValueArray<T>(value: T | T[] | '' | undefined): T[] {
+  if (Array.isArray(value)) return value
+  if (value === '' || value === undefined || value === null) return []
+  return [value]
+}
 
 const filterActive = computed(() => {
   const n = normalized.value
@@ -527,9 +555,9 @@ const filterActive = computed(() => {
     !!n.component ||
     !!n.perms ||
     !!n.terminalType ||
-    n.menuType !== null ||
-    n.visible !== null ||
-    n.status !== null ||
+    n.menuType.length > 0 ||
+    n.visible.length > 0 ||
+    n.status.length > 0 ||
     n.sortMin !== null ||
     n.sortMax !== null ||
     n.updateStart !== null ||
@@ -537,20 +565,28 @@ const filterActive = computed(() => {
   )
 })
 
+/** 单列匹配：批量超限时由 onFilterChange 统一提示，这里只兜底不命中 */
+function safeMatch(raw: unknown, keyword: string, mode: TextMatchMode): boolean {
+  try {
+    return matchByMode(raw, keyword, mode)
+  } catch {
+    return false
+  }
+}
+
 const displayTree = computed(() => {
   if (!filterActive.value) return treeData.value
   const n = normalized.value
-  const contains = (value: unknown, keyword: string) =>
-    !keyword || String(value ?? '').toLowerCase().includes(keyword)
+  const modes = textModes
   return filterTree(treeData.value, (node) => {
-    if (!contains(node.menuName, n.menuName)) return false
-    if (!contains(node.routePath, n.routePath)) return false
-    if (!contains(node.component, n.component)) return false
-    if (!contains(node.perms, n.perms)) return false
-    if (!contains(node.terminalType, n.terminalType)) return false
-    if (n.menuType !== null && node.menuType !== n.menuType) return false
-    if (n.visible !== null && Boolean(node.visible) !== n.visible) return false
-    if (n.status !== null && Boolean(node.status) !== n.status) return false
+    if (!safeMatch(node.menuName, n.menuName, modes.menuName ?? 'like')) return false
+    if (!safeMatch(node.routePath, n.routePath, modes.routePath ?? 'like')) return false
+    if (!safeMatch(node.component, n.component, modes.component ?? 'like')) return false
+    if (!safeMatch(node.perms, n.perms, modes.perms ?? 'like')) return false
+    if (!safeMatch(node.terminalType, n.terminalType, modes.terminalType ?? 'like')) return false
+    if (n.menuType.length && !n.menuType.includes(node.menuType)) return false
+    if (n.visible.length && !n.visible.some((item) => item === Boolean(node.visible))) return false
+    if (n.status.length && !n.status.some((item) => item === Boolean(node.status))) return false
     if (n.sortMin !== null && (node.sortOrder ?? 0) < n.sortMin) return false
     if (n.sortMax !== null && (node.sortOrder ?? 0) > n.sortMax) return false
     const updateDate = (node.updateTime || '').slice(0, 10)
@@ -822,13 +858,33 @@ function resetFilters() {
   filters.visible = ''
   filters.status = ''
   filters.updateRange = []
+  Object.keys(textModes).forEach((key) => delete textModes[key])
 }
 
 /** 表头筛选变化：纯前端筛选，立即重算树与展开项 */
 function onFilterChange() {
+  if (hasBatchOverflow()) {
+    ElMessage.error(`批量查询最多 ${BATCH_LIMIT} 个值，已按不匹配处理`)
+  }
   expandRowKeys.value = filterActive.value
     ? collectExpandKeys(displayTree.value)
     : collectExpandKeys(treeData.value, true)
+}
+
+/** 批量模式关键字超限检测：与后端上限保持一致，超限时明确提示 */
+function hasBatchOverflow(): boolean {
+  const n = normalized.value
+  const pairs: Array<[string, TextMatchMode]> = [
+    [n.menuName, textModes.menuName ?? 'like'],
+    [n.routePath, textModes.routePath ?? 'like'],
+    [n.component, textModes.component ?? 'like'],
+    [n.perms, textModes.perms ?? 'like'],
+    [n.terminalType, textModes.terminalType ?? 'like']
+  ]
+  return pairs.some(
+    ([keyword, mode]) =>
+      mode === 'batch' && keyword.trim() !== '' && splitBatchValues(keyword).length > BATCH_LIMIT
+  )
 }
 
 watch(
@@ -865,22 +921,49 @@ async function handleColumnReset() {
 
 /** 首次进入按默认查询值自动带出筛选 */
 function applyDefaultFilters() {
-  const defaults = defaultFilters()
-  for (const key of ['menuName', 'routePath', 'component', 'perms', 'terminalType'] as const) {
-    if (defaults[key] != null) filters[key] = String(defaults[key])
-  }
-  if (defaults.menuType != null) filters.menuType = Number(defaults.menuType)
-  if (defaults.visible != null) filters.visible = Boolean(defaults.visible)
-  if (defaults.status != null) filters.status = Boolean(defaults.status)
+  const defaults = defaultFiltersRaw()
+  applyTextDefault('menuName', defaults.menuName, (value) => (filters.menuName = value))
+  applyTextDefault('routePath', defaults.routePath, (value) => (filters.routePath = value))
+  applyTextDefault('component', defaults.component, (value) => (filters.component = value))
+  applyTextDefault('perms', defaults.perms, (value) => (filters.perms = value))
+  applyTextDefault('terminalType', defaults.terminalType, (value) => (filters.terminalType = value))
+
+  const menuTypes = toValueList(defaults.menuType).map((item) => Number(item))
+  if (menuTypes.length) filters.menuType = menuTypes.length === 1 ? menuTypes[0] : menuTypes
+
+  const visibles = toValueList(defaults.visible).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (visibles.length) filters.visible = visibles.length === 1 ? visibles[0] : visibles
+
+  const statuses = toValueList(defaults.status).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (statuses.length) filters.status = statuses.length === 1 ? statuses[0] : statuses
+
   if (Array.isArray(defaults.sortOrder)) {
     filters.sortRange = [
       defaults.sortOrder[0] == null ? undefined : Number(defaults.sortOrder[0]),
       defaults.sortOrder[1] == null ? undefined : Number(defaults.sortOrder[1])
     ]
   }
-  if (Array.isArray(defaults.updateTime)) {
-    filters.updateRange = defaults.updateTime.map((item) => String(item))
+}
+
+function toValueList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (value === null || value === undefined || value === '') return []
+  return [value]
+}
+
+function applyTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) textModes[key] = item.mode
+    return
   }
+  setter(String(value))
 }
 
 function openCreateDirectory(parentId = 0) {

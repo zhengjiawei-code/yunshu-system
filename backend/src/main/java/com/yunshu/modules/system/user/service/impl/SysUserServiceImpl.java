@@ -3,6 +3,7 @@ package com.yunshu.modules.system.user.service.impl;
 import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.yunshu.common.exception.BizException;
+import com.yunshu.common.filter.TextFilterMode;
 import com.yunshu.modules.auth.service.PermissionService;
 import com.yunshu.modules.auth.service.TokenStore;
 import com.yunshu.modules.system.dept.entity.SysDept;
@@ -31,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -82,20 +84,27 @@ public class SysUserServiceImpl implements SysUserService {
         String updateByName = trim(query.getUpdateByName());
         LocalDateTime start = parseStart(query.getUpdateTimeStart());
         LocalDateTime end = parseEnd(query.getUpdateTimeEnd());
+        Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
 
         List<SysUser> filtered = all.stream()
-                .filter(user -> username == null || containsIgnoreCase(user.getUsername(), username))
-                .filter(user -> realName == null || containsIgnoreCase(user.getRealName(), realName))
-                .filter(user -> phone == null || containsIgnoreCase(user.getPhone(), phone))
-                .filter(user -> email == null || containsIgnoreCase(user.getEmail(), email))
-                .filter(user -> query.getDeptId() == null || Objects.equals(user.getDeptId(), query.getDeptId()))
-                .filter(user -> query.getRoleId() == null
-                        || context.roleIdsOf(user.getId()).contains(query.getRoleId()))
-                .filter(user -> query.getHasDirectPerm() == null
-                        || context.hasDirectPerm(user.getId()) == query.getHasDirectPerm())
-                .filter(user -> query.getStatus() == null || Objects.equals(user.getStatus(), query.getStatus()))
-                .filter(user -> updateByName == null
-                        || containsIgnoreCase(context.realNameOf(user.getUpdateBy()), updateByName))
+                .filter(user -> TextFilterMode.match(user.getUsername(), username,
+                        TextFilterMode.modeOf(modes, "username")))
+                .filter(user -> TextFilterMode.match(user.getRealName(), realName,
+                        TextFilterMode.modeOf(modes, "realName")))
+                .filter(user -> TextFilterMode.match(user.getPhone(), phone,
+                        TextFilterMode.modeOf(modes, "phone")))
+                .filter(user -> TextFilterMode.match(user.getEmail(), email,
+                        TextFilterMode.modeOf(modes, "email")))
+                .filter(user -> CollectionUtils.isEmpty(query.getDeptId())
+                        || query.getDeptId().contains(user.getDeptId()))
+                .filter(user -> CollectionUtils.isEmpty(query.getRoleId())
+                        || context.roleIdsOf(user.getId()).stream().anyMatch(query.getRoleId()::contains))
+                .filter(user -> CollectionUtils.isEmpty(query.getHasDirectPerm())
+                        || query.getHasDirectPerm().contains(context.hasDirectPerm(user.getId())))
+                .filter(user -> CollectionUtils.isEmpty(query.getStatus())
+                        || query.getStatus().contains(user.getStatus()))
+                .filter(user -> TextFilterMode.match(context.realNameOf(user.getUpdateBy()), updateByName,
+                        TextFilterMode.modeOf(modes, "updateByName")))
                 .filter(user -> start == null
                         || (user.getUpdateTime() != null && !user.getUpdateTime().isBefore(start)))
                 .filter(user -> end == null

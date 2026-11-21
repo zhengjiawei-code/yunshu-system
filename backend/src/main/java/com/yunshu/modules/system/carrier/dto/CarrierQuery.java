@@ -1,10 +1,13 @@
 package com.yunshu.modules.system.carrier.dto;
 
+import com.yunshu.common.query.BaseListQuery;
 import lombok.Data;
+
+import java.util.List;
 
 /** 承运商列表查询：标准列表的服务端筛选/排序/分页 */
 @Data
-public class CarrierQuery {
+public class CarrierQuery extends BaseListQuery {
 
     private String carrierCode;
 
@@ -14,9 +17,9 @@ public class CarrierQuery {
 
     private String phone;
 
-    private Long deptId;
+    private List<Long> deptId;
 
-    private Boolean status;
+    private List<Boolean> status;
 
     private String updateByName;
 

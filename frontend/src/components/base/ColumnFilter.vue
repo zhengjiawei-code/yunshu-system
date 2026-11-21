@@ -1,6 +1,16 @@
 <template>
+  <text-mode-filter
+    v-if="type === 'text' && filterMode === 'multi'"
+    :model-value="(modelValue as string | undefined) ?? ''"
+    :mode="textMode"
+    :placeholder="placeholder"
+    @update:model-value="onUpdate"
+    @update:mode="(value) => emit('update:mode', value)"
+    @change="emit('change')"
+  />
+
   <el-input
-    v-if="type === 'text'"
+    v-else-if="type === 'text'"
     :model-value="(modelValue as string | undefined) ?? ''"
     size="small"
     clearable
@@ -12,8 +22,11 @@
 
   <el-select
     v-else-if="type === 'select'"
-    :model-value="(modelValue as string | number | boolean | undefined)"
+    :model-value="selectValue"
     size="small"
+    :multiple="selectMultiple"
+    :collapse-tags="selectMultiple"
+    :collapse-tags-tooltip="selectMultiple"
     clearable
     :placeholder="placeholder"
     :teleported="true"
@@ -103,7 +116,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ColumnOption, FilterType } from '@/composables/useColumnConfig'
+import type { ColumnOption, FilterMode, FilterType } from '@/composables/useColumnConfig'
+import { DEFAULT_TEXT_MATCH_MODE, type TextMatchMode } from '@/utils/textFilter'
+import TextModeFilter from '@/components/base/TextModeFilter.vue'
 
 /**
  * 列筛选控件：类型由列配置决定，页面只负责把 v-model 值映射到查询参数。
@@ -116,16 +131,38 @@ const props = withDefaults(
     modelValue?: any
     options?: ColumnOption[]
     placeholder?: string
+    /** 文本列查询模式：single 保持普通输入框，multi 使用多模式控件 */
+    filterMode?: FilterMode | null
+    /** 下拉列是否多选（type=select 时生效） */
+    selectMultiple?: boolean
+    /** 文本多模式当前匹配方式（表头运行时状态） */
+    textMode?: TextMatchMode
   }>(),
-  { type: 'text', placeholder: '请输入' }
+  {
+    type: 'text',
+    placeholder: '请输入',
+    filterMode: 'single',
+    selectMultiple: false,
+    textMode: DEFAULT_TEXT_MATCH_MODE
+  }
 )
 
 const emit = defineEmits<{
   'update:modelValue': [value: any]
+  'update:mode': [value: TextMatchMode]
   change: []
 }>()
 
 const options = computed(() => props.options || [])
+
+const selectValue = computed(() => {
+  if (props.selectMultiple) {
+    if (Array.isArray(props.modelValue)) return props.modelValue
+    if (props.modelValue === undefined || props.modelValue === null || props.modelValue === '') return []
+    return [props.modelValue]
+  }
+  return Array.isArray(props.modelValue) ? props.modelValue[0] : props.modelValue
+})
 
 const numberRange = computed<[number | undefined, number | undefined]>(() => {
   const value = props.modelValue

@@ -103,20 +103,21 @@ public class SysRouteController {
     public ApiResult<RegionLibraryPageVO> regionLibrary(
             @RequestParam(required = false) Long applyDeptId,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Integer level,
-            @RequestParam(required = false) Boolean configured,
+            @RequestParam(required = false) List<Integer> level,
+            @RequestParam(required = false) List<Boolean> configured,
             @RequestParam(required = false) String parentCode,
             @RequestParam(required = false) String provinceCode,
             @RequestParam(required = false) String cityCode,
             @RequestParam(required = false) String districtKeyword,
             @RequestParam(required = false) String townKeyword,
+            @RequestParam(required = false) String filterModes,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortOrder,
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "20") long pageSize) {
         return ApiResult.ok(routeService.regionLibrary(applyDeptId, keyword, level, configured,
                 parentCode, provinceCode, cityCode, districtKeyword, townKeyword,
-                sortBy, sortOrder, pageNum, pageSize));
+                filterModes, sortBy, sortOrder, pageNum, pageSize));
     }
 
     @Operation(summary = "从区划库批量加入（默认外转；本公司覆盖公共字段，他公司只补授权）")

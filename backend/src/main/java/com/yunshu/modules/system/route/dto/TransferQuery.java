@@ -1,32 +1,44 @@
 package com.yunshu.modules.system.route.dto;
 
+import com.yunshu.common.query.BaseListQuery;
 import lombok.Data;
+
+import java.util.List;
 
 /** 外转/直达路由列表查询 */
 @Data
-public class TransferQuery {
+public class TransferQuery extends BaseListQuery {
 
     private String routeCode;
 
     private String routeName;
 
-    private Integer transferType;
+    /** 类型：1直达 2外转；支持多选 */
+    private List<Integer> transferType;
 
+    /** 配置网点 */
     private Long applyDeptId;
 
+    /** 目的地编码/名称关键字，支持多模式匹配 */
     private String regionCode;
 
-    /** 目的地级别：2=市 3=区县 4=乡级 */
-    private Integer regionLevel;
+    /** 目的地级别：2=市 3=区县 4=乡级；支持多选 */
+    private List<Integer> regionLevel;
 
-    private Long carrierId;
+    /** 承运商；支持多选 */
+    private List<Long> carrierId;
 
-    private Boolean status;
+    /** 状态；支持多选 */
+    private List<Boolean> status;
 
-    private String grantScope;
+    /** 授权范围：ALL / PARTIAL；支持多选 */
+    private List<String> grantScope;
 
-    /** 修改人姓名（模糊匹配） */
+    /** 修改人姓名，支持多模式匹配 */
     private String updateByName;
+
+    /** 创建公司 ID，多选时逗号分隔 */
+    private String ownerCompanyIds;
 
     private String sortBy;
 

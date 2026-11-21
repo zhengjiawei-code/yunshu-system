@@ -60,7 +60,7 @@
               <el-button class="tool-reset" @click="resetFilters">重置</el-button>
               <el-button class="tool-export" :icon="Download" @click="handleExport">导出</el-button>
 
-              <el-popover placement="bottom-end" :width="440" trigger="click">
+              <el-popover placement="bottom-end" :width="560" trigger="click">
                 <template #reference>
                   <el-button :icon="Setting">列设置</el-button>
                 </template>
@@ -122,7 +122,10 @@
                       v-if="col('deptName').filterType !== 'none'"
                       v-model="filters.deptName"
                       :type="col('deptName').filterType"
+                      :filter-mode="col('deptName').filterMode"
+                      :text-mode="textModes.deptName"
                       :options="col('deptName').filterOptions"
+                      @update:mode="(mode: TextMatchMode) => (textModes.deptName = mode)"
                       @change="onTextFilter"
                     />
                   </div>
@@ -146,6 +149,7 @@
                       v-if="col('parentName').filterType !== 'none'"
                       v-model="filters.parentId"
                       :type="col('parentName').filterType"
+                      :select-multiple="col('parentName').selectMultiple === true"
                       :options="parentFilterOptions"
                       @change="onFilterChange"
                     />
@@ -172,6 +176,7 @@
                       v-if="col('deptType').filterType !== 'none'"
                       v-model="filters.deptType"
                       :type="col('deptType').filterType"
+                      :select-multiple="col('deptType').selectMultiple === true"
                       :options="col('deptType').filterOptions || typeOptions"
                       @change="onFilterChange"
                     />
@@ -196,6 +201,7 @@
                       v-if="col('deptNature').filterType !== 'none'"
                       v-model="filters.deptNature"
                       :type="col('deptNature').filterType"
+                      :select-multiple="col('deptNature').selectMultiple === true"
                       :options="col('deptNature').filterOptions || natureOptions"
                       @change="onFilterChange"
                     />
@@ -222,7 +228,10 @@
                       v-if="col('deptCode').filterType !== 'none'"
                       v-model="filters.deptCode"
                       :type="col('deptCode').filterType"
+                      :filter-mode="col('deptCode').filterMode"
+                      :text-mode="textModes.deptCode"
                       :options="col('deptCode').filterOptions"
+                      @update:mode="(mode: TextMatchMode) => (textModes.deptCode = mode)"
                       @change="onTextFilter"
                     />
                   </div>
@@ -245,7 +254,10 @@
                       v-if="col('leader').filterType !== 'none'"
                       v-model="filters.leader"
                       :type="col('leader').filterType"
+                      :filter-mode="col('leader').filterMode"
+                      :text-mode="textModes.leader"
                       :options="col('leader').filterOptions"
+                      @update:mode="(mode: TextMatchMode) => (textModes.leader = mode)"
                       @change="onTextFilter"
                     />
                   </div>
@@ -266,7 +278,10 @@
                       v-if="col('phone').filterType !== 'none'"
                       v-model="filters.phone"
                       :type="col('phone').filterType"
+                      :filter-mode="col('phone').filterMode"
+                      :text-mode="textModes.phone"
                       :options="col('phone').filterOptions"
+                      @update:mode="(mode: TextMatchMode) => (textModes.phone = mode)"
                       @change="onTextFilter"
                     />
                   </div>
@@ -336,6 +351,7 @@
                       v-if="col('isLeaf').filterType !== 'none'"
                       v-model="filters.isLeaf"
                       :type="col('isLeaf').filterType"
+                      :select-multiple="col('isLeaf').selectMultiple === true"
                       :options="col('isLeaf').filterOptions"
                       @change="onFilterChange"
                     />
@@ -365,6 +381,7 @@
                       v-if="col('applyCompanyNames').filterType !== 'none'"
                       v-model="filters.applyCompanyId"
                       :type="col('applyCompanyNames').filterType"
+                      :select-multiple="col('applyCompanyNames').selectMultiple === true"
                       :options="companyFilterOptions"
                       @change="onFilterChange"
                     />
@@ -392,6 +409,7 @@
                       v-if="col('status').filterType !== 'none'"
                       v-model="filters.status"
                       :type="col('status').filterType"
+                      :select-multiple="col('status').selectMultiple === true"
                       :options="col('status').filterOptions"
                       @change="onFilterChange"
                     />
@@ -418,7 +436,10 @@
                       v-if="col('createByName').filterType !== 'none'"
                       v-model="filters.createByName"
                       :type="col('createByName').filterType"
+                      :filter-mode="col('createByName').filterMode"
+                      :text-mode="textModes.createByName"
                       :options="col('createByName').filterOptions"
+                      @update:mode="(mode: TextMatchMode) => (textModes.createByName = mode)"
                       @change="onTextFilter"
                     />
                   </div>
@@ -461,7 +482,10 @@
                       v-if="col('updateByName').filterType !== 'none'"
                       v-model="filters.updateByName"
                       :type="col('updateByName').filterType"
+                      :filter-mode="col('updateByName').filterMode"
+                      :text-mode="textModes.updateByName"
                       :options="col('updateByName').filterOptions"
+                      @update:mode="(mode: TextMatchMode) => (textModes.updateByName = mode)"
                       @change="onTextFilter"
                     />
                   </div>
@@ -548,6 +572,7 @@ import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteDept, getDeptPage, getDeptTree } from '@/api/system/dept'
 import { getRegionChildren } from '@/api/system/region'
 import { useColumnConfig } from '@/composables/useColumnConfig'
+import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import ColumnFilter from '@/components/base/ColumnFilter.vue'
@@ -655,7 +680,8 @@ const {
   load: loadColumnConfig,
   save: saveColumnConfig,
   reset: resetColumnConfig,
-  defaultFilters
+  defaultFiltersRaw,
+  filterModesParam
 } = useColumnConfig('system:org', schema)
 
 const treeRef = ref<any>()
@@ -671,16 +697,16 @@ const pageSize = ref(20)
 const filters = reactive<{
   deptName: string
   deptCode: string
-  deptType: DeptType | undefined
-  deptNature: DeptNature | undefined
-  parentId: number | undefined
+  deptType: DeptType | DeptType[] | undefined
+  deptNature: DeptNature | DeptNature[] | undefined
+  parentId: number | number[] | undefined
   leader: string
   phone: string
   provinceCode: string
   cityCode: string
-  applyCompanyId: number | undefined
-  isLeaf: boolean | undefined
-  status: boolean | undefined
+  applyCompanyId: number | number[] | undefined
+  isLeaf: boolean | boolean[] | undefined
+  status: boolean | boolean[] | undefined
   createByName: string
   updateByName: string
   createRange: string[]
@@ -703,6 +729,23 @@ const filters = reactive<{
   createRange: [],
   updateRange: []
 })
+
+/** 文本列运行时匹配方式：由表头多模式控件写入 */
+const textModes = reactive<Record<string, TextMatchMode>>({})
+
+const FILTER_FIELD_MAP: Record<string, string> = {
+  deptName: 'deptName',
+  deptCode: 'deptCode',
+  leader: 'leader',
+  phone: 'phone',
+  createByName: 'createByName',
+  updateByName: 'updateByName'
+}
+
+function buildFilterModes(): string | undefined {
+  const modes = filterModesParam(FILTER_FIELD_MAP, textModes)
+  return Object.keys(modes).length ? JSON.stringify(modes) : undefined
+}
 
 /** 省市筛选下拉：省份来自区划根节点，城市随省份联动 */
 const provinceOptions = ref<RegionNode[]>([])
@@ -800,6 +843,7 @@ function findDept(nodes: DeptNode[], id: number): DeptNode | undefined {
 }
 
 function isEmpty(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length === 0
   return value === undefined || value === null || value === ''
 }
 
@@ -833,6 +877,7 @@ function buildQuery(pageNum = page.value, size = pageSize.value): DeptQuery {
     createTimeEnd: isVisible('createTime') ? filters.createRange[1] || undefined : undefined,
     updateTimeStart: isVisible('updateTime') ? filters.updateRange[0] || undefined : undefined,
     updateTimeEnd: isVisible('updateTime') ? filters.updateRange[1] || undefined : undefined,
+    filterModes: buildFilterModes(),
     sortBy: sortState.sortBy,
     sortOrder: sortState.sortOrder,
     pageNum,
@@ -982,41 +1027,82 @@ async function handleColumnReset() {
 
 /** 首次进入按默认查询值自动带出筛选；默认机构/公司失效时忽略并提示 */
 function applyDefaultFilters() {
-  const defaults = defaultFilters()
-  if (defaults.deptName != null) filters.deptName = String(defaults.deptName)
-  if (defaults.deptCode != null) filters.deptCode = String(defaults.deptCode)
-  if (defaults.leader != null) filters.leader = String(defaults.leader)
-  if (defaults.phone != null) filters.phone = String(defaults.phone)
-  if (defaults.createByName != null) filters.createByName = String(defaults.createByName)
-  if (defaults.updateByName != null) filters.updateByName = String(defaults.updateByName)
-  if (typeof defaults.deptType === 'number') filters.deptType = defaults.deptType as DeptType
-  if (typeof defaults.deptNature === 'number') {
-    filters.deptNature = defaults.deptNature as DeptNature
-  }
-  if (typeof defaults.isLeaf === 'boolean') filters.isLeaf = defaults.isLeaf
-  if (typeof defaults.status === 'boolean') filters.status = defaults.status
-  if (defaults.parentId != null) {
-    const parentId = Number(defaults.parentId)
-    if (parentFilterOptions.value.some((item) => item.value === parentId)) {
-      filters.parentId = parentId
+  const defaults = defaultFiltersRaw()
+  applyTextDefault('deptName', defaults.deptName, (value) => (filters.deptName = value))
+  applyTextDefault('deptCode', defaults.deptCode, (value) => (filters.deptCode = value))
+  applyTextDefault('leader', defaults.leader, (value) => (filters.leader = value))
+  applyTextDefault('phone', defaults.phone, (value) => (filters.phone = value))
+  applyTextDefault(
+    'createByName',
+    defaults.createByName,
+    (value) => (filters.createByName = value)
+  )
+  applyTextDefault(
+    'updateByName',
+    defaults.updateByName,
+    (value) => (filters.updateByName = value)
+  )
+
+  const types = toValueList(defaults.deptType).filter(
+    (item): item is DeptType => typeof item === 'number'
+  )
+  if (types.length) filters.deptType = types.length === 1 ? types[0] : types
+
+  const natures = toValueList(defaults.deptNature).filter(
+    (item): item is DeptNature => typeof item === 'number'
+  )
+  if (natures.length) filters.deptNature = natures.length === 1 ? natures[0] : natures
+
+  const leaves = toValueList(defaults.isLeaf).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (leaves.length) filters.isLeaf = leaves.length === 1 ? leaves[0] : leaves
+
+  const statuses = toValueList(defaults.status).filter(
+    (item): item is boolean => typeof item === 'boolean'
+  )
+  if (statuses.length) filters.status = statuses.length === 1 ? statuses[0] : statuses
+
+  const parentIds = toValueList(defaults.parentName).map((item) => Number(item))
+  if (parentIds.length) {
+    const valid = parentIds.filter((id) =>
+      parentFilterOptions.value.some((item) => item.value === id)
+    )
+    if (valid.length) {
+      filters.parentId = valid.length === 1 ? valid[0] : valid
     } else {
       ElMessage.warning('默认查询上级机构已删除，已忽略该默认值')
     }
   }
-  if (defaults.applyCompanyId != null) {
-    const companyId = Number(defaults.applyCompanyId)
-    if (companyFilterOptions.value.some((item) => item.value === companyId)) {
-      filters.applyCompanyId = companyId
+
+  const companyIds = toValueList(defaults.applyCompanyNames).map((item) => Number(item))
+  if (companyIds.length) {
+    const valid = companyIds.filter((id) =>
+      companyFilterOptions.value.some((item) => item.value === id)
+    )
+    if (valid.length) {
+      filters.applyCompanyId = valid.length === 1 ? valid[0] : valid
     } else {
       ElMessage.warning('默认查询适用公司已删除，已忽略该默认值')
     }
   }
-  if (Array.isArray(defaults.createTime)) {
-    filters.createRange = defaults.createTime.map((item) => String(item))
+}
+
+function toValueList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (value === null || value === undefined || value === '') return []
+  return [value]
+}
+
+function applyTextDefault(key: string, value: unknown, setter: (value: string) => void) {
+  if (value === null || value === undefined) return
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const item = value as { mode?: unknown; value?: unknown }
+    setter(item.value === null || item.value === undefined ? '' : String(item.value))
+    if (isTextMatchMode(item.mode)) textModes[key] = item.mode
+    return
   }
-  if (Array.isArray(defaults.updateTime)) {
-    filters.updateRange = defaults.updateTime.map((item) => String(item))
-  }
+  setter(String(value))
 }
 
 function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {

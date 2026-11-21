@@ -22,10 +22,11 @@ export interface CarrierQuery {
   carrierName?: string
   contact?: string
   phone?: string
-  deptId?: number
-  status?: boolean
+  deptId?: number | number[]
+  status?: boolean | boolean[]
   updateByName?: string
   remark?: string
+  filterModes?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   pageNum?: number
