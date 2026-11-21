@@ -1938,20 +1938,8 @@ onMounted(async () => {
   line-height: 18px;
 }
 
-/* 两栏筛选控件统一 24px 高，避免左 select / 右 input 高度差导致表头行高不一致 */
-.pane-table :deep(.col-head .el-input),
-.pane-table :deep(.col-head .el-select),
-.pane-table :deep(.col-head .el-date-editor),
-.pane-table :deep(.col-head .number-range) {
-  height: 24px;
-  line-height: 24px;
-}
-
-.pane-table :deep(.col-head .el-input__wrapper),
-.pane-table :deep(.col-head .el-select__wrapper) {
-  min-height: 24px;
-  height: 24px;
-}
+/* 筛选控件的统一高度由 common.css 的 .col-head 契约统一控制（28px），
+   页面不再单独改写，避免各列表页高度不一致 */
 
 .pane-table :deep(.el-table__header th .cell) {
   overflow: visible;

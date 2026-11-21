@@ -772,6 +772,94 @@ a:hover {
   width: 100%;
 }
 
+/* ============================================================
+ * 表头筛选行（.col-head）纵向高度契约
+ * 筛选行渲染在 th 的 #header 插槽内，与表头共用 colgroup，不是独立布局。
+ * 因此高度只能由 th 内盒模型确定，这里固定为：
+ *   列名 18 + 间距 4 + 控件 28 + 上下留白 5*2 = 60px（不含 1px 边框）
+ * 控件统一 28px（Element Plus small 主题尺寸），保证 select/input/date
+ * 混排时行高一致，且任何控件都不会越出表头带压到表体。
+ * ============================================================ */
+.el-table th.el-table__cell:has(.col-head) {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.el-table th.el-table__cell:has(.col-head) > .cell {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  /* 横向不留白：筛选控件左右边界与列边界对齐（±1px），
+     溢出交给表格内部横向滚动承接，不改变任何列宽 */
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* 可排序列原本右侧预留 20px 给箭头；箭头已移到列名行，筛选控件恢复整列宽度 */
+.el-table th.el-table__cell:has(.col-head).is-sortable > .cell {
+  padding-right: 0;
+}
+
+.el-table th.el-table__cell .col-head {
+  display: grid;
+  grid-template-rows: 18px 28px;
+  row-gap: 4px;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.el-table th.el-table__cell .col-head__label {
+  height: 18px;
+  line-height: 18px;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--font-weight-medium);
+}
+
+/* 排序箭头移到列名行右侧，避免绝对定位在 50% 时压住筛选控件右上角 */
+.el-table th.el-table__cell:has(.col-head) .caret-wrapper {
+  top: 4px;
+  transform: none;
+  right: 6px;
+}
+
+.el-table th.el-table__cell.is-sortable .col-head__label {
+  padding-right: 18px;
+}
+
+/* 所有筛选控件统一 28px，撑满表头内容区且不改变列宽 */
+.el-table th.el-table__cell .col-head .el-input,
+.el-table th.el-table__cell .col-head .el-select,
+.el-table th.el-table__cell .col-head .el-date-editor,
+.el-table th.el-table__cell .col-head .number-range,
+.el-table th.el-table__cell .col-head .region-filter {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  line-height: 28px;
+  box-sizing: border-box;
+}
+
+.el-table th.el-table__cell .col-head .el-input__wrapper,
+.el-table th.el-table__cell .col-head .el-select__wrapper {
+  min-height: 28px;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.el-table th.el-table__cell .col-head .number-range {
+  display: flex;
+  align-items: center;
+}
+
+.el-table th.el-table__cell .col-head .number-range .el-input-number {
+  height: 28px;
+  line-height: 28px;
+}
+
 /* 表体单元格：relative 容器，复制按钮 absolute 钉右边缘
    width:100% !important 覆盖 Element Plus 内联 width，强制 cell 填满 td 内容区
    避免 padding-right 22px 撑开 cell 溢出 td（table-layout:auto 窄列尤甚）
