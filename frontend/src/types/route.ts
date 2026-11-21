@@ -141,6 +141,15 @@ export interface RegionLibraryQuery {
   cityCode?: string
   districtKeyword?: string
   townKeyword?: string
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  pageNum?: number
+  pageSize?: number
+}
+
+export interface RegionLibraryPage {
+  records: RegionLibraryRecord[]
+  total: number
 }
 
 export interface TransferBatchJoinPayload {

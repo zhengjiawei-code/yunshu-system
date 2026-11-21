@@ -13,7 +13,7 @@ import com.yunshu.modules.system.route.dto.TransferEditRequest;
 import com.yunshu.modules.system.route.dto.TransferQuery;
 import com.yunshu.modules.system.route.service.SysRouteService;
 import com.yunshu.modules.system.route.vo.BatchGrantResultVO;
-import com.yunshu.modules.system.route.vo.RegionLibraryVO;
+import com.yunshu.modules.system.route.vo.RegionLibraryPageVO;
 import com.yunshu.modules.system.route.vo.RouteGrantVO;
 import com.yunshu.modules.system.route.vo.RouteMatchVO;
 import com.yunshu.modules.system.route.vo.RoutePageVO;
@@ -100,7 +100,7 @@ public class SysRouteController {
 
     @Operation(summary = "区划库（按配置网点返回可加入区划与配置状态）")
     @GetMapping("/transfers/region-library")
-    public ApiResult<List<RegionLibraryVO>> regionLibrary(
+    public ApiResult<RegionLibraryPageVO> regionLibrary(
             @RequestParam(required = false) Long applyDeptId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer level,
@@ -109,9 +109,14 @@ public class SysRouteController {
             @RequestParam(required = false) String provinceCode,
             @RequestParam(required = false) String cityCode,
             @RequestParam(required = false) String districtKeyword,
-            @RequestParam(required = false) String townKeyword) {
+            @RequestParam(required = false) String townKeyword,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortOrder,
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "20") long pageSize) {
         return ApiResult.ok(routeService.regionLibrary(applyDeptId, keyword, level, configured,
-                parentCode, provinceCode, cityCode, districtKeyword, townKeyword));
+                parentCode, provinceCode, cityCode, districtKeyword, townKeyword,
+                sortBy, sortOrder, pageNum, pageSize));
     }
 
     @Operation(summary = "从区划库批量加入（默认外转；本公司覆盖公共字段，他公司只补授权）")

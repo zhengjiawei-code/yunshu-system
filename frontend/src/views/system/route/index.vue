@@ -256,18 +256,6 @@
                     @reset="resetTransferColumns"
                   />
                 </el-popover>
-                <el-pagination
-                  v-model:current-page="transferPage"
-                  v-model:page-size="transferPageSize"
-                  class="table-pager"
-                  size="small"
-                  background
-                  :total="transferTotal"
-                  :page-sizes="[20, 50, 100]"
-                  layout="total, sizes, prev, pager, next"
-                  @current-change="loadTransfers"
-                  @size-change="handleTransferSizeChange"
-                />
               </div>
             </div>
 
@@ -276,7 +264,7 @@
                 <div class="pane-header">
                   <span class="pane-title">区划库</span>
                   <div class="pane-header__actions">
-                    <span class="pane-sub">关键词或级别查询，单次最多 50 条</span>
+                    <span class="pane-sub">共 {{ regionTotal }} 条</span>
                     <el-popover placement="bottom-end" :width="440" trigger="click">
                       <template #reference>
                         <el-button size="small" :icon="Setting">列设置</el-button>
@@ -293,20 +281,9 @@
                     </el-popover>
                   </div>
                 </div>
-                <div class="library-filters">
-                  <el-input
-                    v-model="regionKeyword"
-                    size="small"
-                    placeholder="区划名称/编码"
-                    clearable
-                    class="library-filters__keyword"
-                    @keyup.enter="loadRegionLibrary"
-                    @clear="loadRegionLibrary"
-                  />
-                  <el-button size="small" :disabled="!transferApplyDeptId" @click="loadRegionLibrary">查询</el-button>
-                </div>
                 <div class="pane-table">
                   <smart-table
+                    ref="regionTableRef"
                     v-loading="regionLoading"
                     :data="regionRows"
                     row-key="code"
@@ -318,10 +295,11 @@
                     :column-hidden="regionHiddenKeys"
                     :column-sortable="regionSortableMap"
                     class="region-table"
+                    @sort-change="handleRegionSort"
                     @selection-change="onRegionSelection"
                   >
                     <el-table-column type="selection" width="40" :selectable="regionSelectable" />
-                    <el-table-column v-if="regionVisible('level')" label="级别" width="110" align="center">
+                    <el-table-column v-if="regionVisible('level')" prop="level" label="级别" width="110" align="center">
                       <template #header>
                         <div class="col-head">
                           <span class="col-head__label">级别</span>
@@ -330,7 +308,7 @@
                             v-model="regionFilters.level"
                             :type="regionCol('level').filterType"
                             :options="regionCol('level').filterOptions"
-                            @change="loadRegionLibrary"
+                            @change="reloadRegionFromFirstPage"
                           />
                         </div>
                       </template>
@@ -361,7 +339,7 @@
                             v-model="regionFilters.cityCode"
                             :type="regionCol('cityName').filterType"
                             :options="cityFilterOptions"
-                            @change="loadRegionLibrary"
+                            @change="reloadRegionFromFirstPage"
                           />
                         </div>
                       </template>
@@ -404,7 +382,7 @@
                             v-model="regionFilters.configured"
                             :type="regionCol('configured').filterType"
                             :options="regionCol('configured').filterOptions"
-                            @change="loadRegionLibrary"
+                            @change="reloadRegionFromFirstPage"
                           />
                         </div>
                       </template>
@@ -414,6 +392,21 @@
                       </template>
                     </el-table-column>
                   </smart-table>
+                </div>
+                <div class="pane-footer">
+                  <el-pagination
+                    v-model:current-page="regionPage"
+                    v-model:page-size="regionPageSize"
+                    class="table-pager"
+                    size="small"
+                    background
+                    :total="regionTotal"
+                    :pager-count="5"
+                    :page-sizes="[20, 50, 100]"
+                    layout="sizes, prev, pager, next"
+                    @current-change="loadRegionLibrary"
+                    @size-change="handleRegionSizeChange"
+                  />
                 </div>
               </section>
 
@@ -435,25 +428,34 @@
 
               <section class="transfer-pane transfer-pane--routes">
                 <div class="pane-header">
-                  <span class="pane-title">
-                    已配置路由{{ transferApplyDeptName ? `（${transferApplyDeptName}）` : '' }}
-                  </span>
+                  <div class="pane-title-group">
+                    <span class="pane-title">
+                      已配置路由{{ transferApplyDeptName ? `（${transferApplyDeptName}）` : '' }}
+                    </span>
+                    <span class="pane-sub pane-sub--total">共 {{ transferTotal }} 条</span>
+                  </div>
                   <div class="pane-actions">
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(1)">
-                      切直达
-                    </el-button>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(2)">
-                      切外转
-                    </el-button>
+                    <el-dropdown trigger="click" :disabled="!selectedTransferRows.length" @command="handleSwitchTypeCommand">
+                      <el-button size="small" :disabled="!selectedTransferRows.length">切换类型</el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item :command="1">设为直达</el-dropdown-item>
+                          <el-dropdown-item :command="2">设为外转</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
                     <el-button size="small" :disabled="!selectedTransferRows.length" @click="openCarrierBatch">
                       挂承运商
                     </el-button>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(true)">
-                      启用
-                    </el-button>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(false)">
-                      停用
-                    </el-button>
+                    <el-dropdown trigger="click" :disabled="!selectedTransferRows.length" @command="handleStatusCommand">
+                      <el-button size="small" :disabled="!selectedTransferRows.length">状态</el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item :command="true">启用</el-dropdown-item>
+                          <el-dropdown-item :command="false">停用</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
                   </div>
                 </div>
                 <div class="pane-table">
@@ -468,8 +470,6 @@
                     :column-order="transferColumnOrder"
                     :column-hidden="transferHiddenKeys"
                     :column-sortable="transferSortableMap"
-                    show-summary
-                    :summary-method="transferSummary"
                     show-overflow-tooltip
                     scrollbar-always-on
                     class="route-table"
@@ -668,6 +668,21 @@
                       </template>
                     </el-table-column>
                   </smart-table>
+                </div>
+                <div class="pane-footer">
+                  <el-pagination
+                    v-model:current-page="transferPage"
+                    v-model:page-size="transferPageSize"
+                    class="table-pager"
+                    size="small"
+                    background
+                    :total="transferTotal"
+                    :pager-count="5"
+                    :page-sizes="[20, 50, 100]"
+                    layout="sizes, prev, pager, next"
+                    @current-change="loadTransfers"
+                    @size-change="handleTransferSizeChange"
+                  />
                 </div>
               </section>
             </div>
@@ -879,24 +894,25 @@ const regionSchema = reactive<ColumnDef[]>([
   {
     key: 'level',
     label: '级别',
-    elKey: 'label:级别',
+    prop: 'level',
     filterType: 'select',
-    sortable: false,
+    sortable: true,
     filterOptions: [
       { label: '市', value: 2 },
       { label: '区县', value: 3 },
       { label: '乡级', value: 4 }
     ]
   },
-  { key: 'provinceName', label: '省', prop: 'provinceName', filterType: 'select', filterOptions: [] },
-  { key: 'cityName', label: '市', prop: 'cityName', filterType: 'select', filterOptions: [] },
-  { key: 'districtName', label: '区县', prop: 'districtName', filterType: 'text' },
-  { key: 'townName', label: '乡级', elKey: 'label:乡级', filterType: 'text' },
+  { key: 'provinceName', label: '省', prop: 'provinceName', filterType: 'select', sortable: false, filterOptions: [] },
+  { key: 'cityName', label: '市', prop: 'cityName', filterType: 'select', sortable: false, filterOptions: [] },
+  { key: 'districtName', label: '区县', prop: 'districtName', filterType: 'text', sortable: false },
+  { key: 'townName', label: '乡级', elKey: 'label:乡级', filterType: 'text', sortable: false },
   {
     key: 'configured',
     label: '配置',
     elKey: 'label:配置',
     filterType: 'select',
+    sortable: false,
     filterOptions: [
       { label: '已配置', value: true },
       { label: '未配置', value: false }
@@ -1024,8 +1040,12 @@ const transferFilters = reactive<{
 const transferSort = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({})
 
 const regionRows = ref<RegionLibraryRecord[]>([])
+const regionTableRef = ref<InstanceType<typeof SmartTable>>()
+const regionTotal = ref(0)
+const regionPage = ref(1)
+const regionPageSize = ref(20)
 const regionLoading = ref(false)
-const regionKeyword = ref('')
+const regionSort = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({})
 const regionFilters = reactive<{
   level: 2 | 3 | 4 | undefined
   provinceCode: string | undefined
@@ -1398,6 +1418,7 @@ async function handleApplyDeptChange() {
   selectedTransferRows.value = []
   selectedRegionCodes.value = []
   regionRows.value = []
+  regionPage.value = 1
   transferPage.value = 1
   await Promise.all([loadTransfers(), loadRegionLibrary()])
 }
@@ -1416,7 +1437,6 @@ function onTransferSelection(rows: TransferRecord[]) {
 
 function hasRegionLibraryFilter(): boolean {
   return !!(
-    regionKeyword.value.trim() ||
     regionFilters.level ||
     regionFilters.provinceCode ||
     regionFilters.cityCode ||
@@ -1429,24 +1449,31 @@ function hasRegionLibraryFilter(): boolean {
 async function loadRegionLibrary() {
   if (!transferApplyDeptId.value) {
     regionRows.value = []
+    regionTotal.value = 0
     return
   }
   if (!hasRegionLibraryFilter()) {
     regionRows.value = []
+    regionTotal.value = 0
     return
   }
   regionLoading.value = true
   try {
-    regionRows.value = await getRegionLibrary({
+    const result = await getRegionLibrary({
       applyDeptId: transferApplyDeptId.value,
-      keyword: regionKeyword.value.trim() || undefined,
       level: regionFilters.level,
       configured: regionFilters.configured,
       provinceCode: regionFilters.provinceCode,
       cityCode: regionFilters.cityCode,
       districtKeyword: regionFilters.districtKeyword.trim() || undefined,
-      townKeyword: regionFilters.townKeyword.trim() || undefined
+      townKeyword: regionFilters.townKeyword.trim() || undefined,
+      sortBy: regionSort.sortBy,
+      sortOrder: regionSort.sortOrder,
+      pageNum: regionPage.value,
+      pageSize: regionPageSize.value
     })
+    regionRows.value = result.records
+    regionTotal.value = result.total
   } catch (error) {
     const message = (error as { message?: string })?.message
     if (message) ElMessage.error(message)
@@ -1455,12 +1482,29 @@ async function loadRegionLibrary() {
   }
 }
 
+/** 筛选/排序/网点变化统一回到第 1 页 */
+function reloadRegionFromFirstPage() {
+  regionPage.value = 1
+  void loadRegionLibrary()
+}
+
+function handleRegionSizeChange() {
+  regionPage.value = 1
+  void loadRegionLibrary()
+}
+
+function handleRegionSort({ prop, order }: { prop: string; order: 'ascending' | 'descending' | null }) {
+  regionSort.sortBy = order ? prop : undefined
+  regionSort.sortOrder = order === 'ascending' ? 'asc' : order === 'descending' ? 'desc' : undefined
+  reloadRegionFromFirstPage()
+}
+
 let regionFilterTimer: number | undefined
 
 function onRegionFilterInput() {
   window.clearTimeout(regionFilterTimer)
   regionFilterTimer = window.setTimeout(() => {
-    void loadRegionLibrary()
+    reloadRegionFromFirstPage()
   }, 300)
 }
 
@@ -1488,7 +1532,7 @@ async function handleProvinceFilterChange() {
   }
   const cityColumn = regionSchema.find((item) => item.key === 'cityName')
   if (cityColumn) cityColumn.filterOptions = cityFilterOptions.value
-  void loadRegionLibrary()
+  reloadRegionFromFirstPage()
 }
 
 async function handleJoinRegions() {
@@ -1533,6 +1577,14 @@ async function handleRemoveSelected() {
   }
   selectedTransferRows.value = []
   await Promise.all([loadTransfers(), loadRegionLibrary()])
+}
+
+function handleSwitchTypeCommand(command: number) {
+  void handleSwitchType(command as 1 | 2)
+}
+
+function handleStatusCommand(command: boolean) {
+  void handleBatchStatus(command)
 }
 
 async function handleSwitchType(target: 1 | 2, row?: TransferRecord) {
@@ -1642,12 +1694,21 @@ function resetTransferFilters() {
   transferSort.sortBy = undefined
   transferSort.sortOrder = undefined
   transferTableRef.value?.getTable()?.clearSort?.()
-  transferPage.value = 1
-  loadTransfers()
-}
 
-function transferSummary({ columns }: { columns: Array<{ label: string }> }) {
-  return columns.map((_, index) => (index === 0 ? '' : index === 1 ? '' : index === 2 ? `合计 ${transferTotal.value} 条路由` : ''))
+  regionFilters.level = undefined
+  regionFilters.provinceCode = undefined
+  regionFilters.cityCode = undefined
+  regionFilters.districtKeyword = ''
+  regionFilters.townKeyword = ''
+  regionFilters.configured = undefined
+  regionSort.sortBy = undefined
+  regionSort.sortOrder = undefined
+  regionTableRef.value?.getTable()?.clearSort?.()
+
+  transferPage.value = 1
+  regionPage.value = 1
+  void loadTransfers()
+  void loadRegionLibrary()
 }
 
 /* ---------- Tab2 统一列设置 ---------- */
@@ -1874,11 +1935,39 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: var(--font-weight-medium);
+  line-height: 18px;
 }
 
-.route-table :deep(.el-table__header th .cell) {
+/* 两栏筛选控件统一 24px 高，避免左 select / 右 input 高度差导致表头行高不一致 */
+.pane-table :deep(.col-head .el-input),
+.pane-table :deep(.col-head .el-select),
+.pane-table :deep(.col-head .el-date-editor),
+.pane-table :deep(.col-head .number-range) {
+  height: 24px;
+  line-height: 24px;
+}
+
+.pane-table :deep(.col-head .el-input__wrapper),
+.pane-table :deep(.col-head .el-select__wrapper) {
+  min-height: 24px;
+  height: 24px;
+}
+
+.pane-table :deep(.el-table__header th .cell) {
   overflow: visible;
   line-height: 1.4;
+}
+
+/* 空态文案统一固定两行高度并居中，窄屏换行时两栏垂直位置仍一致 */
+.pane-table :deep(.el-table__empty-text) {
+  max-width: 80%;
+  min-height: 44px;
+  line-height: 22px;
+  white-space: normal;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mono {
@@ -1981,7 +2070,8 @@ onMounted(async () => {
 }
 
 .transfer-pane {
-  flex: 1 1 46%;
+  /* 两栏等宽：flex-basis 0 + flex-grow 1，可用宽度扣掉中间操作列与间距后 1:1 均分 */
+  flex: 1 1 0;
   min-width: 0;
   /* flex 子项默认 min-height:auto 会让表格撑开容器、导致内容被裁切且不出现内部滚动条 */
   min-height: 0;
@@ -1994,17 +2084,16 @@ onMounted(async () => {
   background: var(--color-white);
 }
 
-.transfer-pane--routes {
-  flex: 1 1 56%;
-}
-
 .pane-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 8px;
-  min-height: 32px;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .pane-header__actions {
@@ -2026,31 +2115,55 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.pane-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.pane-title-group .pane-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-sub--total {
+  flex-shrink: 0;
+}
+
 .pane-actions {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.library-filters {
-  display: flex;
-  gap: 8px;
-  padding-bottom: 8px;
-}
-
-.library-filters__keyword {
-  flex: 1;
-}
-
-.library-filters__select {
-  width: 92px;
+.pane-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .pane-table {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+/* 两栏底部同规格分页区：固定高度，保证分页与滚动条底部 y 坐标一致 */
+.pane-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+  padding-top: 8px;
+}
+
+.pane-footer .table-pager {
+  margin: 0;
 }
 
 /* 双栏滚动条：横向常显 10px，纵向独立滚动；两栏共用同一尺寸，出现/消失不改变列宽 */

@@ -10,7 +10,7 @@ import com.yunshu.modules.system.route.dto.TransferBatchTypeRequest;
 import com.yunshu.modules.system.route.dto.TransferEditRequest;
 import com.yunshu.modules.system.route.dto.TransferQuery;
 import com.yunshu.modules.system.route.vo.BatchGrantResultVO;
-import com.yunshu.modules.system.route.vo.RegionLibraryVO;
+import com.yunshu.modules.system.route.vo.RegionLibraryPageVO;
 import com.yunshu.modules.system.route.vo.RouteGrantVO;
 import com.yunshu.modules.system.route.vo.RouteMatchVO;
 import com.yunshu.modules.system.route.vo.RoutePageVO;
@@ -39,10 +39,12 @@ public interface SysRouteService {
     RouteTransferVO transferDetail(Long id);
 
     /** 区划库：按配置网点给出可加入的市/区县/乡级区划及配置状态 */
-    List<RegionLibraryVO> regionLibrary(Long applyDeptId, String keyword, Integer level,
-                                        Boolean configured, String parentCode,
-                                        String provinceCode, String cityCode,
-                                        String districtKeyword, String townKeyword);
+    RegionLibraryPageVO regionLibrary(Long applyDeptId, String keyword, Integer level,
+                                      Boolean configured, String parentCode,
+                                      String provinceCode, String cityCode,
+                                      String districtKeyword, String townKeyword,
+                                      String sortBy, String sortOrder,
+                                      long pageNum, long pageSize);
 
     /** 从区划库批量加入（默认外转）：新建/恢复；本公司已有覆盖公共字段，他公司只补授权 */
     TransferBatchResultVO batchJoin(TransferBatchJoinRequest request);

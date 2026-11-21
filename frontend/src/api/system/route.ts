@@ -2,7 +2,7 @@ import request from '@/utils/request'
 import type {
   BatchGrantResult,
   RegionLibraryQuery,
-  RegionLibraryRecord,
+  RegionLibraryPage,
   RouteGrantRecord,
   RouteMatchResult,
   RoutePage,
@@ -48,7 +48,7 @@ export function getTransferDetail(id: number): Promise<TransferRecord> {
   return request({ url: `/v1/system/routes/transfers/${id}`, method: 'get' })
 }
 
-export function getRegionLibrary(params: RegionLibraryQuery): Promise<RegionLibraryRecord[]> {
+export function getRegionLibrary(params: RegionLibraryQuery): Promise<RegionLibraryPage> {
   return request({ url: '/v1/system/routes/transfers/region-library', method: 'get', params })
 }
 

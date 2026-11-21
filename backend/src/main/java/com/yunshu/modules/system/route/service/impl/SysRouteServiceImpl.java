@@ -2,6 +2,7 @@ package com.yunshu.modules.system.route.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
 import com.yunshu.modules.system.carrier.entity.SysCarrier;
@@ -29,6 +30,7 @@ import com.yunshu.modules.system.route.mapper.SysRouteTransferMapper;
 import com.yunshu.modules.system.route.service.SysRouteService;
 import com.yunshu.modules.system.route.vo.BatchGrantResultVO;
 import com.yunshu.modules.system.route.vo.RouteGrantVO;
+import com.yunshu.modules.system.route.vo.RegionLibraryPageVO;
 import com.yunshu.modules.system.route.vo.RegionLibraryVO;
 import com.yunshu.modules.system.route.vo.RouteMatchVO;
 import com.yunshu.modules.system.route.vo.RoutePageVO;
@@ -357,10 +359,12 @@ public class SysRouteServiceImpl implements SysRouteService {
 
     @Override
     @DS("slave")
-    public List<RegionLibraryVO> regionLibrary(Long applyDeptId, String keyword, Integer level,
-                                               Boolean configured, String parentCode,
-                                               String provinceCode, String cityCode,
-                                               String districtKeyword, String townKeyword) {
+    public RegionLibraryPageVO regionLibrary(Long applyDeptId, String keyword, Integer level,
+                                             Boolean configured, String parentCode,
+                                             String provinceCode, String cityCode,
+                                             String districtKeyword, String townKeyword,
+                                             String sortBy, String sortOrder,
+                                             long pageNum, long pageSize) {
         UserOrgService.UserOrg org = userOrgService.current();
         Set<Long> scope = userOrgService.manageDeptIds(org);
         SysDept applyDept = requireRouteDept(applyDeptId, "配置网点", scope);
@@ -378,7 +382,26 @@ public class SysRouteServiceImpl implements SysRouteService {
             throw new BizException("区划级别仅支持市、区县、乡级");
         }
 
-        List<SysRegion> regions = regionMapper.selectList(Wrappers.<SysRegion>lambdaQuery()
+        // 当前网点下本公司可见的路由 -> 区划配置状态；配置筛选必须在分页前落到 SQL，否则总数不准
+        Set<Long> granted = authorizedRouteIds(SCOPE_TRANSFER, org);
+        Map<String, SysRouteTransfer> configuredRoutes = transferMapper.selectList(
+                        Wrappers.<SysRouteTransfer>lambdaQuery()
+                                .eq(SysRouteTransfer::getApplyDeptId, applyDept.getId()))
+                .stream()
+                .filter(item -> visibleTransfer(item, org, granted))
+                .collect(Collectors.toMap(SysRouteTransfer::getRegionCode, item -> item, (a, b) -> a));
+        Set<String> configuredCodes = configuredRoutes.keySet();
+
+        RegionLibraryPageVO result = new RegionLibraryPageVO();
+        if (Boolean.TRUE.equals(configured) && configuredCodes.isEmpty()) {
+            result.setRecords(List.of());
+            result.setTotal(0);
+            return result;
+        }
+
+        long safePageNum = Math.max(1, pageNum);
+        long safePageSize = Math.min(200, Math.max(1, pageSize));
+        var wrapper = Wrappers.<SysRegion>lambdaQuery()
                 .eq(SysRegion::getStatus, 1)
                 .ge(SysRegion::getLevel, 2)
                 .le(SysRegion::getLevel, 4)
@@ -390,23 +413,31 @@ public class SysRouteServiceImpl implements SysRouteService {
                         SysRegion::getCode, cityPrefix == null ? "" : cityPrefix.substring(0, 4))
                 .like(districtKw != null, SysRegion::getFullName, districtKw)
                 .like(townKw != null, SysRegion::getName, townKw)
-                .and(kw != null, wrapper -> wrapper.like(SysRegion::getCode, kw)
+                .and(kw != null, q -> q.like(SysRegion::getCode, kw)
                         .or().like(SysRegion::getName, kw)
-                        .or().like(SysRegion::getFullName, kw))
-                .orderByAsc(SysRegion::getCode)
-                .last("LIMIT 50"));
-        if (regions.isEmpty()) {
-            return List.of();
+                        .or().like(SysRegion::getFullName, kw));
+        // 服务端排序：仅开放 level/name，其他字段忽略并回落编码升序
+        boolean desc = "desc".equalsIgnoreCase(trim(sortOrder));
+        String sortField = trim(sortBy);
+        if ("level".equals(sortField)) {
+            wrapper.orderBy(true, !desc, SysRegion::getLevel);
+        } else if ("name".equals(sortField)) {
+            wrapper.orderBy(true, !desc, SysRegion::getName);
+        }
+        wrapper.orderByAsc(SysRegion::getCode);
+        if (Boolean.TRUE.equals(configured)) {
+            wrapper.in(SysRegion::getCode, configuredCodes);
+        } else if (Boolean.FALSE.equals(configured) && !configuredCodes.isEmpty()) {
+            wrapper.notIn(SysRegion::getCode, configuredCodes);
         }
 
-        // 当前网点下本公司可见的路由 -> 区划配置状态
-        Set<Long> granted = authorizedRouteIds(SCOPE_TRANSFER, org);
-        Map<String, SysRouteTransfer> configuredRoutes = transferMapper.selectList(
-                        Wrappers.<SysRouteTransfer>lambdaQuery()
-                                .eq(SysRouteTransfer::getApplyDeptId, applyDept.getId()))
-                .stream()
-                .filter(item -> visibleTransfer(item, org, granted))
-                .collect(Collectors.toMap(SysRouteTransfer::getRegionCode, item -> item, (a, b) -> a));
+        Page<SysRegion> page = regionMapper.selectPage(new Page<>(safePageNum, safePageSize), wrapper);
+        List<SysRegion> regions = page.getRecords();
+        result.setTotal(page.getTotal());
+        if (regions.isEmpty()) {
+            result.setRecords(List.of());
+            return result;
+        }
 
         Set<String> ancestorCodes = new HashSet<>();
         Map<String, String[]> ancestorCodeMap = new HashMap<>();
@@ -429,12 +460,9 @@ public class SysRouteServiceImpl implements SysRouteService {
         Map<String, String> ancestorNames = regionMapper.selectBatchIds(ancestorCodes).stream()
                 .collect(Collectors.toMap(SysRegion::getCode, SysRegion::getName));
 
-        List<RegionLibraryVO> result = new ArrayList<>();
+        List<RegionLibraryVO> records = new ArrayList<>();
         for (SysRegion region : regions) {
             SysRouteTransfer route = configuredRoutes.get(region.getCode());
-            if (configured != null && configured != (route != null)) {
-                continue;
-            }
             String[] ancestors = ancestorCodeMap.get(region.getCode());
             RegionLibraryVO vo = new RegionLibraryVO();
             vo.setCode(region.getCode());
@@ -448,8 +476,9 @@ public class SysRouteServiceImpl implements SysRouteService {
             vo.setConfigured(route != null);
             vo.setRouteId(route == null ? null : route.getId());
             vo.setTransferType(route == null ? null : route.getTransferType());
-            result.add(vo);
+            records.add(vo);
         }
+        result.setRecords(records);
         return result;
     }
 
