@@ -46,11 +46,11 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
-# 数据权限过滤开关：本期保持关闭，仅存档 sys_user.data_scope，不做行级过滤
-# 启用前置件与开关说明见 2026-11-20/system-management/outputs/system-management-design.md
+# 数据权限过滤开关：2026-11-21 家伟裁定采用黑名单式（默认全表过滤、平台表豁免），已启用
+# 规则与豁免清单见 2026-11-21/data-permission/outputs/data-permission-spec.md
 yunshu:
   data-scope:
-    enabled: false
+    enabled: true
 
 logging:
   level:
