@@ -39,6 +39,7 @@ import com.yunshu.modules.system.route.vo.RouteMatchVO;
 import com.yunshu.modules.system.route.vo.RoutePageVO;
 import com.yunshu.modules.system.route.vo.RouteSaveResultVO;
 import com.yunshu.modules.system.route.vo.RouteTransferVO;
+import com.yunshu.modules.system.route.vo.RouteUsageVO;
 import com.yunshu.modules.system.route.vo.RouteVO;
 import com.yunshu.modules.system.route.vo.TransferBatchResultVO;
 import com.yunshu.modules.system.route.vo.TransferPageVO;
@@ -108,6 +109,8 @@ public class SysRouteServiceImpl implements SysRouteService {
         String name = trim(query.getRouteName());
         Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
         Set<Long> ownerCompanyIds = parseIds(query.getOwnerCompanyIds());
+        LocalDateTime updateStart = parseStart(query.getUpdateTimeStart());
+        LocalDateTime updateEnd = parseEnd(query.getUpdateTimeEnd());
         List<SysRoute> filtered = routeMapper.selectList(Wrappers.<SysRoute>lambdaQuery()).stream()
                 .filter(item -> visibleRoute(item, org, granted))
                 .filter(item -> TextFilterMode.match(item.getRouteCode(), code,
@@ -135,6 +138,7 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .filter(item -> TextFilterMode.match(item.getServicePhone(), trim(query.getServicePhone()),
                         TextFilterMode.modeOf(modes, "servicePhone")))
                 .filter(item -> ownerCompanyIds.isEmpty() || ownerCompanyIds.contains(item.getOwnerCompanyId()))
+                .filter(item -> inTimeRange(item.getUpdateTime(), updateStart, updateEnd))
                 .filter(item -> grantFilterMatch(query.getGrantScope(), grants.get(item.getId())))
                 .sorted(buildRouteComparator(query, depts, grants))
                 .toList();
@@ -298,6 +302,12 @@ public class SysRouteServiceImpl implements SysRouteService {
         String name = trim(query.getRouteName());
         String region = trim(query.getRegionCode());
         String modifyName = trim(query.getUpdateByName());
+        String destProvince = trim(query.getDestProvinceCode());
+        String destCity = trim(query.getDestCityCode());
+        String destDistrict = trim(query.getDestDistrictCode());
+        String destTown = trim(query.getDestTownCode());
+        LocalDateTime updateStart = parseStart(query.getUpdateTimeStart());
+        LocalDateTime updateEnd = parseEnd(query.getUpdateTimeEnd());
         Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
         Set<Long> ownerCompanyIds = parseIds(query.getOwnerCompanyIds());
 
@@ -324,6 +334,11 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .filter(item -> CollectionUtils.isEmpty(query.getStatus())
                         || query.getStatus().contains(item.getStatus()))
                 .filter(item -> ownerCompanyIds.isEmpty() || ownerCompanyIds.contains(item.getOwnerCompanyId()))
+                .filter(item -> inTimeRange(item.getUpdateTime(), updateStart, updateEnd))
+                .filter(item -> regionPrefixMatch(item.getRegionCode(), destProvince))
+                .filter(item -> regionPrefixMatch(item.getRegionCode(), destCity))
+                .filter(item -> regionPrefixMatch(item.getRegionCode(), destDistrict))
+                .filter(item -> regionPrefixMatch(item.getRegionCode(), destTown))
                 .filter(item -> region == null
                         || TextFilterMode.match(item.getRegionCode(), region,
                         TextFilterMode.modeOf(modes, "regionFullName"))
@@ -350,8 +365,9 @@ public class SysRouteServiceImpl implements SysRouteService {
             }
         });
         Map<Long, String> names = resolveUserNames(userIds);
+        Map<String, String> regionNames = resolveRegionNames(candidates);
         List<SysRouteTransfer> visible = candidates.stream()
-                .sorted(buildTransferComparator(query, depts, grants, names))
+                .sorted(buildTransferComparator(query, depts, grants, names, regionNames))
                 .toList();
 
         int pageNum = query.getPageNum() == null || query.getPageNum() < 1 ? 1 : query.getPageNum();
@@ -362,7 +378,8 @@ public class SysRouteServiceImpl implements SysRouteService {
 
         TransferPageVO result = new TransferPageVO();
         result.setRecords(visible.subList(from, to).stream()
-                .map(item -> toTransferVO(item, depts, carriers, grants.get(item.getId()), names, org)).toList());
+                .map(item -> toTransferVO(item, depts, carriers, grants.get(item.getId()), names, org, regionNames))
+                .toList());
         result.setTotal(visible.size());
         return result;
     }
@@ -383,7 +400,8 @@ public class SysRouteServiceImpl implements SysRouteService {
         Map<Long, SysCarrier> carriers = carrier == null ? Map.of() : Map.of(carrier.getId(), carrier);
         return toTransferVO(route, userOrgService.deptMap(), carriers,
                 grantsOf(SCOPE_TRANSFER, id),
-                resolveUserNames(Set.of(route.getCreateBy() == null ? 0L : route.getCreateBy())), org);
+                resolveUserNames(Set.of(route.getCreateBy() == null ? 0L : route.getCreateBy())), org,
+                resolveRegionNames(List.of(route)));
     }
 
     @Override
@@ -784,10 +802,10 @@ public class SysRouteServiceImpl implements SysRouteService {
             throw new BizException(403, "只有创建公司可以操作该路由");
         }
         List<SysRouteCompany> grants = grantsOf(SCOPE_TRANSFER, id);
+        // 总部可在确认清单后移除使用中的路由；分公司仅能在“只有自己在用”时移除
         // 0 号行为总部自身的“全部分公司”授权，不算他公司在用
-        boolean otherUsing = org.hq()
-                ? grants.stream().anyMatch(item -> !Objects.equals(0L, item.getCompanyDeptId()))
-                : grants.stream().anyMatch(item -> !Objects.equals(item.getCompanyDeptId(), org.companyId()));
+        boolean otherUsing = !org.hq()
+                && grants.stream().anyMatch(item -> !Objects.equals(item.getCompanyDeptId(), org.companyId()));
         if (otherUsing) {
             throw new BizException(BLOCK_DELETE);
         }
@@ -795,6 +813,69 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .eq(SysRouteCompany::getRouteScope, SCOPE_TRANSFER)
                 .eq(SysRouteCompany::getRouteId, id));
         transferMapper.deleteById(id);
+    }
+
+    @Override
+    @DS("slave")
+    public RouteUsageVO transferUsage(Long id) {
+        UserOrgService.UserOrg org = userOrgService.current();
+        SysRouteTransfer route = requireVisibleTransfer(id, org);
+        Map<Long, SysDept> depts = userOrgService.deptMap();
+        List<SysRouteCompany> rows = grantsOf(SCOPE_TRANSFER, id);
+        Map<Long, String> names = resolveUserNames(rows.stream().map(SysRouteCompany::getGrantBy)
+                .filter(Objects::nonNull).collect(Collectors.toSet()));
+        List<RouteGrantVO> all = new ArrayList<>();
+        for (SysRouteCompany row : rows) {
+            RouteGrantVO vo = new RouteGrantVO();
+            vo.setId(row.getId());
+            vo.setCompanyDeptId(row.getCompanyDeptId());
+            vo.setCompanyName(Objects.equals(0L, row.getCompanyDeptId())
+                    ? "全部分公司"
+                    : (depts.get(row.getCompanyDeptId()) == null
+                    ? null : depts.get(row.getCompanyDeptId()).getDeptName()));
+            vo.setGrantSource(row.getGrantSource());
+            vo.setGrantSourceName(grantSourceName(row.getGrantSource()));
+            vo.setGrantBy(row.getGrantBy());
+            vo.setGrantByName(names.get(row.getGrantBy()));
+            vo.setGrantTime(row.getGrantTime());
+            vo.setRemark(row.getRemark());
+            all.add(vo);
+        }
+
+        boolean hq = org.hq();
+        boolean owner = Objects.equals(route.getOwnerCompanyId(), org.companyId());
+        // 分公司视角：除本公司外的授权行都算“他公司在用”（0 号行代表全部分公司）
+        List<RouteGrantVO> others = all.stream()
+                .filter(item -> hq || !Objects.equals(item.getCompanyDeptId(), org.companyId()))
+                .toList();
+        boolean ownGrant = all.stream().anyMatch(item -> Objects.equals(item.getCompanyDeptId(), org.companyId()));
+        boolean canRemove = hq || (owner && others.isEmpty());
+
+        RouteUsageVO result = new RouteUsageVO();
+        result.setId(route.getId());
+        result.setRouteCode(route.getRouteCode());
+        result.setRouteName(route.getRouteName());
+        result.setOwnerCompanyId(route.getOwnerCompanyId());
+        SysDept ownerDept = depts.get(route.getOwnerCompanyId());
+        result.setOwnerCompanyName(ownerDept == null ? null : ownerDept.getDeptName());
+        result.setCurrentCompanyId(org.companyId());
+        result.setHq(hq);
+        result.setOwner(owner);
+        result.setCanRemove(canRemove);
+        result.setCanRevoke(!hq && ownGrant);
+        result.setCompanies(hq ? all : others);
+        if (!canRemove) {
+            if (others.stream().anyMatch(item -> Objects.equals(0L, item.getCompanyDeptId()))) {
+                result.setBlockReason("该路由已授权全部分公司，不能移除");
+            } else if (!others.isEmpty()) {
+                result.setBlockReason("该路由被 " + others.size() + " 家公司在使用，不能移除");
+            } else if (!owner) {
+                result.setBlockReason("只有创建公司可以移除该路由，可改为取消本公司授权");
+            } else {
+                result.setBlockReason("该路由正在使用中，不能移除");
+            }
+        }
+        return result;
     }
 
     /* ==================== 授权 ==================== */
@@ -1459,7 +1540,8 @@ public class SysRouteServiceImpl implements SysRouteService {
 
     private RouteTransferVO toTransferVO(SysRouteTransfer item, Map<Long, SysDept> depts,
                                          Map<Long, SysCarrier> carriers, List<SysRouteCompany> grants,
-                                         Map<Long, String> names, UserOrgService.UserOrg org) {
+                                         Map<Long, String> names, UserOrgService.UserOrg org,
+                                         Map<String, String> regionNames) {
         RouteTransferVO vo = new RouteTransferVO();
         vo.setId(item.getId());
         vo.setRouteCode(item.getRouteCode());
@@ -1470,6 +1552,19 @@ public class SysRouteServiceImpl implements SysRouteService {
         vo.setRegionCode(item.getRegionCode());
         vo.setRegionLevel(item.getRegionLevel());
         vo.setRegionFullName(item.getRegionFullName());
+        String regionCode = item.getRegionCode();
+        if (regionCode != null && regionCode.length() >= 2) {
+            vo.setDestProvinceName(regionNames.get(regionCode.substring(0, 2) + "0000"));
+            if (regionCode.length() >= 4) {
+                vo.setDestCityName(regionNames.get(regionCode.substring(0, 4) + "00"));
+            }
+            if (regionCode.length() >= 6) {
+                vo.setDestDistrictName(regionNames.get(regionCode.substring(0, 6)));
+            }
+            if (regionCode.length() > 6) {
+                vo.setDestTownName(regionNames.get(regionCode));
+            }
+        }
         vo.setCarrierId(item.getCarrierId());
         SysCarrier carrier = item.getCarrierId() == null ? null : carriers.get(item.getCarrierId());
         vo.setCarrierName(carrier == null ? null : carrier.getCarrierName());
@@ -1487,13 +1582,16 @@ public class SysRouteServiceImpl implements SysRouteService {
             boolean all = hasAllGrant(grants);
             vo.setGrantScope(all ? "ALL" : "COUNT");
             vo.setGrantCount(grantCount(grants));
-            // 0 号行为总部自身授权，不算他公司在用
-            vo.setDeletable(grants == null || grants.stream()
-                    .noneMatch(row -> !Objects.equals(0L, row.getCompanyDeptId())));
+            // 总部可在确认使用公司清单后移除路由（含使用中），故始终提供移除入口
+            vo.setDeletable(true);
         } else {
-            vo.setDeletable(Objects.equals(item.getOwnerCompanyId(), org.companyId())
-                    && (grants == null || grants.stream()
-                    .allMatch(row -> Objects.equals(row.getCompanyDeptId(), org.companyId()))));
+            boolean owner = Objects.equals(item.getOwnerCompanyId(), org.companyId());
+            boolean ownGrant = grants != null && grants.stream()
+                    .anyMatch(row -> Objects.equals(row.getCompanyDeptId(), org.companyId()));
+            boolean onlySelf = grants == null || grants.stream()
+                    .allMatch(row -> Objects.equals(row.getCompanyDeptId(), org.companyId()));
+            // 创建公司且仅自己在用可移除；被授权的分公司也保留入口，由弹窗引导“取消授权”
+            vo.setDeletable(owner ? onlySelf : ownGrant);
         }
         vo.setEditable(hq || Objects.equals(item.getOwnerCompanyId(), org.companyId()));
         return vo;
@@ -1583,7 +1681,8 @@ public class SysRouteServiceImpl implements SysRouteService {
 
     private Comparator<SysRouteTransfer> buildTransferComparator(TransferQuery query, Map<Long, SysDept> depts,
                                                                  Map<Long, List<SysRouteCompany>> grants,
-                                                                 Map<Long, String> names) {
+                                                                 Map<Long, String> names,
+                                                                 Map<String, String> regionNames) {
         // 默认排序对齐 luohuo：sort_order asc, id desc
         Comparator<SysRouteTransfer> fallback = Comparator.comparing(SysRouteTransfer::getSortOrder)
                 .thenComparing(SysRouteTransfer::getId, Comparator.reverseOrder());
@@ -1601,6 +1700,18 @@ public class SysRouteServiceImpl implements SysRouteService {
                     item -> deptName(depts, item.getApplyDeptId()),
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "regionFullName" -> Comparator.comparing(SysRouteTransfer::getRegionFullName,
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            case "destProvinceName" -> Comparator.<SysRouteTransfer, String>comparing(
+                    item -> destRegionName(regionNames, item.getRegionCode(), 2),
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            case "destCityName" -> Comparator.<SysRouteTransfer, String>comparing(
+                    item -> destRegionName(regionNames, item.getRegionCode(), 4),
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            case "destDistrictName" -> Comparator.<SysRouteTransfer, String>comparing(
+                    item -> destRegionName(regionNames, item.getRegionCode(), 6),
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            case "destTownName" -> Comparator.<SysRouteTransfer, String>comparing(
+                    item -> destRegionName(regionNames, item.getRegionCode(), 9),
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "regionLevel" -> Comparator.comparing(SysRouteTransfer::getRegionLevel,
                     Comparator.nullsLast(Comparator.naturalOrder()));
@@ -1757,8 +1868,105 @@ public class SysRouteServiceImpl implements SysRouteService {
 
     /* ==================== 工具 ==================== */
 
+    /** 目的地四级区划名称：按 regionCode 前缀批量查区划表，避免 N+1 */
+    private Map<String, String> resolveRegionNames(List<SysRouteTransfer> rows) {
+        Set<String> codes = new HashSet<>();
+        for (SysRouteTransfer row : rows) {
+            String code = row.getRegionCode();
+            if (code == null || code.length() < 2) {
+                continue;
+            }
+            codes.add(code.substring(0, 2) + "0000");
+            if (code.length() >= 4) {
+                codes.add(code.substring(0, 4) + "00");
+            }
+            if (code.length() >= 6) {
+                codes.add(code.substring(0, 6));
+            }
+            if (code.length() > 6) {
+                codes.add(code);
+            }
+        }
+        if (codes.isEmpty()) {
+            return Map.of();
+        }
+        return regionMapper.selectList(Wrappers.<SysRegion>lambdaQuery().in(SysRegion::getCode, codes))
+                .stream().collect(Collectors.toMap(SysRegion::getCode, SysRegion::getName, (a, b) -> a));
+    }
+
+    /** 取目的地某一级区划名称：levelLen=2 省、4 市、6 区县、9 乡级 */
+    private String destRegionName(Map<String, String> regionNames, String regionCode, int levelLen) {
+        if (regionCode == null) {
+            return null;
+        }
+        if (levelLen == 2) {
+            return regionCode.length() >= 2 ? regionNames.get(regionCode.substring(0, 2) + "0000") : null;
+        }
+        if (levelLen == 4) {
+            return regionCode.length() >= 4 ? regionNames.get(regionCode.substring(0, 4) + "00") : null;
+        }
+        if (levelLen == 6) {
+            return regionCode.length() >= 6 ? regionNames.get(regionCode.substring(0, 6)) : null;
+        }
+        return regionCode.length() > 6 ? regionNames.get(regionCode) : null;
+    }
+
+    /** 区划编码前缀匹配：省取 2 位、市取 4 位、区县取 6 位、乡级取全码 */
+    private boolean regionPrefixMatch(String regionCode, String filterCode) {
+        if (!StringUtils.hasText(filterCode)) {
+            return true;
+        }
+        if (regionCode == null) {
+            return false;
+        }
+        String code = filterCode.trim();
+        int len;
+        if (code.length() > 6) {
+            len = code.length();
+        } else if (code.endsWith("0000")) {
+            len = 2;
+        } else if (code.endsWith("00")) {
+            len = 4;
+        } else {
+            len = 6;
+        }
+        return code.length() >= len && regionCode.length() >= len
+                && regionCode.startsWith(code.substring(0, len));
+    }
+
     private String trim(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /** 起始日 00:00:00；结束日当日 23:59:59（含当日） */
+    private LocalDateTime parseStart(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String text = value.trim();
+        return text.length() <= 10
+                ? LocalDate.parse(text).atStartOfDay()
+                : LocalDateTime.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private LocalDateTime parseEnd(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String text = value.trim();
+        return text.length() <= 10
+                ? LocalDate.parse(text).atTime(23, 59, 59)
+                : LocalDateTime.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private boolean inTimeRange(LocalDateTime value, LocalDateTime start, LocalDateTime end) {
+        if (start == null && end == null) {
+            return true;
+        }
+        if (value == null) {
+            return false;
+        }
+        return (start == null || !value.isBefore(start)) && (end == null || !value.isAfter(end));
     }
 
     private boolean contains(String source, String keyword) {
@@ -1793,25 +2001,5 @@ public class SysRouteServiceImpl implements SysRouteService {
         }
         return (min == null || value.compareTo(min) >= 0)
                 && (max == null || value.compareTo(max) <= 0);
-    }
-
-    private LocalDateTime parseStart(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        String text = value.trim();
-        return text.length() <= 10
-                ? LocalDate.parse(text, DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay()
-                : LocalDateTime.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-    }
-
-    private LocalDateTime parseEnd(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        String text = value.trim();
-        return text.length() <= 10
-                ? LocalDate.parse(text, DateTimeFormatter.ISO_LOCAL_DATE).atTime(23, 59, 59)
-                : LocalDateTime.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 }

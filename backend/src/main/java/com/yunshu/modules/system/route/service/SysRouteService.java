@@ -16,6 +16,7 @@ import com.yunshu.modules.system.route.vo.RouteMatchVO;
 import com.yunshu.modules.system.route.vo.RoutePageVO;
 import com.yunshu.modules.system.route.vo.RouteSaveResultVO;
 import com.yunshu.modules.system.route.vo.RouteTransferVO;
+import com.yunshu.modules.system.route.vo.RouteUsageVO;
 import com.yunshu.modules.system.route.vo.RouteVO;
 import com.yunshu.modules.system.route.vo.TransferBatchResultVO;
 import com.yunshu.modules.system.route.vo.TransferPageVO;
@@ -54,6 +55,9 @@ public interface SysRouteService {
     void updateTransfer(Long id, TransferEditRequest request);
 
     void deleteTransfer(Long id);
+
+    /** 直达/外转路由使用情况：使用公司清单与移除/取消授权判定 */
+    RouteUsageVO transferUsage(Long id);
 
     TransferBatchResultVO switchTransferType(TransferBatchTypeRequest request);
 

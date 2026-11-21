@@ -60,6 +60,8 @@ public class SysCarrierServiceImpl implements SysCarrierService {
         String phone = trim(query.getPhone());
         String updateByName = trim(query.getUpdateByName());
         String remark = trim(query.getRemark());
+        LocalDateTime updateStart = parseStart(query.getUpdateTimeStart());
+        LocalDateTime updateEnd = parseEnd(query.getUpdateTimeEnd());
         Map<String, TextFilterMode> modes = TextFilterMode.parse(query.getFilterModes());
 
         List<SysCarrier> filtered = visible.stream()
@@ -80,6 +82,7 @@ public class SysCarrierServiceImpl implements SysCarrierService {
                         || query.getDeptId().contains(item.getDeptId()))
                 .filter(item -> CollectionUtils.isEmpty(query.getStatus())
                         || query.getStatus().contains(item.getStatus()))
+                .filter(item -> inTimeRange(item.getUpdateTime(), updateStart, updateEnd))
                 .sorted(buildComparator(query, depts, userNames))
                 .toList();
 
@@ -302,5 +305,36 @@ public class SysCarrierServiceImpl implements SysCarrierService {
 
     private String trim(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /** 起始日：日期取 00:00:00；结束日：日期取当日 23:59:59，保证“当日包含” */
+    private LocalDateTime parseStart(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String text = value.trim();
+        return text.length() <= 10
+                ? LocalDate.parse(text).atStartOfDay()
+                : LocalDateTime.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private LocalDateTime parseEnd(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String text = value.trim();
+        return text.length() <= 10
+                ? LocalDate.parse(text).atTime(23, 59, 59)
+                : LocalDateTime.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private boolean inTimeRange(LocalDateTime value, LocalDateTime start, LocalDateTime end) {
+        if (start == null && end == null) {
+            return true;
+        }
+        if (value == null) {
+            return false;
+        }
+        return (start == null || !value.isBefore(start)) && (end == null || !value.isAfter(end));
     }
 }

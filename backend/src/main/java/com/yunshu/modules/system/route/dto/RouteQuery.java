@@ -50,6 +50,11 @@ public class RouteQuery extends BaseListQuery {
     /** 创建公司 ID，多选时逗号分隔 */
     private String ownerCompanyIds;
 
+    /** 更新时间起止：yyyy-MM-dd，结束日含当日 */
+    private String updateTimeStart;
+
+    private String updateTimeEnd;
+
     private String sortBy;
 
     private String sortOrder;

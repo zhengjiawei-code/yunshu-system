@@ -25,6 +25,15 @@ public class RouteTransferVO {
 
     private String regionFullName;
 
+    /** 目的地四级区划名称，按 regionCode 前缀实时取自区划表，不落快照 */
+    private String destProvinceName;
+
+    private String destCityName;
+
+    private String destDistrictName;
+
+    private String destTownName;
+
     private Long carrierId;
 
     private String carrierName;

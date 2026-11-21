@@ -243,7 +243,19 @@
             label="修改时间"
             min-width="180"
             align="center"
-          />
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">修改时间</span>
+                <column-filter
+                  v-if="col('updateTime').filterType !== 'none'"
+                  v-model="filters.updateRange"
+                  :type="col('updateTime').filterType"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
+          </el-table-column>
 
           <el-table-column v-if="isVisible('remark')" prop="remark" label="备注" min-width="160">
             <template #header>
@@ -329,7 +341,7 @@ const schema = reactive<ColumnDef[]>([
   // 排序号/修改时间后端未提供区间筛选参数，保持无筛选，避免前端无效控件
   { key: 'sortOrder', label: '排序号', prop: 'sortOrder', filterType: 'none', align: 'right' },
   { key: 'updateByName', label: '修改人', prop: 'updateByName', filterType: 'text' },
-  { key: 'updateTime', label: '修改时间', prop: 'updateTime', filterType: 'none', align: 'center' },
+  { key: 'updateTime', label: '修改时间', prop: 'updateTime', filterType: 'daterange', align: 'center' },
   { key: 'remark', label: '备注', prop: 'remark', filterType: 'text' },
   {
     key: 'operation',
@@ -375,6 +387,7 @@ const filters = reactive<{
   status: boolean | boolean[] | undefined
   updateByName: string
   remark: string
+  updateRange: string[] | undefined
 }>({
   carrierCode: '',
   carrierName: '',
@@ -383,7 +396,8 @@ const filters = reactive<{
   deptId: undefined,
   status: undefined,
   updateByName: '',
-  remark: ''
+  remark: '',
+  updateRange: undefined
 })
 
 /** 文本列运行时匹配方式：由表头多模式控件写入 */
@@ -431,6 +445,8 @@ function buildQuery(pageNum = page.value, size = pageSize.value): CarrierQuery {
     deptId: isVisible('deptName') ? filters.deptId : undefined,
     status: isVisible('status') ? filters.status : undefined,
     updateByName: isVisible('updateByName') ? filters.updateByName.trim() || undefined : undefined,
+    updateTimeStart: isVisible('updateTime') ? filters.updateRange?.[0] || undefined : undefined,
+    updateTimeEnd: isVisible('updateTime') ? filters.updateRange?.[1] || undefined : undefined,
     remark: isVisible('remark') ? filters.remark.trim() || undefined : undefined,
     filterModes: buildFilterModes(),
     sortBy: sortState.sortBy,
@@ -519,6 +535,7 @@ function resetFilters() {
   filters.status = undefined
   filters.updateByName = ''
   filters.remark = ''
+  filters.updateRange = undefined
   sortState.sortBy = undefined
   sortState.sortOrder = undefined
   tableRef.value?.getTable()?.clearSort?.()
@@ -552,6 +569,9 @@ function applyDefaultFilters() {
   applyTextDefault('phone', defaults.phone, (value) => (filters.phone = value))
   applyTextDefault('updateByName', defaults.updateByName, (value) => (filters.updateByName = value))
   applyTextDefault('remark', defaults.remark, (value) => (filters.remark = value))
+  if (Array.isArray(defaults.updateTime)) {
+    filters.updateRange = defaults.updateTime.map((item) => String(item))
+  }
 
   const deptIds = toValueList(defaults.deptName).map((item) => Number(item))
   if (deptIds.length) {

@@ -8,23 +8,15 @@
     @open="handleOpen"
   >
     <el-form :model="form" label-width="96px">
-      <el-form-item label="路由">
-        <el-select
-          v-model="form.routeIds"
-          multiple
-          filterable
-          collapse-tags
-          :max-collapse-tags="4"
-          placeholder="选择要授权的路由（最多 50 条）"
-          class="full-width"
-        >
-          <el-option
-            v-for="item in routes"
-            :key="item.id"
-            :label="`${item.routeCode}｜${item.routeName}`"
-            :value="item.id"
-          />
-        </el-select>
+      <el-form-item label="已选路由">
+        <div class="grant-selected">
+          <span class="grant-selected__count">已选 {{ routes.length }} 条路由</span>
+          <div class="grant-selected__tags">
+            <el-tag v-for="item in routes" :key="item.id" size="small" type="info">
+              {{ item.routeCode }}｜{{ item.routeName }}
+            </el-tag>
+          </div>
+        </div>
       </el-form-item>
       <el-form-item label="授权分公司">
         <el-select
@@ -84,8 +76,11 @@ const form = reactive<{ routeIds: number[]; companyDeptIds: number[] }>({
   companyDeptIds: []
 })
 
+const MAX_GRANT_BATCH = 50
+
 async function handleOpen() {
-  form.routeIds = []
+  // 授权对象固定为表格当前勾选行，弹窗内只读展示，不再二次选择
+  form.routeIds = props.routes.map((item) => item.id)
   form.companyDeptIds = []
   try {
     companyOptions.value = await getDeptOptions(2)
@@ -96,7 +91,11 @@ async function handleOpen() {
 
 async function handleSubmit() {
   if (form.routeIds.length === 0) {
-    ElMessage.warning('请选择路由')
+    ElMessage.warning('请先在列表勾选路由')
+    return
+  }
+  if (form.routeIds.length > MAX_GRANT_BATCH) {
+    ElMessage.warning(`一次最多授权 ${MAX_GRANT_BATCH} 条，当前已选 ${form.routeIds.length} 条`)
     return
   }
   if (form.companyDeptIds.length === 0) {
@@ -121,5 +120,23 @@ async function handleSubmit() {
 <style scoped>
 .full-width {
   width: 100%;
+}
+
+.grant-selected {
+  width: 100%;
+}
+
+.grant-selected__count {
+  font-size: var(--font-size-small);
+  color: var(--color-text-primary);
+}
+
+.grant-selected__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 120px;
+  overflow-y: auto;
 }
 </style>

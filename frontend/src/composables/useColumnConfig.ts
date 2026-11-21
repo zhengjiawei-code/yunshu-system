@@ -53,6 +53,8 @@ export interface ColumnDef {
   defaultFilter?: unknown
   /** 不允许隐藏（如状态、操作等关键列） */
   locked?: boolean
+  /** 默认隐藏（列定义保留，列设置可勾回） */
+  defaultHidden?: boolean
   /** 不参与列设置（如序号列） */
   ignored?: boolean
 }
@@ -76,7 +78,14 @@ export interface ColumnConfigPayload {
 /** 文本列运行时匹配方式：键为列 key，值为本次查询选择的模式 */
 export type RuntimeTextModes = Partial<Record<string, TextMatchMode>>
 
-const CONFIG_VERSION = 2
+/**
+ * 配置版本：
+ * 1 允许用户改筛选类型；
+ * 2 控件类型只跟随 schema，用户只能关闭筛选；
+ * 3 一次性迁移：历史配置的「是否启用筛选」重置为默认全开（保留顺序/显隐/匹配模式/默认值），
+ *   同时为 defaultHidden 的新列落一次默认隐藏。
+ */
+const CONFIG_VERSION = 3
 const DATE_TYPES: FilterType[] = ['date', 'daterange']
 
 function isDateType(type: FilterType): boolean {
@@ -112,11 +121,18 @@ function modeValueOf(value: unknown): unknown {
  * v1 允许用户改筛选类型；v2 起控件类型只跟随页面 schema，用户只能关闭筛选。
  * 日期类型不提供任何筛选配置项，历史默认值在这里清空。
  */
-function normalizeState(def: ColumnDef, saved?: Partial<ColumnItemState> | null): ColumnItemState {
+function normalizeState(
+  def: ColumnDef,
+  saved?: Partial<ColumnItemState> | null,
+  migrate = false
+): ColumnItemState {
   const targetType = schemaTypeOf(def)
   const savedType = saved?.filterType
   let filterType: FilterType = targetType
-  if (savedType === 'none') {
+  if (migrate) {
+    // 历史配置迁移：所有可筛列统一回到默认全开
+    filterType = targetType
+  } else if (savedType === 'none') {
     filterType = 'none'
   } else if (savedType === 'multiselect' && targetType === 'select') {
     filterType = 'select'
@@ -180,7 +196,7 @@ function normalizeState(def: ColumnDef, saved?: Partial<ColumnItemState> | null)
 
   return {
     key: def.key,
-    visible: saved?.visible !== false,
+    visible: migrate && def.defaultHidden ? false : saved?.visible !== false,
     sortable: saved?.sortable !== false,
     filterType,
     filterMode,
@@ -190,7 +206,7 @@ function normalizeState(def: ColumnDef, saved?: Partial<ColumnItemState> | null)
 }
 
 function defaultState(def: ColumnDef): ColumnItemState {
-  return normalizeState(def, null)
+  return normalizeState(def, null, true)
 }
 
 /**
@@ -208,12 +224,14 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
     const defs = new Map(configurable.value.map((def) => [def.key, def]))
     const result: ColumnItemState[] = []
     const seen = new Set<string>()
+    // 旧版本配置一次性迁移：筛选重置全开、defaultHidden 列落为隐藏
+    const migrate = !saved || (saved.version ?? 0) < CONFIG_VERSION
     // 先按用户保存的顺序还原；页面新增的列再追加到末尾，保证顺序配置真实生效
     for (const item of saved?.columns || []) {
       const def = defs.get(item.key)
       if (!def || seen.has(item.key)) continue
       seen.add(item.key)
-      result.push(normalizeState(def, item))
+      result.push(normalizeState(def, item, migrate))
     }
     for (const def of configurable.value) {
       if (!seen.has(def.key)) result.push(defaultState(def))

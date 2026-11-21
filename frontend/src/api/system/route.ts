@@ -15,7 +15,8 @@ import type {
   TransferEditPayload,
   TransferPage,
   TransferQuery,
-  TransferRecord
+  TransferRecord,
+  RouteUsage
 } from '@/types/route'
 
 /* Tab1 短驳/干线 */
@@ -83,6 +84,11 @@ export function batchTransferStatus(payload: {
 
 export function deleteTransfer(id: number): Promise<void> {
   return request({ url: `/v1/system/routes/transfers/${id}`, method: 'delete' })
+}
+
+/** 路由使用情况：使用公司清单 + 移除/取消授权判定 */
+export function getTransferUsage(id: number): Promise<RouteUsage> {
+  return request({ url: `/v1/system/routes/transfers/${id}/usage`, method: 'get' })
 }
 
 /* 授权 */

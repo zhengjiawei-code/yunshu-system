@@ -25,6 +25,8 @@ export interface CarrierQuery {
   deptId?: number | number[]
   status?: boolean | boolean[]
   updateByName?: string
+  updateTimeStart?: string
+  updateTimeEnd?: string
   remark?: string
   filterModes?: string
   sortBy?: string

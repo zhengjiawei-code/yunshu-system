@@ -40,6 +40,20 @@ public class TransferQuery extends BaseListQuery {
     /** 创建公司 ID，多选时逗号分隔 */
     private String ownerCompanyIds;
 
+    /** 修改时间起止：yyyy-MM-dd，结束日含当日 */
+    private String updateTimeStart;
+
+    private String updateTimeEnd;
+
+    /** 目的地四级区划编码筛选，按 regionCode 前缀匹配 */
+    private String destProvinceCode;
+
+    private String destCityCode;
+
+    private String destDistrictCode;
+
+    private String destTownCode;
+
     private String sortBy;
 
     private String sortOrder;

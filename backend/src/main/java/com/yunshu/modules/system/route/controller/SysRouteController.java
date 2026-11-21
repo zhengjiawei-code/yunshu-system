@@ -19,6 +19,7 @@ import com.yunshu.modules.system.route.vo.RouteMatchVO;
 import com.yunshu.modules.system.route.vo.RoutePageVO;
 import com.yunshu.modules.system.route.vo.RouteSaveResultVO;
 import com.yunshu.modules.system.route.vo.RouteTransferVO;
+import com.yunshu.modules.system.route.vo.RouteUsageVO;
 import com.yunshu.modules.system.route.vo.RouteVO;
 import com.yunshu.modules.system.route.vo.TransferBatchResultVO;
 import com.yunshu.modules.system.route.vo.TransferPageVO;
@@ -160,6 +161,11 @@ public class SysRouteController {
     public ApiResult<Void> deleteTransfer(@PathVariable Long id) {
         routeService.deleteTransfer(id);
         return ApiResult.ok();
+    }
+
+    @GetMapping("/transfers/{id}/usage")
+    public ApiResult<RouteUsageVO> transferUsage(@PathVariable Long id) {
+        return ApiResult.ok(routeService.transferUsage(id));
     }
 
     /* ---------- 授权 ---------- */

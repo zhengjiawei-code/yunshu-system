@@ -23,6 +23,11 @@ public class CarrierQuery extends BaseListQuery {
 
     private String updateByName;
 
+    /** 修改时间起止：日期格式 yyyy-MM-dd，结束日含当日 */
+    private String updateTimeStart;
+
+    private String updateTimeEnd;
+
     private String remark;
 
     private String sortBy;

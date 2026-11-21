@@ -218,7 +218,8 @@ function isTextMulti(item: ColumnItemState): boolean {
 
 function fixedHint(item: ColumnItemState): string {
   if (!isFilterEnabled(item) || !canFilter(item.key)) return '—'
-  if (isDate(item) || item.filterType === 'numberrange') return '固定区间'
+  if (isDate(item)) return '固定按日期区间查询'
+  if (item.filterType === 'numberrange') return '固定区间'
   return '—'
 }
 

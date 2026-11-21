@@ -47,6 +47,8 @@ export interface RouteQuery {
   serviceName?: string
   servicePhone?: string
   ownerCompanyIds?: string
+  updateTimeStart?: string
+  updateTimeEnd?: string
   /** 文本列匹配模式 JSON：{ field: 'exact' | 'ne' | 'like' | 'left' | 'right' | 'batch' } */
   filterModes?: string
   status?: boolean | boolean[]
@@ -89,6 +91,10 @@ export interface TransferRecord {
   regionCode: string
   regionLevel: number
   regionFullName: string
+  destProvinceName?: string
+  destCityName?: string
+  destDistrictName?: string
+  destTownName?: string
   carrierId?: number
   carrierName?: string
   ownerCompanyId: number
@@ -113,10 +119,16 @@ export interface TransferQuery {
   applyDeptId?: number
   regionCode?: string
   regionLevel?: 2 | 3 | 4 | Array<2 | 3 | 4>
+  destProvinceCode?: string
+  destCityCode?: string
+  destDistrictCode?: string
+  destTownCode?: string
   carrierId?: number | number[]
   status?: boolean | boolean[]
   grantScope?: 'ALL' | 'PARTIAL' | Array<'ALL' | 'PARTIAL'>
   updateByName?: string
+  updateTimeStart?: string
+  updateTimeEnd?: string
   ownerCompanyIds?: string
   filterModes?: string
   sortBy?: string
@@ -128,6 +140,30 @@ export interface TransferQuery {
 export interface TransferPage {
   records: TransferRecord[]
   total: number
+}
+
+/** 路由使用情况（移除确认弹窗） */
+export interface RouteUsageCompany {
+  id: number
+  companyDeptId: number
+  companyName?: string | null
+  grantSourceName?: string
+  grantTime?: string
+}
+
+export interface RouteUsage {
+  id: number
+  routeCode: string
+  routeName: string
+  ownerCompanyId: number
+  ownerCompanyName?: string | null
+  currentCompanyId?: number | null
+  hq: boolean
+  owner: boolean
+  canRemove: boolean
+  canRevoke: boolean
+  blockReason?: string | null
+  companies: RouteUsageCompany[]
 }
 
 /** 区划库条目：外转/直达从区划挑选后加入 */
