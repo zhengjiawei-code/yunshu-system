@@ -100,27 +100,6 @@
             <p class="form-hint">可额外授权其他机构登录；主机构始终包含</p>
           </el-form-item>
 
-          <el-form-item label="状态" prop="status">
-            <el-radio-group v-model="form.status">
-              <el-radio :value="true">启用</el-radio>
-              <el-radio :value="false" :disabled="isSuperAdmin">禁用</el-radio>
-            </el-radio-group>
-            <p v-if="isSuperAdmin" class="form-hint">超级管理员不可禁用</p>
-          </el-form-item>
-
-          <el-form-item label="备注" prop="remark">
-            <el-input
-              v-model="form.remark"
-              type="textarea"
-              :rows="3"
-              maxlength="500"
-              show-word-limit
-              placeholder="选填"
-            />
-          </el-form-item>
-        </el-tab-pane>
-
-        <el-tab-pane label="角色" name="roles">
           <el-form-item label="角色" prop="roleIds">
             <el-select
               v-model="form.roleIds"
@@ -141,9 +120,28 @@
               内部员工至少 1 个角色；客户允许 0 个{{ isSuperAdmin ? '；超级管理员的角色不可修改' : '' }}
             </p>
           </el-form-item>
+
+          <el-form-item label="状态" prop="status">
+            <el-radio-group v-model="form.status">
+              <el-radio :value="true">启用</el-radio>
+              <el-radio :value="false" :disabled="isSuperAdmin">禁用</el-radio>
+            </el-radio-group>
+            <p v-if="isSuperAdmin" class="form-hint">超级管理员不可禁用</p>
+          </el-form-item>
+
+          <el-form-item label="备注" prop="remark">
+            <el-input
+              v-model="form.remark"
+              type="textarea"
+              :rows="3"
+              maxlength="500"
+              show-word-limit
+              placeholder="选填"
+            />
+          </el-form-item>
         </el-tab-pane>
 
-        <el-tab-pane label="数据权限" name="scope">
+        <el-tab-pane label="数据授权" name="scope">
           <el-form-item label="数据范围" prop="dataScope">
             <el-select
               v-model="form.dataScope"
