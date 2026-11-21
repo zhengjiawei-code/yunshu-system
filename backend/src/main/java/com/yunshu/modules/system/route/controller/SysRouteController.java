@@ -105,8 +105,13 @@ public class SysRouteController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer level,
             @RequestParam(required = false) Boolean configured,
-            @RequestParam(required = false) String parentCode) {
-        return ApiResult.ok(routeService.regionLibrary(applyDeptId, keyword, level, configured, parentCode));
+            @RequestParam(required = false) String parentCode,
+            @RequestParam(required = false) String provinceCode,
+            @RequestParam(required = false) String cityCode,
+            @RequestParam(required = false) String districtKeyword,
+            @RequestParam(required = false) String townKeyword) {
+        return ApiResult.ok(routeService.regionLibrary(applyDeptId, keyword, level, configured,
+                parentCode, provinceCode, cityCode, districtKeyword, townKeyword));
     }
 
     @Operation(summary = "从区划库批量加入（默认外转；本公司覆盖公共字段，他公司只补授权）")

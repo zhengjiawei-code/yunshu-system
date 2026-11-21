@@ -17,26 +17,19 @@
           <el-button class="tool-reset" @click="resetFilters">重置</el-button>
           <el-button class="tool-export" :icon="Download" @click="handleExport">导出</el-button>
 
-          <el-popover placement="bottom-end" :width="200" trigger="click">
+          <el-popover placement="bottom-end" :width="440" trigger="click">
             <template #reference>
               <el-button :icon="Setting">列设置</el-button>
             </template>
-            <div class="column-setting">
-              <div class="column-setting__head">
-                <span>显示列</span>
-                <el-button link type="primary" size="small" @click="resetColumns">恢复默认</el-button>
-              </div>
-              <el-checkbox
-                v-for="item in columnOptions"
-                :key="item.key"
-                v-model="columnState[item.key]"
-                :disabled="item.locked"
-                class="column-setting__item"
-                @change="(value: boolean) => onColumnToggle(item.key, value)"
-              >
-                {{ item.label }}
-              </el-checkbox>
-            </div>
+            <column-setting
+              :schema="schema"
+              :states="states"
+              :loading="columnLoading"
+              :saving="columnSaving"
+              @update:states="onStatesUpdate"
+              @save="handleColumnSave"
+              @reset="handleColumnReset"
+            />
           </el-popover>
 
           <el-pagination
@@ -63,6 +56,8 @@
           height="100%"
           :empty-text="emptyText"
           persist-key="system:role"
+          :column-order="columnOrder"
+          :column-hidden="hiddenKeys"
           show-summary
           :summary-method="summaryMethod"
           show-overflow-tooltip
@@ -72,16 +67,21 @@
         >
           <el-table-column type="index" label="序号" width="80" align="center" :index="indexMethod" />
 
-          <el-table-column v-if="columnState.roleName" prop="roleName" label="角色名称" min-width="150">
+          <el-table-column
+            v-if="isVisible('roleName')"
+            prop="roleName"
+            label="角色名称"
+            min-width="150"
+          >
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">角色名称</span>
-                <el-input
+                <column-filter
+                  v-if="col('roleName').filterType !== 'none'"
                   v-model="filters.roleName"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('roleName').filterType"
+                  :options="col('roleName').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
@@ -90,16 +90,21 @@
             </template>
           </el-table-column>
 
-          <el-table-column v-if="columnState.roleCode" prop="roleCode" label="角色编码" min-width="150">
+          <el-table-column
+            v-if="isVisible('roleCode')"
+            prop="roleCode"
+            label="角色编码"
+            min-width="150"
+          >
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">角色编码</span>
-                <el-input
+                <column-filter
+                  v-if="col('roleCode').filterType !== 'none'"
                   v-model="filters.roleCode"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('roleCode').filterType"
+                  :options="col('roleCode').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
@@ -108,16 +113,21 @@
             </template>
           </el-table-column>
 
-          <el-table-column v-if="columnState.roleDesc" prop="roleDesc" label="角色描述" min-width="170">
+          <el-table-column
+            v-if="isVisible('roleDesc')"
+            prop="roleDesc"
+            label="角色描述"
+            min-width="170"
+          >
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">角色描述</span>
-                <el-input
+                <column-filter
+                  v-if="col('roleDesc').filterType !== 'none'"
                   v-model="filters.roleDesc"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('roleDesc').filterType"
+                  :options="col('roleDesc').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
@@ -125,7 +135,7 @@
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.updateByName"
+            v-if="isVisible('updateByName')"
             prop="updateByName"
             label="最后修改人"
             min-width="120"
@@ -133,12 +143,12 @@
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">最后修改人</span>
-                <el-input
+                <column-filter
+                  v-if="col('updateByName').filterType !== 'none'"
                   v-model="filters.updateByName"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('updateByName').filterType"
+                  :options="col('updateByName').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
@@ -146,23 +156,20 @@
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.updateTime"
+            v-if="isVisible('updateTime')"
             prop="updateTime"
             label="最后修改时间"
-            min-width="200"
+            min-width="220"
             align="center"
           >
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">最后修改时间</span>
-                <el-date-picker
+                <column-filter
+                  v-if="col('updateTime').filterType !== 'none'"
                   v-model="filters.updateRange"
-                  size="small"
-                  type="daterange"
-                  value-format="YYYY-MM-DD"
-                  start-placeholder="开始"
-                  end-placeholder="结束"
-                  unlink-panels
+                  :type="col('updateTime').filterType"
+                  :options="col('updateTime').filterOptions"
                   @change="onFilterChange"
                 />
               </div>
@@ -170,7 +177,13 @@
             <template #default="{ row }">{{ row.updateTime || '—' }}</template>
           </el-table-column>
 
-          <el-table-column label="操作" width="200" fixed="right" align="right">
+          <el-table-column
+            v-if="isVisible('operation')"
+            label="操作"
+            width="200"
+            fixed="right"
+            align="right"
+          >
             <template #default="{ row }">
               <div class="row-actions">
                 <el-tooltip
@@ -223,22 +236,52 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Setting } from '@element-plus/icons-vue'
 import type { RoleQuery, RoleRecord } from '@/types/role'
+import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteRole, getRolePage } from '@/api/system/role'
+import { useColumnConfig } from '@/composables/useColumnConfig'
 import SmartTable from '@/components/base/SmartTable.vue'
+import ColumnFilter from '@/components/base/ColumnFilter.vue'
+import ColumnSetting from '@/components/base/ColumnSetting.vue'
 import RoleFormDrawer from './components/RoleFormDrawer.vue'
 import RoleAuthDialog from './components/RoleAuthDialog.vue'
 
 defineOptions({ name: 'SystemRole' })
 
-const COLUMN_STORAGE_KEY = 'yunshu_role_columns_v1'
+const schema = reactive<ColumnDef[]>([
+  { key: 'roleName', label: '角色名称', prop: 'roleName', filterType: 'text', locked: true },
+  { key: 'roleCode', label: '角色编码', prop: 'roleCode', filterType: 'text' },
+  { key: 'roleDesc', label: '角色描述', prop: 'roleDesc', filterType: 'text' },
+  { key: 'updateByName', label: '最后修改人', prop: 'updateByName', filterType: 'text' },
+  {
+    key: 'updateTime',
+    label: '最后修改时间',
+    prop: 'updateTime',
+    filterType: 'daterange',
+    align: 'center'
+  },
+  {
+    key: 'operation',
+    label: '操作',
+    elKey: 'label:操作',
+    filterType: 'none',
+    sortable: false,
+    locked: true
+  }
+])
 
-const columnOptions: Array<{ key: string; label: string; locked?: boolean }> = [
-  { key: 'roleName', label: '角色名称', locked: true },
-  { key: 'roleCode', label: '角色编码' },
-  { key: 'roleDesc', label: '角色描述' },
-  { key: 'updateByName', label: '最后修改人' },
-  { key: 'updateTime', label: '最后修改时间' }
-]
+const {
+  states,
+  loading: columnLoading,
+  saving: columnSaving,
+  col,
+  isVisible,
+  columnOrder,
+  hiddenKeys,
+  load: loadColumnConfig,
+  save: saveColumnConfig,
+  reset: resetColumnConfig,
+  defaultFilters
+} = useColumnConfig('system:role', schema)
 
 const roleTableRef = ref<InstanceType<typeof SmartTable>>()
 const loading = ref(false)
@@ -246,8 +289,6 @@ const rows = ref<RoleRecord[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-
-const columnState = reactive<Record<string, boolean>>(loadColumnState())
 
 const filters = reactive<{
   roleName: string
@@ -299,12 +340,14 @@ function indexMethod(index: number): number {
 
 function buildQuery(pageNum = page.value, size = pageSize.value): RoleQuery {
   return {
-    roleName: filters.roleName.trim() || undefined,
-    roleCode: filters.roleCode.trim() || undefined,
-    roleDesc: filters.roleDesc.trim() || undefined,
-    updateByName: filters.updateByName.trim() || undefined,
-    updateTimeStart: filters.updateRange[0] || undefined,
-    updateTimeEnd: filters.updateRange[1] || undefined,
+    roleName: isVisible('roleName') ? filters.roleName.trim() || undefined : undefined,
+    roleCode: isVisible('roleCode') ? filters.roleCode.trim() || undefined : undefined,
+    roleDesc: isVisible('roleDesc') ? filters.roleDesc.trim() || undefined : undefined,
+    updateByName: isVisible('updateByName')
+      ? filters.updateByName.trim() || undefined
+      : undefined,
+    updateTimeStart: isVisible('updateTime') ? filters.updateRange[0] || undefined : undefined,
+    updateTimeEnd: isVisible('updateTime') ? filters.updateRange[1] || undefined : undefined,
     sortBy: sortState.sortBy,
     sortOrder: sortState.sortOrder,
     pageNum,
@@ -369,64 +412,32 @@ function resetFilters() {
   loadPage()
 }
 
-function loadColumnState(): Record<string, boolean> {
-  const defaults: Record<string, boolean> = {}
-  columnOptions.forEach((item) => {
-    defaults[item.key] = true
-  })
-  try {
-    const raw = localStorage.getItem(COLUMN_STORAGE_KEY)
-    if (!raw) return defaults
-    const saved = JSON.parse(raw) as Record<string, boolean>
-    columnOptions.forEach((item) => {
-      if (item.locked) return
-      if (typeof saved[item.key] === 'boolean') defaults[item.key] = saved[item.key]
-    })
-  } catch {
-    // 存储损坏时回退默认
-  }
-  return defaults
+/* ---------- 统一列设置（后端按用户+页面持久化） ---------- */
+function onStatesUpdate(next: ColumnItemState[]) {
+  states.value = next
 }
 
-/** 隐藏列时同步清空该列筛选，避免“看不见条件却仍在过滤” */
-const FILTER_RESET: Record<string, () => void> = {
-  roleName: () => (filters.roleName = ''),
-  roleCode: () => (filters.roleCode = ''),
-  roleDesc: () => (filters.roleDesc = ''),
-  updateByName: () => (filters.updateByName = ''),
-  updateTime: () => (filters.updateRange = [])
+async function handleColumnSave() {
+  await saveColumnConfig()
 }
 
-function persistColumnState() {
-  try {
-    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnState))
-  } catch {
-    // 忽略存储失败
-  }
-}
-
-function onColumnToggle(key: string, visible: boolean) {
-  persistColumnState()
-  if (!visible && FILTER_RESET[key]) {
-    FILTER_RESET[key]()
-    // 隐藏了正在排序的列时同步取消排序
-    if (sortState.sortBy === key) {
-      sortState.sortBy = undefined
-      sortState.sortOrder = undefined
-      roleTableRef.value?.getTable()?.clearSort?.()
-    }
-    page.value = 1
-    loadPage()
-  }
-}
-
-function resetColumns() {
-  columnOptions.forEach((item) => {
-    columnState[item.key] = true
-  })
-  persistColumnState()
+async function handleColumnReset() {
+  await resetColumnConfig()
   roleTableRef.value?.resetColumnWidths()
-  ElMessage.success('已恢复默认列')
+  page.value = 1
+  loadPage()
+}
+
+/** 首次进入按默认查询值自动带出筛选 */
+function applyDefaultFilters() {
+  const defaults = defaultFilters()
+  if (defaults.roleName != null) filters.roleName = String(defaults.roleName)
+  if (defaults.roleCode != null) filters.roleCode = String(defaults.roleCode)
+  if (defaults.roleDesc != null) filters.roleDesc = String(defaults.roleDesc)
+  if (defaults.updateByName != null) filters.updateByName = String(defaults.updateByName)
+  if (Array.isArray(defaults.updateTime)) {
+    filters.updateRange = defaults.updateTime.map((item) => String(item))
+  }
 }
 
 function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {
@@ -435,7 +446,9 @@ function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {
 
 /** 导出：跟随当前筛选与可见列，导出全部页 */
 async function handleExport() {
-  const exportColumns = columnOptions.filter((item) => columnState[item.key])
+  const exportColumns = schema.filter(
+    (item) => item.key !== 'operation' && isVisible(item.key)
+  )
   try {
     const result = await getRolePage(buildQuery(1, 10000))
     const header = exportColumns.map((item) => item.label)
@@ -513,7 +526,11 @@ async function handleSaved() {
   await loadPage()
 }
 
-onMounted(loadPage)
+onMounted(async () => {
+  await loadColumnConfig()
+  applyDefaultFilters()
+  loadPage()
+})
 </script>
 
 <style scoped>

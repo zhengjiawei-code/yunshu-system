@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type {
+  AddressRecognizeResult,
   RegionImportCheck,
   RegionImportResult,
   RegionLogDetail,
@@ -18,6 +19,11 @@ export function searchRegions(keyword: string, limit = 20): Promise<RegionNode[]
 
 export function getRegionStats(): Promise<RegionStats> {
   return request({ url: '/v1/system/regions/stats', method: 'get' })
+}
+
+/** 详细地址识别省/市/区县（仅本地区划数据） */
+export function recognizeAddress(text: string): Promise<AddressRecognizeResult> {
+  return request({ url: '/v1/system/regions/recognize-address', method: 'post', data: { text } })
 }
 
 function formData(file: File, version?: string): FormData {

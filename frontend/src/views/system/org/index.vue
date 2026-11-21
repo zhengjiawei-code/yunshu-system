@@ -60,26 +60,19 @@
               <el-button class="tool-reset" @click="resetFilters">重置</el-button>
               <el-button class="tool-export" :icon="Download" @click="handleExport">导出</el-button>
 
-              <el-popover placement="bottom-end" :width="200" trigger="click">
+              <el-popover placement="bottom-end" :width="440" trigger="click">
                 <template #reference>
                   <el-button :icon="Setting">列设置</el-button>
                 </template>
-                <div class="column-setting">
-                  <div class="column-setting__head">
-                    <span>显示列</span>
-                    <el-button link type="primary" size="small" @click="resetColumns">恢复默认</el-button>
-                  </div>
-                  <el-checkbox
-                    v-for="item in columnOptions"
-                    :key="item.key"
-                    v-model="columnState[item.key]"
-                    :disabled="item.locked"
-                    class="column-setting__item"
-                    @change="(value: boolean) => onColumnToggle(item.key, value)"
-                  >
-                    {{ item.label }}
-                  </el-checkbox>
-                </div>
+                <column-setting
+                  :schema="schema"
+                  :states="states"
+                  :loading="columnLoading"
+                  :saving="columnSaving"
+                  @update:states="onStatesUpdate"
+                  @save="handleColumnSave"
+                  @reset="handleColumnReset"
+                />
               </el-popover>
 
               <el-pagination
@@ -106,6 +99,8 @@
               height="100%"
               :empty-text="emptyText"
               persist-key="system:org"
+              :column-order="columnOrder"
+              :column-hidden="hiddenKeys"
               show-summary
               :summary-method="summaryMethod"
               show-overflow-tooltip
@@ -114,7 +109,7 @@
               @sort-change="handleSortChange"
             >
               <el-table-column
-                v-if="columnState.deptName"
+                v-if="isVisible('deptName')"
                 prop="deptName"
                 label="机构名称"
                 min-width="240"
@@ -122,12 +117,12 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">机构名称</span>
-                    <el-input
+                    <column-filter
+                      v-if="col('deptName').filterType !== 'none'"
                       v-model="filters.deptName"
-                      size="small"
-                      placeholder="请输入"
-                      clearable
-                      @input="onTextFilter"
+                      :type="col('deptName').filterType"
+                      :options="col('deptName').filterOptions"
+                      @change="onTextFilter"
                     />
                   </div>
                 </template>
@@ -137,7 +132,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.parentName"
+                v-if="isVisible('parentName')"
                 prop="parentName"
                 label="上级机构"
                 min-width="200"
@@ -146,21 +141,13 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">上级机构</span>
-                    <el-select
+                    <column-filter
+                      v-if="col('parentName').filterType !== 'none'"
                       v-model="filters.parentId"
-                      size="small"
-                      placeholder="全部"
-                      clearable
-                      filterable
+                      :type="col('parentName').filterType"
+                      :options="parentFilterOptions"
                       @change="onFilterChange"
-                    >
-                      <el-option
-                        v-for="item in parentOptions"
-                        :key="item.id"
-                        :label="item.label"
-                        :value="item.id"
-                      />
-                    </el-select>
+                    />
                   </div>
                 </template>
                 <template #default="{ row }">
@@ -171,7 +158,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.deptType"
+                v-if="isVisible('deptType')"
                 prop="deptType"
                 label="类型"
                 min-width="136"
@@ -180,20 +167,13 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">类型</span>
-                    <el-select
+                    <column-filter
+                      v-if="col('deptType').filterType !== 'none'"
                       v-model="filters.deptType"
-                      size="small"
-                      placeholder="全部"
-                      clearable
+                      :type="col('deptType').filterType"
+                      :options="col('deptType').filterOptions || typeOptions"
                       @change="onFilterChange"
-                    >
-                      <el-option
-                        v-for="item in typeOptions"
-                        :key="item.value"
-                        :label="item.label"
-                        :value="item.value"
-                      />
-                    </el-select>
+                    />
                   </div>
                 </template>
                 <template #default="{ row }">
@@ -202,7 +182,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.deptNature"
+                v-if="isVisible('deptNature')"
                 prop="deptNature"
                 label="机构性质"
                 min-width="136"
@@ -211,20 +191,13 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">机构性质</span>
-                    <el-select
+                    <column-filter
+                      v-if="col('deptNature').filterType !== 'none'"
                       v-model="filters.deptNature"
-                      size="small"
-                      placeholder="全部"
-                      clearable
+                      :type="col('deptNature').filterType"
+                      :options="col('deptNature').filterOptions || natureOptions"
                       @change="onFilterChange"
-                    >
-                      <el-option
-                        v-for="item in natureOptions"
-                        :key="item.value"
-                        :label="item.label"
-                        :value="item.value"
-                      />
-                    </el-select>
+                    />
                   </div>
                 </template>
                 <template #default="{ row }">
@@ -236,7 +209,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.deptCode"
+                v-if="isVisible('deptCode')"
                 prop="deptCode"
                 label="机构编码"
                 min-width="160"
@@ -244,12 +217,12 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">机构编码</span>
-                    <el-input
+                    <column-filter
+                      v-if="col('deptCode').filterType !== 'none'"
                       v-model="filters.deptCode"
-                      size="small"
-                      placeholder="请输入"
-                      clearable
-                      @input="onTextFilter"
+                      :type="col('deptCode').filterType"
+                      :options="col('deptCode').filterOptions"
+                      @change="onTextFilter"
                     />
                   </div>
                 </template>
@@ -258,16 +231,21 @@
                 </template>
               </el-table-column>
 
-              <el-table-column v-if="columnState.leader" prop="leader" label="负责人" min-width="136">
+              <el-table-column
+                v-if="isVisible('leader')"
+                prop="leader"
+                label="负责人"
+                min-width="136"
+              >
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">负责人</span>
-                    <el-input
+                    <column-filter
+                      v-if="col('leader').filterType !== 'none'"
                       v-model="filters.leader"
-                      size="small"
-                      placeholder="请输入"
-                      clearable
-                      @input="onTextFilter"
+                      :type="col('leader').filterType"
+                      :options="col('leader').filterOptions"
+                      @change="onTextFilter"
                     />
                   </div>
                 </template>
@@ -275,7 +253,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.phone"
+                v-if="isVisible('phone')"
                 prop="phone"
                 label="联系电话"
                 min-width="140"
@@ -283,12 +261,12 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">联系电话</span>
-                    <el-input
+                    <column-filter
+                      v-if="col('phone').filterType !== 'none'"
                       v-model="filters.phone"
-                      size="small"
-                      placeholder="请输入"
-                      clearable
-                      @input="onTextFilter"
+                      :type="col('phone').filterType"
+                      :options="col('phone').filterOptions"
+                      @change="onTextFilter"
                     />
                   </div>
                 </template>
@@ -296,7 +274,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.regionName"
+                v-if="isVisible('regionName')"
                 prop="regionName"
                 label="所在地区"
                 min-width="240"
@@ -344,7 +322,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.isLeaf"
+                v-if="isVisible('isLeaf')"
                 prop="isLeaf"
                 label="是否末端"
                 min-width="136"
@@ -353,16 +331,13 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">是否末端</span>
-                    <el-select
+                    <column-filter
+                      v-if="col('isLeaf').filterType !== 'none'"
                       v-model="filters.isLeaf"
-                      size="small"
-                      placeholder="全部"
-                      clearable
+                      :type="col('isLeaf').filterType"
+                      :options="col('isLeaf').filterOptions"
                       @change="onFilterChange"
-                    >
-                      <el-option label="是" :value="true" />
-                      <el-option label="否" :value="false" />
-                    </el-select>
+                    />
                   </div>
                 </template>
                 <template #default="{ row }">
@@ -376,7 +351,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.applyCompanyNames"
+                v-if="isVisible('applyCompanyNames')"
                 prop="applyCompanyNames"
                 label="适用公司"
                 min-width="200"
@@ -385,21 +360,13 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">适用公司</span>
-                    <el-select
+                    <column-filter
+                      v-if="col('applyCompanyNames').filterType !== 'none'"
                       v-model="filters.applyCompanyId"
-                      size="small"
-                      placeholder="全部"
-                      clearable
-                      filterable
+                      :type="col('applyCompanyNames').filterType"
+                      :options="companyFilterOptions"
                       @change="onFilterChange"
-                    >
-                      <el-option
-                        v-for="item in companyOptions"
-                        :key="item.id"
-                        :label="item.deptName"
-                        :value="item.id"
-                      />
-                    </el-select>
+                    />
                   </div>
                 </template>
                 <template #default="{ row }">
@@ -411,7 +378,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.status"
+                v-if="isVisible('status')"
                 prop="status"
                 label="状态"
                 min-width="136"
@@ -420,16 +387,13 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">状态</span>
-                    <el-select
+                    <column-filter
+                      v-if="col('status').filterType !== 'none'"
                       v-model="filters.status"
-                      size="small"
-                      placeholder="全部"
-                      clearable
+                      :type="col('status').filterType"
+                      :options="col('status').filterOptions"
                       @change="onFilterChange"
-                    >
-                      <el-option label="启用" :value="true" />
-                      <el-option label="禁用" :value="false" />
-                    </el-select>
+                    />
                   </div>
                 </template>
                 <template #default="{ row }">
@@ -441,7 +405,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.createByName"
+                v-if="isVisible('createByName')"
                 prop="createByName"
                 label="创建人"
                 min-width="136"
@@ -449,12 +413,12 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">创建人</span>
-                    <el-input
+                    <column-filter
+                      v-if="col('createByName').filterType !== 'none'"
                       v-model="filters.createByName"
-                      size="small"
-                      placeholder="请输入"
-                      clearable
-                      @input="onTextFilter"
+                      :type="col('createByName').filterType"
+                      :options="col('createByName').filterOptions"
+                      @change="onTextFilter"
                     />
                   </div>
                 </template>
@@ -462,23 +426,20 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.createTime"
+                v-if="isVisible('createTime')"
                 prop="createTime"
                 label="创建时间"
-                min-width="200"
+                min-width="220"
                 align="center"
               >
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">创建时间</span>
-                    <el-date-picker
+                    <column-filter
+                      v-if="col('createTime').filterType !== 'none'"
                       v-model="filters.createRange"
-                      size="small"
-                      type="daterange"
-                      value-format="YYYY-MM-DD"
-                      start-placeholder="开始"
-                      end-placeholder="结束"
-                      unlink-panels
+                      :type="col('createTime').filterType"
+                      :options="col('createTime').filterOptions"
                       @change="onFilterChange"
                     />
                   </div>
@@ -487,7 +448,7 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.updateByName"
+                v-if="isVisible('updateByName')"
                 prop="updateByName"
                 label="最后修改人"
                 min-width="136"
@@ -495,12 +456,12 @@
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">最后修改人</span>
-                    <el-input
+                    <column-filter
+                      v-if="col('updateByName').filterType !== 'none'"
                       v-model="filters.updateByName"
-                      size="small"
-                      placeholder="请输入"
-                      clearable
-                      @input="onTextFilter"
+                      :type="col('updateByName').filterType"
+                      :options="col('updateByName').filterOptions"
+                      @change="onTextFilter"
                     />
                   </div>
                 </template>
@@ -508,23 +469,20 @@
               </el-table-column>
 
               <el-table-column
-                v-if="columnState.updateTime"
+                v-if="isVisible('updateTime')"
                 prop="updateTime"
                 label="最后修改时间"
-                min-width="200"
+                min-width="220"
                 align="center"
               >
                 <template #header>
                   <div class="col-head">
                     <span class="col-head__label">最后修改时间</span>
-                    <el-date-picker
+                    <column-filter
+                      v-if="col('updateTime').filterType !== 'none'"
                       v-model="filters.updateRange"
-                      size="small"
-                      type="daterange"
-                      value-format="YYYY-MM-DD"
-                      start-placeholder="开始"
-                      end-placeholder="结束"
-                      unlink-panels
+                      :type="col('updateTime').filterType"
+                      :options="col('updateTime').filterOptions"
                       @change="onFilterChange"
                     />
                   </div>
@@ -532,7 +490,13 @@
                 <template #default="{ row }">{{ row.updateTime || '—' }}</template>
               </el-table-column>
 
-              <el-table-column label="操作" width="170" fixed="right" align="right">
+              <el-table-column
+                v-if="isVisible('operation')"
+                label="操作"
+                width="170"
+                fixed="right"
+                align="right"
+              >
                 <template #default="{ row }">
                   <div class="row-actions">
                     <el-button link type="primary" size="small" @click="openAuth(row)">
@@ -579,17 +543,20 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Expand, Fold, Setting } from '@element-plus/icons-vue'
 import type { DeptNature, DeptNode, DeptQuery, DeptRow, DeptType } from '@/types/dept'
 import type { RegionNode } from '@/types/region'
+import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteDept, getDeptPage, getDeptTree } from '@/api/system/dept'
 import { getRegionChildren } from '@/api/system/region'
+import { useColumnConfig } from '@/composables/useColumnConfig'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
+import ColumnFilter from '@/components/base/ColumnFilter.vue'
+import ColumnSetting from '@/components/base/ColumnSetting.vue'
 import DeptFormDrawer from './components/DeptFormDrawer.vue'
 import DeptAuthDrawer from './components/DeptAuthDrawer.vue'
 
 defineOptions({ name: 'SystemOrg' })
 
 const HQ_ID = 1
-const COLUMN_STORAGE_KEY = 'yunshu_org_columns_v1'
 
 const typeOptions: Array<{ label: string; value: DeptType }> = [
   { label: '总部', value: 1 },
@@ -605,23 +572,89 @@ const natureOptions: Array<{ label: string; value: DeptNature }> = [
   { label: '合作', value: 3 }
 ]
 
-const columnOptions: Array<{ key: string; label: string; locked?: boolean }> = [
-  { key: 'deptName', label: '机构名称', locked: true },
-  { key: 'parentName', label: '上级机构' },
-  { key: 'deptType', label: '类型' },
-  { key: 'deptNature', label: '机构性质' },
-  { key: 'deptCode', label: '机构编码' },
-  { key: 'leader', label: '负责人' },
-  { key: 'phone', label: '联系电话' },
-  { key: 'regionName', label: '所在地区' },
-  { key: 'isLeaf', label: '是否末端' },
-  { key: 'applyCompanyNames', label: '适用公司' },
-  { key: 'status', label: '状态' },
-  { key: 'createByName', label: '创建人' },
-  { key: 'createTime', label: '创建时间' },
-  { key: 'updateByName', label: '最后修改人' },
-  { key: 'updateTime', label: '最后修改时间' }
-]
+const schema = reactive<ColumnDef[]>([
+  { key: 'deptName', label: '机构名称', prop: 'deptName', filterType: 'text', locked: true },
+  { key: 'parentName', label: '上级机构', prop: 'parentName', filterType: 'select', filterOptions: [] },
+  { key: 'deptType', label: '类型', prop: 'deptType', filterType: 'select', filterOptions: typeOptions },
+  {
+    key: 'deptNature',
+    label: '机构性质',
+    prop: 'deptNature',
+    filterType: 'select',
+    filterOptions: natureOptions
+  },
+  { key: 'deptCode', label: '机构编码', prop: 'deptCode', filterType: 'text' },
+  { key: 'leader', label: '负责人', prop: 'leader', filterType: 'text' },
+  { key: 'phone', label: '联系电话', prop: 'phone', filterType: 'text' },
+  // 所在地区是“省+市”联动复合筛选，通用筛选控件无法表达，保留页面自定义表头，仅参与顺序/显隐
+  { key: 'regionName', label: '所在地区', prop: 'regionName', filterType: 'none' },
+  {
+    key: 'isLeaf',
+    label: '是否末端',
+    prop: 'isLeaf',
+    filterType: 'select',
+    filterOptions: [
+      { label: '是', value: true },
+      { label: '否', value: false }
+    ]
+  },
+  {
+    key: 'applyCompanyNames',
+    label: '适用公司',
+    prop: 'applyCompanyNames',
+    filterType: 'select',
+    filterOptions: []
+  },
+  {
+    key: 'status',
+    label: '状态',
+    prop: 'status',
+    filterType: 'select',
+    filterOptions: [
+      { label: '启用', value: true },
+      { label: '禁用', value: false }
+    ],
+    locked: true
+  },
+  { key: 'createByName', label: '创建人', prop: 'createByName', filterType: 'text' },
+  {
+    key: 'createTime',
+    label: '创建时间',
+    prop: 'createTime',
+    filterType: 'daterange',
+    align: 'center'
+  },
+  { key: 'updateByName', label: '最后修改人', prop: 'updateByName', filterType: 'text' },
+  {
+    key: 'updateTime',
+    label: '最后修改时间',
+    prop: 'updateTime',
+    filterType: 'daterange',
+    align: 'center'
+  },
+  {
+    key: 'operation',
+    label: '操作',
+    elKey: 'label:操作',
+    filterType: 'none',
+    sortable: false,
+    locked: true
+  }
+])
+
+const {
+  states,
+  loading: columnLoading,
+  saving: columnSaving,
+  col,
+  isVisible,
+  columnOrder,
+  hiddenKeys,
+  load: loadColumnConfig,
+  save: saveColumnConfig,
+  reset: resetColumnConfig,
+  defaultFilters
+} = useColumnConfig('system:org', schema)
 
 const treeRef = ref<any>()
 const orgTableRef = ref<InstanceType<typeof SmartTable>>()
@@ -632,8 +665,6 @@ const rows = ref<DeptRow[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-
-const columnState = reactive<Record<string, boolean>>(loadColumnState())
 
 const filters = reactive<{
   deptName: string
@@ -687,6 +718,14 @@ const companyOptions = computed(() => {
   walk(treeData.value)
   return result
 })
+
+const parentFilterOptions = computed(() =>
+  parentOptions.value.map((item) => ({ label: item.label, value: item.id }))
+)
+
+const companyFilterOptions = computed(() =>
+  companyOptions.value.map((item) => ({ label: item.deptName, value: item.id }))
+)
 
 /** 服务端排序状态：sortBy 为空表示默认 sort_order asc, id asc */
 const sortState = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({
@@ -765,24 +804,33 @@ function isEmpty(value: unknown): boolean {
 function buildQuery(pageNum = page.value, size = pageSize.value): DeptQuery {
   return {
     rootId: selectedId.value,
-    deptName: filters.deptName.trim() || undefined,
-    deptCode: filters.deptCode.trim() || undefined,
-    deptType: isEmpty(filters.deptType) ? undefined : filters.deptType,
-    deptNature: isEmpty(filters.deptNature) ? undefined : filters.deptNature,
-    parentId: isEmpty(filters.parentId) ? undefined : filters.parentId,
-    leader: filters.leader.trim() || undefined,
-    phone: filters.phone.trim() || undefined,
-    provinceCode: filters.provinceCode || undefined,
-    cityCode: filters.cityCode || undefined,
-    applyCompanyId: isEmpty(filters.applyCompanyId) ? undefined : filters.applyCompanyId,
-    isLeaf: isEmpty(filters.isLeaf) ? undefined : filters.isLeaf,
-    status: isEmpty(filters.status) ? undefined : filters.status,
-    createByName: filters.createByName.trim() || undefined,
-    updateByName: filters.updateByName.trim() || undefined,
-    createTimeStart: filters.createRange[0] || undefined,
-    createTimeEnd: filters.createRange[1] || undefined,
-    updateTimeStart: filters.updateRange[0] || undefined,
-    updateTimeEnd: filters.updateRange[1] || undefined,
+    deptName: isVisible('deptName') ? filters.deptName.trim() || undefined : undefined,
+    deptCode: isVisible('deptCode') ? filters.deptCode.trim() || undefined : undefined,
+    deptType: !isVisible('deptType') || isEmpty(filters.deptType) ? undefined : filters.deptType,
+    deptNature:
+      !isVisible('deptNature') || isEmpty(filters.deptNature) ? undefined : filters.deptNature,
+    parentId:
+      !isVisible('parentName') || isEmpty(filters.parentId) ? undefined : filters.parentId,
+    leader: isVisible('leader') ? filters.leader.trim() || undefined : undefined,
+    phone: isVisible('phone') ? filters.phone.trim() || undefined : undefined,
+    provinceCode: isVisible('regionName') ? filters.provinceCode || undefined : undefined,
+    cityCode: isVisible('regionName') ? filters.cityCode || undefined : undefined,
+    applyCompanyId:
+      !isVisible('applyCompanyNames') || isEmpty(filters.applyCompanyId)
+        ? undefined
+        : filters.applyCompanyId,
+    isLeaf: !isVisible('isLeaf') || isEmpty(filters.isLeaf) ? undefined : filters.isLeaf,
+    status: !isVisible('status') || isEmpty(filters.status) ? undefined : filters.status,
+    createByName: isVisible('createByName')
+      ? filters.createByName.trim() || undefined
+      : undefined,
+    updateByName: isVisible('updateByName')
+      ? filters.updateByName.trim() || undefined
+      : undefined,
+    createTimeStart: isVisible('createTime') ? filters.createRange[0] || undefined : undefined,
+    createTimeEnd: isVisible('createTime') ? filters.createRange[1] || undefined : undefined,
+    updateTimeStart: isVisible('updateTime') ? filters.updateRange[0] || undefined : undefined,
+    updateTimeEnd: isVisible('updateTime') ? filters.updateRange[1] || undefined : undefined,
     sortBy: sortState.sortBy,
     sortOrder: sortState.sortOrder,
     pageNum,
@@ -914,78 +962,59 @@ function resetFilters() {
   loadPage()
 }
 
-function loadColumnState(): Record<string, boolean> {
-  const defaults: Record<string, boolean> = {}
-  columnOptions.forEach((item) => {
-    defaults[item.key] = true
-  })
-  try {
-    const raw = localStorage.getItem(COLUMN_STORAGE_KEY)
-    if (!raw) return defaults
-    const saved = JSON.parse(raw) as Record<string, boolean>
-    columnOptions.forEach((item) => {
-      if (item.locked) return
-      if (typeof saved[item.key] === 'boolean') defaults[item.key] = saved[item.key]
-    })
-  } catch {
-    // 存储损坏时回退默认
-  }
-  return defaults
+/* ---------- 统一列设置（后端按用户+页面持久化） ---------- */
+function onStatesUpdate(next: ColumnItemState[]) {
+  states.value = next
 }
 
-/** 隐藏列时同步清空该列筛选，避免“看不见条件却仍在过滤” */
-const FILTER_RESET: Record<string, () => void> = {
-  deptName: () => (filters.deptName = ''),
-  parentName: () => (filters.parentId = undefined),
-  deptType: () => (filters.deptType = undefined),
-  deptNature: () => (filters.deptNature = undefined),
-  deptCode: () => (filters.deptCode = ''),
-  leader: () => (filters.leader = ''),
-  phone: () => (filters.phone = ''),
-  regionName: () => {
-    filters.provinceCode = ''
-    filters.cityCode = ''
-    filterCityOptions.value = []
-  },
-  isLeaf: () => (filters.isLeaf = undefined),
-  applyCompanyNames: () => (filters.applyCompanyId = undefined),
-  status: () => (filters.status = undefined),
-  createByName: () => (filters.createByName = ''),
-  updateByName: () => (filters.updateByName = ''),
-  createTime: () => (filters.createRange = []),
-  updateTime: () => (filters.updateRange = [])
+async function handleColumnSave() {
+  await saveColumnConfig()
 }
 
-function persistColumnState() {
-  try {
-    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnState))
-  } catch {
-    // 忽略存储失败
-  }
-}
-
-function onColumnToggle(key: string, visible: boolean) {
-  persistColumnState()
-  if (!visible && FILTER_RESET[key]) {
-    FILTER_RESET[key]()
-    // 隐藏了正在排序的列时同步取消排序，避免“看不见排序条件却仍在排序”
-    if (sortState.sortBy === key) {
-      sortState.sortBy = undefined
-      sortState.sortOrder = undefined
-      orgTableRef.value?.getTable()?.clearSort?.()
-    }
-    page.value = 1
-    loadPage()
-  }
-}
-
-function resetColumns() {
-  columnOptions.forEach((item) => {
-    columnState[item.key] = true
-  })
-  persistColumnState()
+async function handleColumnReset() {
+  await resetColumnConfig()
   orgTableRef.value?.resetColumnWidths()
-  ElMessage.success('已恢复默认列')
+  page.value = 1
+  loadPage()
+}
+
+/** 首次进入按默认查询值自动带出筛选；默认机构/公司失效时忽略并提示 */
+function applyDefaultFilters() {
+  const defaults = defaultFilters()
+  if (defaults.deptName != null) filters.deptName = String(defaults.deptName)
+  if (defaults.deptCode != null) filters.deptCode = String(defaults.deptCode)
+  if (defaults.leader != null) filters.leader = String(defaults.leader)
+  if (defaults.phone != null) filters.phone = String(defaults.phone)
+  if (defaults.createByName != null) filters.createByName = String(defaults.createByName)
+  if (defaults.updateByName != null) filters.updateByName = String(defaults.updateByName)
+  if (typeof defaults.deptType === 'number') filters.deptType = defaults.deptType as DeptType
+  if (typeof defaults.deptNature === 'number') {
+    filters.deptNature = defaults.deptNature as DeptNature
+  }
+  if (typeof defaults.isLeaf === 'boolean') filters.isLeaf = defaults.isLeaf
+  if (typeof defaults.status === 'boolean') filters.status = defaults.status
+  if (defaults.parentId != null) {
+    const parentId = Number(defaults.parentId)
+    if (parentFilterOptions.value.some((item) => item.value === parentId)) {
+      filters.parentId = parentId
+    } else {
+      ElMessage.warning('默认查询上级机构已删除，已忽略该默认值')
+    }
+  }
+  if (defaults.applyCompanyId != null) {
+    const companyId = Number(defaults.applyCompanyId)
+    if (companyFilterOptions.value.some((item) => item.value === companyId)) {
+      filters.applyCompanyId = companyId
+    } else {
+      ElMessage.warning('默认查询适用公司已删除，已忽略该默认值')
+    }
+  }
+  if (Array.isArray(defaults.createTime)) {
+    filters.createRange = defaults.createTime.map((item) => String(item))
+  }
+  if (Array.isArray(defaults.updateTime)) {
+    filters.updateRange = defaults.updateTime.map((item) => String(item))
+  }
 }
 
 function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {
@@ -994,7 +1023,9 @@ function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {
 
 /** 导出：跟随当前筛选与可见列，导出全部页 */
 async function handleExport() {
-  const exportColumns = columnOptions.filter((item) => columnState[item.key])
+  const exportColumns = schema.filter(
+    (item) => item.key !== 'operation' && isVisible(item.key)
+  )
   try {
     const result = await getDeptPage(buildQuery(1, 10000))
     const header = exportColumns.map((item) => item.label)
@@ -1085,9 +1116,17 @@ async function handleSaved() {
   await loadData()
 }
 
-onMounted(() => {
-  loadData()
-  loadProvinceOptions()
+onMounted(async () => {
+  await Promise.all([loadColumnConfig(), loadProvinceOptions()])
+  await loadData()
+  // 机构树/适用公司加载完成后填充默认值选项，再按默认查询值带出筛选
+  const parentColumn = schema.find((item) => item.key === 'parentName')
+  if (parentColumn) parentColumn.filterOptions = parentFilterOptions.value
+  const companyColumn = schema.find((item) => item.key === 'applyCompanyNames')
+  if (companyColumn) companyColumn.filterOptions = companyFilterOptions.value
+  applyDefaultFilters()
+  page.value = 1
+  loadPage()
 })
 </script>
 

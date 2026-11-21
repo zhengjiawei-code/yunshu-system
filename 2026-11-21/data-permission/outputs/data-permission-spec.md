@@ -34,6 +34,7 @@ sys_carrier
 sys_route
 sys_route_transfer
 sys_route_company
+sys_column_config
 flyway_schema_history
 ```
 
@@ -57,6 +58,7 @@ flyway_schema_history
 | `sys_route` | 短驳/干线路由 | **豁免表可见性由服务层负责**：短驳/干线为网点间物理段，不参与跨公司授权，列表/详情/导出统一按 `owner_company_id=本公司` 过滤（总部全部）；编辑/删除仅 owner；禁止裸 `selectById` |
 | `sys_route_transfer` | 外转/直达共享路由 | **豁免表可见性由服务层负责**：同 `sys_route`，开单匹配另按授权关系过滤，`apply_dept_id` 只作业务字段、`dept_id` 仅审计锚点 |
 | `sys_route_company` | 路由授权关系 | **豁免表可见性由服务层负责**：授权读取/写入仅总部（取消授权允许分公司删本公司行）；`grant_by` 由服务层显式写入；无 `dept_id`，不豁免会被追加不存在列 |
+| `sys_column_config` | 列表列配置 | **平台配置类，不含业务数据**；无 `dept_id`，若参与过滤会报列不存在。可见性由 `ColumnConfigServiceImpl` 负责：所有读写强制带 `user_id = 当前登录用户`，页面标识走白名单；接口不接受客户端传入 userId，避免读写他人配置越权 |
 
 后续新增同类表（路由、承运商、路由授权）在同一小节登记后方可加入豁免清单。
 

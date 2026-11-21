@@ -1,5 +1,5 @@
 <template>
-  <el-table ref="tableRef" v-bind="passAttrs" @header-dragend="onHeaderDragend">
+  <el-table ref="tableRef" :key="columnSignature" v-bind="passAttrs" @header-dragend="onHeaderDragend">
     <ColumnNodes />
   </el-table>
 </template>
@@ -38,6 +38,7 @@ const slots = useSlots()
 /**
  * 列节点：给带 prop 的 el-table-column 补默认 sortable="custom"。
  * 采用 cloneVNode 而不是让页面逐列声明，保证两页行为一致、后续新页面自动继承。
+ * 同时按统一列设置（columnOrder / columnHidden）调整渲染顺序与显隐。
  */
 const ColumnNodes = () => {
   const out: VNode[] = []
@@ -58,7 +59,50 @@ const ColumnNodes = () => {
     })
   }
   walk(slots.default?.() || [])
-  return out
+  return applyColumnConfig(out)
+}
+
+/** 列的匹配键：prop 优先，无 prop 时用 label（与 useColumnConfig.renderKeyOf 一致） */
+function columnNodeKey(node: VNode): string {
+  const columnProps = (node.props || {}) as Record<string, unknown>
+  return columnProps.prop ? String(columnProps.prop) : `label:${String(columnProps.label || '')}`
+}
+
+/** 统一列设置：序号/选择/展开等固定列保持原位，数据列按配置排序与隐藏 */
+function applyColumnConfig(nodes: VNode[]): VNode[] {
+  const order = props.columnOrder || []
+  const hidden = new Set(props.columnHidden || [])
+  if (!order.length && !hidden.size) return nodes
+
+  const fixed: VNode[] = []
+  const data: VNode[] = []
+  nodes.forEach((node) => {
+    const name = (node.type as { name?: string } | null)?.name
+    const columnProps = (node.props || {}) as Record<string, unknown>
+    if (name !== 'ElTableColumn' || columnProps.type) {
+      fixed.push(node)
+      return
+    }
+    data.push(node)
+  })
+
+  const visibleData = hidden.size
+    ? data.filter((node) => !hidden.has(columnNodeKey(node)))
+    : data
+  if (!order.length) return [...fixed, ...visibleData]
+
+  const orderIndex = new Map(order.map((key, index) => [key, index]))
+  const sorted = visibleData
+    .map((node, index) => ({
+      node,
+      index,
+      order: orderIndex.has(columnNodeKey(node))
+        ? (orderIndex.get(columnNodeKey(node)) as number)
+        : Number.MAX_SAFE_INTEGER
+    }))
+    .sort((a, b) => (a.order === b.order ? a.index - b.index : a.order - b.order))
+    .map((item) => item.node)
+  return [...fixed, ...sorted]
 }
 
 const props = withDefaults(
@@ -68,9 +112,26 @@ const props = withDefaults(
     autoWidthExclude?: string[]
     /** 列宽持久化标识，如 system:org；不传则不持久化 */
     persistKey?: string
+    /** 可见列顺序（统一列设置），元素为 prop 或 label:列名 */
+    columnOrder?: string[]
+    /** 隐藏列（统一列设置） */
+    columnHidden?: string[]
   }>(),
-  { autoWidth: true, autoWidthMax: DEFAULT_MAX_COL_WIDTH, autoWidthExclude: () => [], persistKey: '' }
+  {
+    autoWidth: true,
+    autoWidthMax: DEFAULT_MAX_COL_WIDTH,
+    autoWidthExclude: () => [],
+    persistKey: '',
+    columnOrder: () => [],
+    columnHidden: () => []
+  }
 )
+
+/**
+ * el-table 的列顺序由列注册顺序决定，仅调整 vnode 顺序不会重排；
+ * 顺序变化时整体重建 el-table，确保列按新顺序注册（列宽会按持久化值重新应用）。
+ */
+const columnSignature = computed(() => (props.columnOrder || []).join('|'))
 
 const MIN_COLUMN_WIDTH = 80
 

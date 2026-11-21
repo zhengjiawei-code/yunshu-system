@@ -79,3 +79,18 @@ export interface RegionLogDetail extends RegionSyncLog {
     truncated?: boolean
   }
 }
+
+/** 详细地址识别结果：matched 表示至少识别一级，partial 表示省/市/区县不完整 */
+export interface AddressRecognizeResult {
+  provinceCode?: string
+  provinceName?: string
+  cityCode?: string
+  cityName?: string
+  districtCode?: string
+  districtName?: string
+  matched: boolean
+  partial: boolean
+  ambiguous: boolean
+  candidates: string[]
+  message: string
+}

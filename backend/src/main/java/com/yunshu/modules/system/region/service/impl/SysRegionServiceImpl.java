@@ -11,6 +11,7 @@ import com.yunshu.modules.system.region.mapper.SysRegionMapper;
 import com.yunshu.modules.system.region.mapper.SysRegionSyncLogMapper;
 import com.yunshu.modules.system.region.service.SysRegionService;
 import com.yunshu.modules.system.region.vo.RegionBriefVO;
+import com.yunshu.modules.system.region.vo.AddressRecognizeVO;
 import com.yunshu.modules.system.region.vo.RegionImportCheckVO;
 import com.yunshu.modules.system.region.vo.RegionImportResultVO;
 import com.yunshu.modules.system.region.vo.RegionNodeVO;
@@ -678,6 +679,397 @@ public class SysRegionServiceImpl implements SysRegionService {
             case 4 -> code + "00";
             default -> code;
         };
+    }
+
+    // ==================== 地址自动识别 ====================
+
+    private static final String MSG_NOT_FOUND = "未能识别地区，请手动选择";
+    private static final String MSG_AMBIGUOUS = "存在同名区县，请手动选择";
+    private static final String MSG_PARTIAL = "已识别部分地区，请补充选择";
+
+    /** 民族词后缀，用于从自治州/自治县名称中还原常用简称，如“延边朝鲜族自治州”→“延边” */
+    private static final List<String> ETHNIC_WORDS = List.of(
+            "朝鲜族", "蒙古族", "维吾尔族", "哈萨克族", "柯尔克孜族", "藏族", "壮族", "回族",
+            "彝族", "苗族", "侗族", "傣族", "白族", "哈尼族", "土家族", "布依族", "傈僳族",
+            "拉祜族", "景颇族", "羌族", "蒙古", "维吾尔", "哈萨克", "柯尔克孜");
+
+    /** 区划数据缓存：省/市/区县共约 3400 行，10 分钟过期，避免每次按键查库 */
+    private volatile List<SysRegion> regionCache;
+    private volatile long regionCacheAt;
+
+    @Override
+    @com.baomidou.dynamic.datasource.annotation.DS("slave")
+    public AddressRecognizeVO recognizeAddress(String text) {
+        AddressRecognizeVO vo = new AddressRecognizeVO();
+        vo.setMatched(false);
+        vo.setPartial(false);
+        vo.setAmbiguous(false);
+        vo.setCandidates(List.of());
+
+        String normalized = normalizeAddress(text);
+        if (!StringUtils.hasText(normalized)) {
+            vo.setMessage(MSG_NOT_FOUND);
+            return vo;
+        }
+
+        List<SysRegion> all = level123Regions();
+        Map<String, SysRegion> byCode = new HashMap<>();
+        Map<String, List<SysRegion>> children = new HashMap<>();
+        for (SysRegion region : all) {
+            byCode.put(region.getCode(), region);
+            children.computeIfAbsent(region.getParentCode(), key -> new ArrayList<>()).add(region);
+        }
+
+        // 1) 全称匹配：省/市/区县全称一起找，取层级最深、名称最长的一段作为锚点
+        List<Hit> fullHits = hits(normalized, all, false);
+        if (!fullHits.isEmpty()) {
+            int maxLevel = fullHits.stream().mapToInt(hit -> hit.region().getLevel()).max().orElse(1);
+            List<Hit> levelHits = fullHits.stream()
+                    .filter(hit -> hit.region().getLevel() == maxLevel)
+                    .toList();
+            List<Hit> picked = pickLongest(levelHits);
+            if (picked.isEmpty()) {
+                return ambiguous(vo, levelHits, byCode);
+            }
+            Hit chosen = picked.size() == 1
+                    ? picked.get(0)
+                    : disambiguate(picked, normalized, byCode);
+            if (chosen == null) {
+                return ambiguous(vo, picked, byCode);
+            }
+            return resolve(vo, chosen, normalized, byCode, children, all);
+        }
+
+        // 2) 省级简称兜底：内蒙古/广西/宁夏/新疆/西藏/北京 等不带后缀的写法
+        List<SysRegion> provinces = all.stream().filter(item -> Objects.equals(item.getLevel(), 1)).toList();
+        List<Hit> provinceHits = hits(normalized, provinces, true);
+        if (!provinceHits.isEmpty()) {
+            List<Hit> picked = pickLongest(provinceHits);
+            if (picked.isEmpty()) {
+                return ambiguous(vo, provinceHits, byCode);
+            }
+            Hit chosen = picked.size() == 1 ? picked.get(0) : disambiguate(picked, normalized, byCode);
+            if (chosen == null) {
+                return ambiguous(vo, picked, byCode);
+            }
+            return resolve(vo, chosen, normalized, byCode, children, all);
+        }
+
+        // 3) 区县简称兜底：如“南岗”，仅在唯一命中时采用，避免误判
+        List<SysRegion> districts = all.stream().filter(item -> Objects.equals(item.getLevel(), 3)).toList();
+        List<Hit> shortDistrictHits = hits(normalized, districts, true);
+        if (!shortDistrictHits.isEmpty()) {
+            List<Hit> picked = pickLongest(shortDistrictHits);
+            if (picked.isEmpty()) {
+                return ambiguous(vo, shortDistrictHits, byCode);
+            }
+            Hit chosen = picked.size() == 1 ? picked.get(0) : disambiguate(picked, normalized, byCode);
+            if (chosen == null) {
+                return ambiguous(vo, picked, byCode);
+            }
+            return resolve(vo, chosen, normalized, byCode, children, all);
+        }
+
+        vo.setMessage(MSG_NOT_FOUND);
+        return vo;
+    }
+
+    /** 以命中的区划为锚点，向上补齐省/市，向下补齐区县 */
+    private AddressRecognizeVO resolve(AddressRecognizeVO vo, Hit anchor, String text,
+                                       Map<String, SysRegion> byCode,
+                                       Map<String, List<SysRegion>> children,
+                                       List<SysRegion> all) {
+        SysRegion province = null;
+        SysRegion city = null;
+        SysRegion district = null;
+        int level = anchor.region().getLevel() == null ? 1 : anchor.region().getLevel();
+        if (level >= 3) {
+            district = anchor.region();
+            city = byCode.get(district.getParentCode());
+            province = city == null ? null : byCode.get(city.getParentCode());
+        } else if (level == 2) {
+            city = anchor.region();
+            province = byCode.get(city.getParentCode());
+        } else {
+            province = anchor.region();
+        }
+
+        String rest = removeOnce(text, anchor.variant());
+
+        if (city == null && province != null) {
+            Hit cityHit = pickOne(levelChildren(children, province.getCode(), 2, false, rest));
+            if (cityHit == null) {
+                cityHit = pickOne(levelChildren(children, province.getCode(), 2, true, rest));
+            }
+            // 北京市朝阳区：省后直接跟区县时，市级全称不在文本里，允许回退到原文本做全称匹配
+            if (cityHit == null) {
+                cityHit = pickOne(levelChildren(children, province.getCode(), 2, false, text));
+            }
+            if (cityHit != null) {
+                city = cityHit.region();
+                rest = removeOnce(rest, cityHit.variant());
+            }
+        }
+        // 直辖市：市级与省级同名（北京市/北京市）
+        if (city == null && district == null && province != null) {
+            SysRegion provinceAnchor = province;
+            city = children.getOrDefault(province.getCode(), List.of()).stream()
+                    .filter(item -> Objects.equals(item.getLevel(), 2))
+                    .filter(item -> Objects.equals(item.getName(), provinceAnchor.getName()))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (district == null && city != null) {
+            Hit districtHit = pickOne(levelChildren(children, city.getCode(), 3, false, rest));
+            if (districtHit == null) {
+                districtHit = pickOne(levelChildren(children, city.getCode(), 3, true, rest));
+            }
+            if (districtHit != null) {
+                district = districtHit.region();
+            }
+        }
+        // 重庆“县”等特殊结构：市未命中时直接在全省范围找区县，再回填所属市
+        if (district == null && city == null && province != null) {
+            SysRegion provinceAnchor = province;
+            List<SysRegion> scope = all.stream()
+                    .filter(item -> Objects.equals(item.getLevel(), 3))
+                    .filter(item -> {
+                        SysRegion parent = byCode.get(item.getParentCode());
+                        return parent != null && Objects.equals(parent.getParentCode(), provinceAnchor.getCode());
+                    })
+                    .toList();
+            Hit districtHit = pickOne(hits(rest, scope, false));
+            if (districtHit == null) {
+                districtHit = pickOne(hits(rest, scope, true));
+            }
+            if (districtHit != null) {
+                district = districtHit.region();
+                city = byCode.get(district.getParentCode());
+            }
+        }
+
+        vo.setProvinceCode(province == null ? null : province.getCode());
+        vo.setProvinceName(province == null ? null : province.getName());
+        vo.setCityCode(city == null ? null : city.getCode());
+        vo.setCityName(city == null ? null : city.getName());
+        vo.setDistrictCode(district == null ? null : district.getCode());
+        vo.setDistrictName(district == null ? null : district.getName());
+        boolean matched = province != null || city != null || district != null;
+        boolean partial = matched && (province == null || city == null || district == null);
+        vo.setMatched(matched);
+        vo.setPartial(partial);
+        vo.setAmbiguous(false);
+        vo.setMessage(!matched ? MSG_NOT_FOUND : partial ? MSG_PARTIAL : "已识别地区");
+        return vo;
+    }
+
+    private List<Hit> levelChildren(Map<String, List<SysRegion>> children, String parentCode,
+                                    int level, boolean allowShort, String text) {
+        List<SysRegion> list = children.getOrDefault(parentCode, List.of()).stream()
+                .filter(item -> Objects.equals(item.getLevel(), level))
+                .filter(item -> !isPlaceholder(item))
+                .toList();
+        // 短名匹配仅在同一父级范围内使用，避免跨省串味；候选必须真实出现在文本中
+        List<Hit> result = new ArrayList<>();
+        for (SysRegion region : list) {
+            for (String variant : nameVariants(region, allowShort)) {
+                if (variant.length() >= 2 && StringUtils.hasText(text) && text.contains(variant)) {
+                    result.add(new Hit(region, variant));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** 唯一最长命中；并列时返回 null（由调用方按歧义处理） */
+    private Hit pickOne(List<Hit> hits) {
+        List<Hit> picked = pickLongest(hits);
+        return picked.size() == 1 ? picked.get(0) : null;
+    }
+
+    /** 命中集合中取名称最长的一组；同长度不同区划视为并列 */
+    private List<Hit> pickLongest(List<Hit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return List.of();
+        }
+        int maxLen = hits.stream().mapToInt(hit -> hit.variant().length()).max().orElse(0);
+        Map<String, Hit> distinct = new LinkedHashMap<>();
+        hits.stream()
+                .filter(hit -> hit.variant().length() == maxLen)
+                .forEach(hit -> distinct.putIfAbsent(hit.region().getCode(), hit));
+        return new ArrayList<>(distinct.values());
+    }
+
+    /** 同名区县消歧：先看父级市名是否出现在文本，再看省级名 */
+    private Hit disambiguate(List<Hit> hits, String text, Map<String, SysRegion> byCode) {
+        List<Hit> remain = hits;
+        for (int level : new int[]{2, 1}) {
+            List<Hit> filtered = remain.stream()
+                    .filter(hit -> ancestorNameInText(hit.region(), level, text, byCode))
+                    .toList();
+            if (filtered.size() == 1) {
+                return filtered.get(0);
+            }
+            if (filtered.size() > 1) {
+                remain = filtered;
+            }
+        }
+        return null;
+    }
+
+    private boolean ancestorNameInText(SysRegion region, int level, String text,
+                                       Map<String, SysRegion> byCode) {
+        SysRegion cursor = region;
+        int guard = 0;
+        while (cursor != null && guard++ < 6) {
+            if (Objects.equals(cursor.getLevel(), level)) {
+                return nameVariants(cursor, true).stream()
+                        .filter(variant -> variant.length() >= 2)
+                        .anyMatch(text::contains);
+            }
+            cursor = byCode.get(cursor.getParentCode());
+        }
+        return false;
+    }
+
+    private AddressRecognizeVO ambiguous(AddressRecognizeVO vo, List<Hit> hits,
+                                         Map<String, SysRegion> byCode) {
+        vo.setMatched(false);
+        vo.setPartial(false);
+        vo.setAmbiguous(true);
+        vo.setMessage(MSG_AMBIGUOUS);
+        vo.setCandidates(hits.stream()
+                .map(hit -> fullPath(hit.region(), byCode))
+                .distinct()
+                .limit(5)
+                .toList());
+        return vo;
+    }
+
+    private String fullPath(SysRegion region, Map<String, SysRegion> byCode) {
+        if (StringUtils.hasText(region.getFullName())) {
+            return region.getFullName();
+        }
+        List<String> names = new ArrayList<>();
+        SysRegion cursor = region;
+        int guard = 0;
+        while (cursor != null && guard++ < 6) {
+            names.add(0, cursor.getName());
+            cursor = byCode.get(cursor.getParentCode());
+        }
+        return String.join("/", names);
+    }
+
+    /** 地址文本归一：去空白、去“市辖区”占位 */
+    private String normalizeAddress(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return "";
+        }
+        String text = raw.replaceAll("[\\s\\u3000]+", "");
+        text = text.replace("市辖区", "");
+        return text;
+    }
+
+    private String removeOnce(String text, String token) {
+        if (!StringUtils.hasText(text) || !StringUtils.hasText(token)) {
+            return text;
+        }
+        int index = text.indexOf(token);
+        if (index < 0) {
+            return text;
+        }
+        return text.substring(0, index) + text.substring(index + token.length());
+    }
+
+    private List<Hit> hits(String text, java.util.Collection<SysRegion> regions, boolean allowShort) {
+        List<Hit> result = new ArrayList<>();
+        if (!StringUtils.hasText(text)) {
+            return result;
+        }
+        for (SysRegion region : regions) {
+            if (isPlaceholder(region)) {
+                continue;
+            }
+            for (String variant : nameVariants(region, allowShort)) {
+                if (variant.length() >= 2 && text.contains(variant)) {
+                    result.add(new Hit(region, variant));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** 名称变体：全称 + 去后缀简称（省级补“内蒙”等常用写法） */
+    private List<String> nameVariants(SysRegion region, boolean allowShort) {
+        List<String> variants = new ArrayList<>(3);
+        String name = region.getName();
+        if (!StringUtils.hasText(name)) {
+            return variants;
+        }
+        variants.add(name);
+        if (!allowShort) {
+            return variants;
+        }
+        String shortName = shortName(name, region.getLevel());
+        if (StringUtils.hasText(shortName) && shortName.length() >= 2 && !shortName.equals(name)) {
+            variants.add(shortName);
+        }
+        if (Objects.equals(region.getLevel(), 1) && "内蒙古自治区".equals(name)) {
+            variants.add("内蒙");
+        }
+        return variants;
+    }
+
+    private String shortName(String name, Integer level) {
+        if (level == null) {
+            return name;
+        }
+        List<String> suffixes = switch (level) {
+            case 1 -> List.of("维吾尔自治区", "壮族自治区", "回族自治区", "特别行政区", "自治区", "省", "市");
+            case 2 -> List.of("自治州", "地区", "林区", "特区", "盟", "市");
+            default -> List.of("自治县", "自治旗", "林区", "特区", "区", "县", "市", "旗");
+        };
+        for (String suffix : suffixes) {
+            if (name.endsWith(suffix) && name.length() > suffix.length()) {
+                return stripEthnic(name.substring(0, name.length() - suffix.length()));
+            }
+        }
+        return name;
+    }
+
+    private String stripEthnic(String base) {
+        for (String ethnic : ETHNIC_WORDS) {
+            if (base.endsWith(ethnic) && base.length() > ethnic.length() + 1) {
+                return base.substring(0, base.length() - ethnic.length());
+            }
+        }
+        return base;
+    }
+
+    /** “省直辖县级行政区划”“自治区直辖县级行政区划”“县”等占位节点不参与匹配 */
+    private boolean isPlaceholder(SysRegion region) {
+        String name = region.getName();
+        if (!StringUtils.hasText(name)) {
+            return true;
+        }
+        return name.contains("直辖县级行政区划") || "县".equals(name);
+    }
+
+    private List<SysRegion> level123Regions() {
+        long now = System.currentTimeMillis();
+        List<SysRegion> cache = regionCache;
+        if (cache == null || now - regionCacheAt > 10 * 60 * 1000L) {
+            cache = regionMapper.selectList(Wrappers.<SysRegion>lambdaQuery()
+                    .eq(SysRegion::getStatus, 1)
+                    .le(SysRegion::getLevel, 3));
+            regionCache = cache;
+            regionCacheAt = now;
+        }
+        return cache;
+    }
+
+    private record Hit(SysRegion region, String variant) {
     }
 
     private String limit(String text, int max) {

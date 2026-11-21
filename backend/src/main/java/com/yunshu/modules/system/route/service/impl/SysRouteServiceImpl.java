@@ -358,14 +358,21 @@ public class SysRouteServiceImpl implements SysRouteService {
     @Override
     @DS("slave")
     public List<RegionLibraryVO> regionLibrary(Long applyDeptId, String keyword, Integer level,
-                                               Boolean configured, String parentCode) {
+                                               Boolean configured, String parentCode,
+                                               String provinceCode, String cityCode,
+                                               String districtKeyword, String townKeyword) {
         UserOrgService.UserOrg org = userOrgService.current();
         Set<Long> scope = userOrgService.manageDeptIds(org);
         SysDept applyDept = requireRouteDept(applyDeptId, "配置网点", scope);
         String kw = trim(keyword);
         String parent = trim(parentCode);
-        if (kw == null && level == null && parent == null) {
-            throw new BizException("请输入关键词或选择级别后再查询区划");
+        String provincePrefix = trim(provinceCode);
+        String cityPrefix = trim(cityCode);
+        String districtKw = trim(districtKeyword);
+        String townKw = trim(townKeyword);
+        if (kw == null && level == null && parent == null && provincePrefix == null && cityPrefix == null
+                && districtKw == null && townKw == null && configured == null) {
+            throw new BizException("请输入筛选条件后再查询区划");
         }
         if (level != null && (level < 2 || level > 4)) {
             throw new BizException("区划级别仅支持市、区县、乡级");
@@ -377,6 +384,12 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .le(SysRegion::getLevel, 4)
                 .eq(level != null, SysRegion::getLevel, level)
                 .eq(parent != null, SysRegion::getParentCode, parent)
+                .likeRight(provincePrefix != null && provincePrefix.length() >= 2,
+                        SysRegion::getCode, provincePrefix == null ? "" : provincePrefix.substring(0, 2))
+                .likeRight(cityPrefix != null && cityPrefix.length() >= 4,
+                        SysRegion::getCode, cityPrefix == null ? "" : cityPrefix.substring(0, 4))
+                .like(districtKw != null, SysRegion::getFullName, districtKw)
+                .like(townKw != null, SysRegion::getName, townKw)
                 .and(kw != null, wrapper -> wrapper.like(SysRegion::getCode, kw)
                         .or().like(SysRegion::getName, kw)
                         .or().like(SysRegion::getFullName, kw))

@@ -2,7 +2,9 @@ package com.yunshu.modules.system.region.controller;
 
 import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.result.ApiResult;
+import com.yunshu.modules.system.region.dto.AddressRecognizeRequest;
 import com.yunshu.modules.system.region.service.SysRegionService;
+import com.yunshu.modules.system.region.vo.AddressRecognizeVO;
 import com.yunshu.modules.system.region.vo.RegionImportCheckVO;
 import com.yunshu.modules.system.region.vo.RegionImportResultVO;
 import com.yunshu.modules.system.region.vo.RegionNodeVO;
@@ -10,10 +12,12 @@ import com.yunshu.modules.system.region.vo.RegionStatsVO;
 import com.yunshu.modules.system.region.vo.RegionSyncLogPageVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,6 +51,12 @@ public class SysRegionController {
     @GetMapping("/stats")
     public ApiResult<RegionStatsVO> stats() {
         return ApiResult.ok(regionService.stats());
+    }
+
+    @Operation(summary = "详细地址自动识别省/市/区县（仅本地区划，最长优先）")
+    @PostMapping("/recognize-address")
+    public ApiResult<AddressRecognizeVO> recognizeAddress(@RequestBody @Valid AddressRecognizeRequest request) {
+        return ApiResult.ok(regionService.recognizeAddress(request.getText()));
     }
 
     @Operation(summary = "离线 JSON 导入预检")

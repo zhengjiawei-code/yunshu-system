@@ -29,6 +29,7 @@ public final class DataScopeTables {
             "sys_route",
             "sys_route_transfer",
             "sys_route_company",
+            "sys_column_config",
             "flyway_schema_history"
     );
 

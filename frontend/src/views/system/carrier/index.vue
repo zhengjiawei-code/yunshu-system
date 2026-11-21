@@ -17,26 +17,19 @@
           <el-button @click="resetFilters">重置</el-button>
           <el-button :icon="Download" @click="handleExport">导出</el-button>
 
-          <el-popover placement="bottom-end" :width="200" trigger="click">
+          <el-popover placement="bottom-end" :width="440" trigger="click">
             <template #reference>
               <el-button :icon="Setting">列设置</el-button>
             </template>
-            <div class="column-setting">
-              <div class="column-setting__head">
-                <span>显示列</span>
-                <el-button link type="primary" size="small" @click="resetColumns">恢复默认</el-button>
-              </div>
-              <el-checkbox
-                v-for="item in columnOptions"
-                :key="item.key"
-                v-model="columnState[item.key]"
-                :disabled="item.locked"
-                class="column-setting__item"
-                @change="(value: boolean) => onColumnToggle(item.key, value)"
-              >
-                {{ item.label }}
-              </el-checkbox>
-            </div>
+            <column-setting
+              :schema="schema"
+              :states="states"
+              :loading="columnLoading"
+              :saving="columnSaving"
+              @update:states="onStatesUpdate"
+              @save="handleColumnSave"
+              @reset="handleColumnReset"
+            />
           </el-popover>
 
           <el-pagination
@@ -63,6 +56,8 @@
           height="100%"
           :empty-text="'暂无匹配的承运商'"
           persist-key="system:carrier"
+          :column-order="columnOrder"
+          :column-hidden="hiddenKeys"
           show-summary
           :summary-method="summaryMethod"
           show-overflow-tooltip
@@ -73,7 +68,7 @@
           <el-table-column type="index" label="序号" width="64" align="center" :index="rowIndex" />
 
           <el-table-column
-            v-if="columnState.carrierCode"
+            v-if="isVisible('carrierCode')"
             prop="carrierCode"
             label="承运商编码"
             min-width="150"
@@ -81,12 +76,12 @@
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">承运商编码</span>
-                <el-input
+                <column-filter
+                  v-if="col('carrierCode').filterType !== 'none'"
                   v-model="filters.carrierCode"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('carrierCode').filterType"
+                  :options="col('carrierCode').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
@@ -96,7 +91,7 @@
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.carrierName"
+            v-if="isVisible('carrierName')"
             prop="carrierName"
             label="承运商名称"
             min-width="200"
@@ -104,34 +99,39 @@
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">承运商名称</span>
-                <el-input
+                <column-filter
+                  v-if="col('carrierName').filterType !== 'none'"
                   v-model="filters.carrierName"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
-                />
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column v-if="columnState.contact" prop="contact" label="联系人" min-width="130">
-            <template #header>
-              <div class="col-head">
-                <span class="col-head__label">联系人</span>
-                <el-input
-                  v-model="filters.contact"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('carrierName').filterType"
+                  :options="col('carrierName').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.phone"
+            v-if="isVisible('contact')"
+            prop="contact"
+            label="联系人"
+            min-width="130"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">联系人</span>
+                <column-filter
+                  v-if="col('contact').filterType !== 'none'"
+                  v-model="filters.contact"
+                  :type="col('contact').filterType"
+                  :options="col('contact').filterOptions"
+                  @change="onTextFilter"
+                />
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column
+            v-if="isVisible('phone')"
             prop="phone"
             label="联系电话"
             min-width="150"
@@ -139,19 +139,19 @@
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">联系电话</span>
-                <el-input
+                <column-filter
+                  v-if="col('phone').filterType !== 'none'"
                   v-model="filters.phone"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('phone').filterType"
+                  :options="col('phone').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.deptName"
+            v-if="isVisible('deptName')"
             prop="deptName"
             label="归属机构"
             min-width="180"
@@ -159,15 +159,11 @@
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">归属机构</span>
-                <el-tree-select
+                <column-filter
+                  v-if="col('deptName').filterType !== 'none'"
                   v-model="filters.deptId"
-                  size="small"
-                  :data="scopeTree"
-                  :props="{ label: 'deptName', children: 'children' }"
-                  node-key="id"
-                  check-strictly
-                  clearable
-                  placeholder="全部"
+                  :type="col('deptName').filterType"
+                  :options="deptOptions"
                   @change="onFilterChange"
                 />
               </div>
@@ -176,7 +172,7 @@
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.status"
+            v-if="isVisible('status')"
             prop="status"
             label="状态"
             min-width="120"
@@ -185,16 +181,13 @@
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">状态</span>
-                <el-select
+                <column-filter
+                  v-if="col('status').filterType !== 'none'"
                   v-model="filters.status"
-                  size="small"
-                  placeholder="全部"
-                  clearable
+                  :type="col('status').filterType"
+                  :options="col('status').filterOptions"
                   @change="onFilterChange"
-                >
-                  <el-option label="启用" :value="true" />
-                  <el-option label="停用" :value="false" />
-                </el-select>
+                />
               </div>
             </template>
             <template #default="{ row }">
@@ -203,7 +196,7 @@
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.sortOrder"
+            v-if="isVisible('sortOrder')"
             prop="sortOrder"
             label="排序号"
             min-width="110"
@@ -211,7 +204,7 @@
           />
 
           <el-table-column
-            v-if="columnState.updateByName"
+            v-if="isVisible('updateByName')"
             prop="updateByName"
             label="修改人"
             min-width="130"
@@ -219,12 +212,12 @@
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">修改人</span>
-                <el-input
+                <column-filter
+                  v-if="col('updateByName').filterType !== 'none'"
                   v-model="filters.updateByName"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('updateByName').filterType"
+                  :options="col('updateByName').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
@@ -232,35 +225,36 @@
           </el-table-column>
 
           <el-table-column
-            v-if="columnState.updateTime"
+            v-if="isVisible('updateTime')"
             prop="updateTime"
             label="修改时间"
             min-width="180"
             align="center"
           />
 
-          <el-table-column
-            v-if="columnState.remark"
-            prop="remark"
-            label="备注"
-            min-width="160"
-          >
+          <el-table-column v-if="isVisible('remark')" prop="remark" label="备注" min-width="160">
             <template #header>
               <div class="col-head">
                 <span class="col-head__label">备注</span>
-                <el-input
+                <column-filter
+                  v-if="col('remark').filterType !== 'none'"
                   v-model="filters.remark"
-                  size="small"
-                  placeholder="请输入"
-                  clearable
-                  @input="onTextFilter"
+                  :type="col('remark').filterType"
+                  :options="col('remark').filterOptions"
+                  @change="onTextFilter"
                 />
               </div>
             </template>
             <template #default="{ row }">{{ row.remark || '—' }}</template>
           </el-table-column>
 
-          <el-table-column label="操作" width="120" fixed="right" align="right">
+          <el-table-column
+            v-if="isVisible('operation')"
+            label="操作"
+            width="120"
+            fixed="right"
+            align="right"
+          >
             <template #default="{ row }">
               <div class="row-actions">
                 <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
@@ -282,33 +276,67 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Setting } from '@element-plus/icons-vue'
 import type { CarrierQuery, CarrierRecord } from '@/types/carrier'
 import type { ManageScopeNode } from '@/types/dept'
+import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteCarrier, getCarrierPage } from '@/api/system/carrier'
 import { getManageScope } from '@/api/system/dept'
+import { useColumnConfig } from '@/composables/useColumnConfig'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
+import ColumnFilter from '@/components/base/ColumnFilter.vue'
+import ColumnSetting from '@/components/base/ColumnSetting.vue'
 import CarrierFormDrawer from './components/CarrierFormDrawer.vue'
 
 defineOptions({ name: 'SystemCarrier' })
 
-const COLUMN_STORAGE_KEY = 'yunshu_carrier_columns_v1'
+const schema = reactive<ColumnDef[]>([
+  { key: 'carrierCode', label: '承运商编码', prop: 'carrierCode', filterType: 'text', locked: true },
+  { key: 'carrierName', label: '承运商名称', prop: 'carrierName', filterType: 'text' },
+  { key: 'contact', label: '联系人', prop: 'contact', filterType: 'text' },
+  { key: 'phone', label: '联系电话', prop: 'phone', filterType: 'text' },
+  { key: 'deptName', label: '归属机构', prop: 'deptName', filterType: 'select', filterOptions: [] },
+  {
+    key: 'status',
+    label: '状态',
+    prop: 'status',
+    filterType: 'select',
+    filterOptions: [
+      { label: '启用', value: true },
+      { label: '停用', value: false }
+    ]
+  },
+  // 排序号/修改时间后端未提供区间筛选参数，保持无筛选，避免前端无效控件
+  { key: 'sortOrder', label: '排序号', prop: 'sortOrder', filterType: 'none', align: 'right' },
+  { key: 'updateByName', label: '修改人', prop: 'updateByName', filterType: 'text' },
+  { key: 'updateTime', label: '修改时间', prop: 'updateTime', filterType: 'none', align: 'center' },
+  { key: 'remark', label: '备注', prop: 'remark', filterType: 'text' },
+  {
+    key: 'operation',
+    label: '操作',
+    elKey: 'label:操作',
+    filterType: 'none',
+    sortable: false,
+    locked: true
+  }
+])
 
-const columnOptions: Array<{ key: string; label: string; locked?: boolean }> = [
-  { key: 'carrierCode', label: '承运商编码', locked: true },
-  { key: 'carrierName', label: '承运商名称' },
-  { key: 'contact', label: '联系人' },
-  { key: 'phone', label: '联系电话' },
-  { key: 'deptName', label: '归属机构' },
-  { key: 'status', label: '状态' },
-  { key: 'sortOrder', label: '排序号' },
-  { key: 'updateByName', label: '修改人' },
-  { key: 'updateTime', label: '修改时间' },
-  { key: 'remark', label: '备注' }
-]
+const {
+  states,
+  loading: columnLoading,
+  saving: columnSaving,
+  col,
+  isVisible,
+  columnOrder,
+  hiddenKeys,
+  load: loadColumnConfig,
+  save: saveColumnConfig,
+  reset: resetColumnConfig,
+  defaultFilters
+} = useColumnConfig('system:carrier', schema)
 
 const tableRef = ref<InstanceType<typeof SmartTable>>()
 const loading = ref(false)
@@ -317,7 +345,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const scopeTree = ref<ManageScopeNode[]>([])
-const columnState = reactive<Record<string, boolean>>(loadColumnState())
+const deptOptions = computed(() => flattenDeptOptions(scopeTree.value))
 
 const filters = reactive<{
   carrierCode: string
@@ -360,14 +388,14 @@ function rowIndex(index: number) {
 
 function buildQuery(pageNum = page.value, size = pageSize.value): CarrierQuery {
   return {
-    carrierCode: filters.carrierCode.trim() || undefined,
-    carrierName: filters.carrierName.trim() || undefined,
-    contact: filters.contact.trim() || undefined,
-    phone: filters.phone.trim() || undefined,
-    deptId: filters.deptId,
-    status: filters.status,
-    updateByName: filters.updateByName.trim() || undefined,
-    remark: filters.remark.trim() || undefined,
+    carrierCode: isVisible('carrierCode') ? filters.carrierCode.trim() || undefined : undefined,
+    carrierName: isVisible('carrierName') ? filters.carrierName.trim() || undefined : undefined,
+    contact: isVisible('contact') ? filters.contact.trim() || undefined : undefined,
+    phone: isVisible('phone') ? filters.phone.trim() || undefined : undefined,
+    deptId: isVisible('deptName') ? filters.deptId : undefined,
+    status: isVisible('status') ? filters.status : undefined,
+    updateByName: isVisible('updateByName') ? filters.updateByName.trim() || undefined : undefined,
+    remark: isVisible('remark') ? filters.remark.trim() || undefined : undefined,
     sortBy: sortState.sortBy,
     sortOrder: sortState.sortOrder,
     pageNum,
@@ -420,9 +448,24 @@ async function loadScope() {
   try {
     const scope = await getManageScope()
     scopeTree.value = scope.tree
+    // 归属机构默认值编辑器需要完整的机构选项
+    const deptColumn = schema.find((item) => item.key === 'deptName')
+    if (deptColumn) deptColumn.filterOptions = deptOptions.value
   } catch {
     // 选项失败不阻断列表
   }
+}
+
+function flattenDeptOptions(nodes: ManageScopeNode[]): Array<{ label: string; value: number }> {
+  const result: Array<{ label: string; value: number }> = []
+  const walk = (list: ManageScopeNode[]) => {
+    list.forEach((node) => {
+      result.push({ label: node.deptName, value: node.id })
+      if (node.children?.length) walk(node.children)
+    })
+  }
+  walk(nodes)
+  return result
 }
 
 function handleSizeChange() {
@@ -446,65 +489,41 @@ function resetFilters() {
   loadPage()
 }
 
-function loadColumnState(): Record<string, boolean> {
-  const defaults: Record<string, boolean> = {}
-  columnOptions.forEach((item) => {
-    defaults[item.key] = true
-  })
-  try {
-    const raw = localStorage.getItem(COLUMN_STORAGE_KEY)
-    if (!raw) return defaults
-    const saved = JSON.parse(raw) as Record<string, boolean>
-    columnOptions.forEach((item) => {
-      if (item.locked) return
-      if (typeof saved[item.key] === 'boolean') defaults[item.key] = saved[item.key]
-    })
-  } catch {
-    // 存储损坏时回退默认
-  }
-  return defaults
+/* ---------- 统一列设置（后端按用户+页面持久化） ---------- */
+function onStatesUpdate(next: ColumnItemState[]) {
+  states.value = next
 }
 
-function persistColumnState() {
-  try {
-    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnState))
-  } catch {
-    // 忽略存储失败
-  }
+async function handleColumnSave() {
+  await saveColumnConfig()
+  if (hiddenKeys.value.length) loadPage()
 }
 
-const FILTER_RESET: Record<string, () => void> = {
-  carrierCode: () => (filters.carrierCode = ''),
-  carrierName: () => (filters.carrierName = ''),
-  contact: () => (filters.contact = ''),
-  phone: () => (filters.phone = ''),
-  deptName: () => (filters.deptId = undefined),
-  status: () => (filters.status = undefined),
-  updateByName: () => (filters.updateByName = ''),
-  remark: () => (filters.remark = '')
-}
-
-function onColumnToggle(key: string, visible: boolean) {
-  persistColumnState()
-  if (!visible && FILTER_RESET[key]) {
-    FILTER_RESET[key]()
-    if (sortState.sortBy === key) {
-      sortState.sortBy = undefined
-      sortState.sortOrder = undefined
-      tableRef.value?.getTable()?.clearSort?.()
-    }
-    page.value = 1
-    loadPage()
-  }
-}
-
-function resetColumns() {
-  columnOptions.forEach((item) => {
-    columnState[item.key] = true
-  })
-  persistColumnState()
+async function handleColumnReset() {
+  await resetColumnConfig()
   tableRef.value?.resetColumnWidths()
-  ElMessage.success('已恢复默认列')
+  page.value = 1
+  loadPage()
+}
+
+/** 首次进入按默认查询值自动带出筛选；默认机构已失效时忽略并提示 */
+function applyDefaultFilters() {
+  const defaults = defaultFilters()
+  if (defaults.carrierCode != null) filters.carrierCode = String(defaults.carrierCode)
+  if (defaults.carrierName != null) filters.carrierName = String(defaults.carrierName)
+  if (defaults.contact != null) filters.contact = String(defaults.contact)
+  if (defaults.phone != null) filters.phone = String(defaults.phone)
+  if (defaults.updateByName != null) filters.updateByName = String(defaults.updateByName)
+  if (defaults.remark != null) filters.remark = String(defaults.remark)
+  if (defaults.deptId != null) {
+    const deptId = Number(defaults.deptId)
+    if (deptOptions.value.some((item) => item.value === deptId)) {
+      filters.deptId = deptId
+    } else {
+      ElMessage.warning('默认查询机构已删除或不在管理范围，已忽略该默认值')
+    }
+  }
+  if (typeof defaults.status === 'boolean') filters.status = defaults.status
 }
 
 /** 合计：仅展示总条数（标准列表口径） */
@@ -513,7 +532,9 @@ function summaryMethod({ columns }: { columns: Array<{ label: string }> }) {
 }
 
 async function handleExport() {
-  const exportColumns = columnOptions.filter((item) => columnState[item.key])
+  const exportColumns = schema.filter(
+    (item) => item.key !== 'operation' && isVisible(item.key)
+  )
   try {
     const result = await getCarrierPage(buildQuery(1, 10000))
     const header = ['序号', ...exportColumns.map((item) => item.label)]
@@ -582,9 +603,10 @@ async function handleDelete(row: CarrierRecord) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await Promise.all([loadScope(), loadColumnConfig()])
+  applyDefaultFilters()
   loadPage()
-  loadScope()
 })
 </script>
 

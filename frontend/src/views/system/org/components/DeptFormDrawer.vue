@@ -144,7 +144,16 @@
       </el-form-item>
 
       <el-form-item label="详细地址" prop="address">
-        <el-input v-model="form.address" maxlength="200" placeholder="选填，街道门牌等详细地址" />
+        <el-input
+          v-model="form.address"
+          maxlength="200"
+          placeholder="选填，如：浙江省杭州市西湖区文三路 100 号"
+        >
+          <template #suffix>
+            <el-icon v-if="addressRecognizing" class="is-loading"><Loading /></el-icon>
+          </template>
+        </el-input>
+        <p class="form-hint">输入后自动识别省/市/区县并回填，识别失败可手动选择</p>
       </el-form-item>
 
       <el-form-item
@@ -216,11 +225,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Lock } from '@element-plus/icons-vue'
+import { Loading, Lock } from '@element-plus/icons-vue'
 import type { DeptNature, DeptNode, DeptSavePayload, DeptType } from '@/types/dept'
 import type { RegionNode } from '@/types/region'
 import { createDept, updateDept } from '@/api/system/dept'
-import { getRegionChildren } from '@/api/system/region'
+import { getRegionChildren, recognizeAddress } from '@/api/system/region'
 import { useUserStore } from '@/stores/user'
 import PageDrawer from '@/components/base/PageDrawer.vue'
 
@@ -441,6 +450,90 @@ function clearRegionValidate() {
   formRef.value?.clearValidate('provinceCode')
 }
 
+/* ---------- 详细地址自动识别（仅本地区划，防抖 400ms，一次输入一次请求） ---------- */
+const addressRecognizing = ref(false)
+let addressTimer: number | undefined
+let addressSeq = 0
+let lastRecognized = ''
+
+function clearAddressTimer() {
+  if (addressTimer) {
+    window.clearTimeout(addressTimer)
+    addressTimer = undefined
+  }
+}
+
+async function runAddressRecognize(text: string) {
+  const seq = ++addressSeq
+  addressRecognizing.value = true
+  try {
+    const result = await recognizeAddress(text)
+    // 只应用最新一次识别的结果，避免旧请求回填覆盖
+    if (seq !== addressSeq || !props.modelValue) return
+    if (result.ambiguous) {
+      ElMessage.warning(
+        result.candidates?.length
+          ? `${result.message}：${result.candidates.join('、')}`
+          : result.message
+      )
+      return
+    }
+    if (!result.matched) {
+      ElMessage.warning('未能识别地区，请手动选择')
+      return
+    }
+    // 仅回填省/市/区县三级，不改动负责人、电话等用户已填写字段
+    if (result.provinceCode && result.provinceCode !== form.provinceCode) {
+      form.cityCode = ''
+      form.districtCode = ''
+      districtOptions.value = []
+    }
+    if (result.provinceCode) {
+      await loadCities(result.provinceCode)
+      form.provinceCode = result.provinceCode
+    }
+    if (result.cityCode) {
+      await loadDistricts(result.cityCode)
+      form.cityCode = result.cityCode
+    }
+    if (result.districtCode) {
+      form.districtCode = result.districtCode
+    }
+    clearRegionValidate()
+    if (result.partial) {
+      ElMessage.warning(result.message || '已识别部分地区，请补充选择')
+    } else {
+      ElMessage.success(
+        `已识别地区：${[result.provinceName, result.cityName, result.districtName]
+          .filter(Boolean)
+          .join(' / ')}`
+      )
+    }
+  } catch {
+    // 请求层已统一提示，识别失败不阻断保存
+  } finally {
+    if (seq === addressSeq) addressRecognizing.value = false
+  }
+}
+
+watch(
+  () => form.address,
+  (value) => {
+    if (!props.modelValue) return
+    const text = (value || '').trim()
+    clearAddressTimer()
+    if (text.length < 2) {
+      lastRecognized = ''
+      return
+    }
+    if (text === lastRecognized) return
+    addressTimer = window.setTimeout(() => {
+      lastRecognized = text
+      void runAddressRecognize(text)
+    }, 400)
+  }
+)
+
 const rules: FormRules = {
   parentId: [
     {
@@ -569,6 +662,10 @@ watch(
   (open) => {
     if (open) {
       resetForm()
+      // 每次打开重置识别状态，避免上次地址的“已识别”缓存阻止本次识别
+      clearAddressTimer()
+      lastRecognized = ''
+      addressRecognizing.value = false
       void initRegionOptions()
     }
   }

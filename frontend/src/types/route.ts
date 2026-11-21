@@ -137,6 +137,10 @@ export interface RegionLibraryQuery {
   level?: 2 | 3 | 4
   configured?: boolean
   parentCode?: string
+  provinceCode?: string
+  cityCode?: string
+  districtKeyword?: string
+  townKeyword?: string
 }
 
 export interface TransferBatchJoinPayload {
