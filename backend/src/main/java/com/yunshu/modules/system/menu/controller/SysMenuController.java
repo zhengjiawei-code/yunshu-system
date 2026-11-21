@@ -58,7 +58,7 @@ public class SysMenuController {
         return ApiResult.ok();
     }
 
-    @Operation(summary = "删除菜单节点（存在子节点时拒绝）")
+    @Operation(summary = "删除菜单节点（存在下级内容时拒绝）")
     @DeleteMapping("/{id}")
     public ApiResult<Void> delete(@PathVariable Long id) {
         menuService.delete(id);

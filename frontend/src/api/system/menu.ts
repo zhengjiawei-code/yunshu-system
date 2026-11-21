@@ -190,7 +190,7 @@ export async function deleteMenu(id: number): Promise<void> {
   if (useMock) {
     const node = findNode(mockTree, id)
     if (!node) fail('菜单不存在')
-    if (node.children?.length) fail('存在子节点，请先删除子节点')
+    if (node.children?.length) fail('存在下级内容，请先删除下级内容')
     const parent = findParent(mockTree, id)
     if (parent?.children) {
       parent.children = parent.children.filter((child) => child.id !== id)

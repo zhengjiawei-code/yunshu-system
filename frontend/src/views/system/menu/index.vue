@@ -37,7 +37,14 @@
         </div>
       </div>
 
-      <div class="menu-table-wrap">
+      <div
+        ref="menuTableWrap"
+        class="menu-table-wrap"
+        @dragstart="onRowDragStart"
+        @dragover="onRowDragOver"
+        @drop="onRowDrop"
+        @dragend="onRowDragEnd"
+      >
         <smart-table
           ref="menuTableRef"
           v-loading="loading"
@@ -54,6 +61,7 @@
           show-overflow-tooltip
           scrollbar-always-on
           class="menu-table"
+          :row-class-name="menuRowClass"
           @sort-change="handleSortChange"
         >
           <el-table-column
@@ -301,10 +309,10 @@
               <div class="row-actions">
                 <template v-if="row.menuType === 1">
                   <el-button link type="primary" size="small" @click="openCreateDirectory(row.id)">
-                    新增子目录
+                    新增目录
                   </el-button>
                   <el-button link type="primary" size="small" @click="openCreateMenu(row.id)">
-                    新增子菜单
+                    新增菜单
                   </el-button>
                 </template>
                 <el-button
@@ -316,8 +324,23 @@
                 >
                   新增按钮
                 </el-button>
-                <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+                <el-dropdown trigger="click" @command="(command: string) => handleRowCommand(command, row)">
+                  <el-button link type="primary" size="small">
+                    更多<el-icon class="more-icon"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="edit">编辑{{ typeLabel(row.menuType) }}</el-dropdown-item>
+                      <el-dropdown-item
+                        v-if="!row.children?.length"
+                        command="delete"
+                        divided
+                      >
+                        删除{{ typeLabel(row.menuType) }}
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </template>
           </el-table-column>
@@ -346,12 +369,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Setting } from '@element-plus/icons-vue'
+import { ArrowDown, Refresh, Setting } from '@element-plus/icons-vue'
 import type { MenuNode } from '@/types/menu'
 import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
-import { deleteMenu, getMenuTree } from '@/api/system/menu'
+import { deleteMenu, getMenuTree, sortMenus } from '@/api/system/menu'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { resolveIcon } from '@/utils/icon'
 import { collectExpandKeys, filterTree } from '@/utils/tree'
@@ -569,6 +592,199 @@ function typeTag(type: number) {
   return { type: 'warning' as const, text: '按钮' }
 }
 
+function typeLabel(type: number) {
+  if (type === 1) return '目录'
+  if (type === 2) return '菜单'
+  return '按钮'
+}
+
+function handleRowCommand(command: string, row: MenuNode) {
+  if (command === 'edit') {
+    openEdit(row)
+    return
+  }
+  if (command === 'delete') {
+    void handleDelete(row)
+  }
+}
+
+/* ---------- 同级拖拽排序 ----------
+ * 本期只开放同级：跨层级会改 parentId，必须走编辑接口的父子矩阵、深度、名称/路由唯一性校验；
+ * 拖拽直接改父级容易绕过校验，因此跨层级统一提示改用「编辑」。
+ */
+const menuTableWrap = ref<HTMLElement>()
+const dragState = reactive<{
+  sourceId?: number
+  targetId?: number
+  position?: 'before' | 'after'
+  valid: boolean
+}>({ valid: false })
+let lastCrossWarnAt = 0
+
+function menuRowClass({ row }: { row: MenuNode }) {
+  return `menu-row menu-row-${row.id}`
+}
+
+function findMenuById(nodes: MenuNode[], id: number): MenuNode | undefined {
+  for (const node of nodes) {
+    if (node.id === id) return node
+    const found = node.children ? findMenuById(node.children, id) : undefined
+    if (found) return found
+  }
+  return undefined
+}
+
+function rowIdFromEvent(event: DragEvent): number | undefined {
+  const target = event.target as HTMLElement | null
+  const tr = target?.closest?.('tr.menu-row') as HTMLElement | null
+  if (!tr) return undefined
+  const token = Array.from(tr.classList).find((name) => name.startsWith('menu-row-'))
+  if (!token) return undefined
+  const id = Number(token.slice('menu-row-'.length))
+  return Number.isFinite(id) ? id : undefined
+}
+
+function rowElementFromEvent(event: DragEvent): HTMLElement | null {
+  const target = event.target as HTMLElement | null
+  return (target?.closest?.('tr.menu-row') as HTMLElement | null) ?? null
+}
+
+function clearDragStyles() {
+  menuTableWrap.value
+    ?.querySelectorAll('tr.is-dragging, tr.drop-before, tr.drop-after')
+    .forEach((row) => row.classList.remove('is-dragging', 'drop-before', 'drop-after'))
+}
+
+function resetDragState() {
+  dragState.sourceId = undefined
+  dragState.targetId = undefined
+  dragState.position = undefined
+  dragState.valid = false
+  clearDragStyles()
+}
+
+function onRowDragStart(event: DragEvent) {
+  const id = rowIdFromEvent(event)
+  if (!id) return
+  if (filterActive.value) {
+    event.preventDefault()
+    ElMessage.warning('筛选状态下不支持拖拽排序，请先重置筛选')
+    return
+  }
+  if (!findMenuById(treeData.value, id)) return
+  dragState.sourceId = id
+  dragState.valid = false
+  event.dataTransfer?.setData('text/plain', String(id))
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+  rowElementFromEvent(event)?.classList.add('is-dragging')
+}
+
+function onRowDragOver(event: DragEvent) {
+  if (!dragState.sourceId) return
+  const targetId = rowIdFromEvent(event)
+  if (!targetId) return
+  event.preventDefault()
+  const source = findMenuById(treeData.value, dragState.sourceId)
+  const target = findMenuById(treeData.value, targetId)
+  if (!source || !target || source.id === target.id) {
+    dragState.valid = false
+    clearDragStyles()
+    return
+  }
+  const sameLevel = source.parentId === target.parentId
+  if (!sameLevel) {
+    dragState.valid = false
+    dragState.targetId = targetId
+    clearDragStyles()
+    if (Date.now() - lastCrossWarnAt > 1200) {
+      lastCrossWarnAt = Date.now()
+      ElMessage.warning('本期仅支持同级拖拽，跨层级请用「编辑」调整上级节点')
+    }
+    return
+  }
+  const tr = rowElementFromEvent(event)
+  if (!tr) return
+  const rect = tr.getBoundingClientRect()
+  const after = event.clientY > rect.top + rect.height / 2
+  clearDragStyles()
+  menuTableWrap.value?.querySelector(`tr.menu-row-${source.id}`)?.classList.add('is-dragging')
+  tr.classList.add(after ? 'drop-after' : 'drop-before')
+  dragState.targetId = targetId
+  dragState.position = after ? 'after' : 'before'
+  dragState.valid = true
+}
+
+function onRowDrop(event: DragEvent) {
+  if (!dragState.sourceId) return
+  event.preventDefault()
+  const { sourceId, targetId, position, valid } = dragState
+  if (!valid || !targetId || !position) {
+    resetDragState()
+    return
+  }
+  void commitDragSort(sourceId!, targetId, position)
+}
+
+function onRowDragEnd() {
+  resetDragState()
+}
+
+async function commitDragSort(sourceId: number, targetId: number, position: 'before' | 'after') {
+  const source = findMenuById(treeData.value, sourceId)
+  if (!source) {
+    resetDragState()
+    return
+  }
+  const siblings = source.parentId
+    ? findMenuById(treeData.value, source.parentId)?.children || []
+    : treeData.value
+  const ordered = [...siblings].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+  const originalIds = ordered.map((item) => item.id)
+  const fromIndex = ordered.findIndex((item) => item.id === sourceId)
+  if (fromIndex < 0) {
+    resetDragState()
+    return
+  }
+  const [moved] = ordered.splice(fromIndex, 1)
+  let targetIndex = ordered.findIndex((item) => item.id === targetId)
+  if (targetIndex < 0) {
+    resetDragState()
+    return
+  }
+  if (position === 'after') targetIndex += 1
+  ordered.splice(targetIndex, 0, moved)
+  const nextIds = ordered.map((item) => item.id)
+  resetDragState()
+  if (nextIds.join(',') === originalIds.join(',')) return
+
+  try {
+    await sortMenus(nextIds)
+    await loadData()
+    ElMessage.success('排序已保存')
+  } catch (error) {
+    const message = (error as { message?: string })?.message
+    ElMessage.error(message || '排序保存失败，已回滚')
+    await loadData()
+  }
+}
+
+/** 表格重渲染后恢复行可拖拽属性（树展开/筛选都会重建行） */
+function applyDraggableRows() {
+  menuTableWrap.value
+    ?.querySelectorAll('tr.menu-row')
+    .forEach((row) => row.setAttribute('draggable', 'true'))
+}
+
+watch(
+  [displayTree, expandRowKeys],
+  () => {
+    void nextTick(applyDraggableRows)
+  },
+  { immediate: true }
+)
+
 async function loadData() {
   loading.value = true
   try {
@@ -714,7 +930,7 @@ function findParentNode(nodes: MenuNode[], id: number): MenuNode | undefined {
 
 async function handleDelete(row: MenuNode) {
   if (row.children?.length) {
-    ElMessage.warning('存在子节点，请先删除子节点')
+    ElMessage.warning('存在下级内容，请先删除下级内容')
     return
   }
   try {
@@ -784,6 +1000,37 @@ onMounted(async () => {
 .menu-table :deep(.el-table__header th .cell) {
   overflow: visible;
   line-height: 1.4;
+}
+
+/* 行操作：单行不换行，避免固定操作列内按钮被裁切 */
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.more-icon {
+  margin-left: 2px;
+}
+
+/* 同级拖拽视觉反馈 */
+.menu-table :deep(tr.menu-row) {
+  cursor: grab;
+}
+
+.menu-table :deep(tr.menu-row.is-dragging) {
+  opacity: 0.45;
+}
+
+.menu-table :deep(tr.menu-row.drop-before td) {
+  box-shadow: inset 0 2px 0 var(--color-primary);
+}
+
+.menu-table :deep(tr.menu-row.drop-after td) {
+  box-shadow: inset 0 -2px 0 var(--color-primary);
 }
 
 .menu-name {

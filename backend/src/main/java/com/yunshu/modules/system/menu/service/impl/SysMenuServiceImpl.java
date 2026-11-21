@@ -73,7 +73,7 @@ public class SysMenuServiceImpl implements SysMenuService {
         // 目录有子节点后禁止改路由，避免子孙页面路径全部失效
         if (existing.getMenuType() == DIR && hasChildren
                 && !Objects.equals(normalize(existing.getRoutePath()), normalize(request.getRoutePath()))) {
-            throw new BizException("该目录下已有子节点，不允许修改路由地址");
+            throw new BizException("该目录下已有内容，不允许修改路由地址");
         }
 
         if (!Objects.equals(existing.getParentId(), request.getParentId())) {
@@ -111,7 +111,7 @@ public class SysMenuServiceImpl implements SysMenuService {
     public void delete(Long id) {
         require(id);
         if (hasChildren(id)) {
-            throw new BizException("该节点下存在子节点，请先删除子节点");
+            throw new BizException("该节点下存在下级内容，请先删除下级内容");
         }
         menuMapper.deleteById(id);
         permissionService.evictAll();
@@ -343,7 +343,7 @@ public class SysMenuServiceImpl implements SysMenuService {
             throw new BizException("上级节点不能是自己");
         }
         if (isDescendant(request.getParentId(), id)) {
-            throw new BizException("上级节点不能是自己的子节点");
+            throw new BizException("上级节点不能是自己的下级节点");
         }
         if (request.getMenuType() != BUTTON) {
             int parentDepth = depthOf(request.getParentId());

@@ -37,13 +37,13 @@
           :placeholder="isDirectory ? '如 /system' : parentPathHint"
         >
           <template v-if="routeLocked" #suffix>
-            <el-tooltip content="目录存在子节点，路由地址不可修改" placement="top">
+            <el-tooltip content="目录下已有内容，路由地址不可修改" placement="top">
               <el-icon><Lock /></el-icon>
             </el-tooltip>
           </template>
         </el-input>
         <p v-if="routeLocked" class="form-hint form-hint--warning">
-          该目录下已有子节点，路由地址已锁定
+          该目录下已有内容，路由地址已锁定
         </p>
       </el-form-item>
 
@@ -72,7 +72,7 @@
       </el-form-item>
 
       <el-form-item v-if="isDirectory" label="默认跳转" prop="redirect">
-        <el-input v-model="form.redirect" placeholder="留空则自动跳转第一个子菜单" />
+        <el-input v-model="form.redirect" placeholder="留空则自动跳转到第一个菜单" />
       </el-form-item>
 
       <el-form-item v-if="!isDirectory" label="终端类型" prop="terminalType">
