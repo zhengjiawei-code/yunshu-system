@@ -1,5 +1,8 @@
 server:
-  port: 8080
+  # yunshu 专用端口：避开 luohuo（前端 5173 / 后端 8000）
+  port: 8090
+  # 同时监听 IPv4/IPv6，避免只监听 IPv6 导致 127.0.0.1 无法访问
+  address: 0.0.0.0
 
 spring:
   application:
