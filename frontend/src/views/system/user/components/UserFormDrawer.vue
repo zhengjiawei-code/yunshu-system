@@ -53,7 +53,7 @@
           </el-form-item>
 
           <el-form-item label="手机号" prop="phone">
-            <el-input v-model="form.phone" maxlength="11" placeholder="选填" />
+            <el-input v-model="form.phone" maxlength="11" placeholder="请输入手机号" />
           </el-form-item>
 
           <el-form-item label="邮箱" prop="email">
@@ -117,7 +117,7 @@
               />
             </el-select>
             <p class="form-hint">
-              内部员工至少 1 个角色；客户允许 0 个{{ isSuperAdmin ? '；超级管理员的角色不可修改' : '' }}
+              至少选择 1 个角色{{ isSuperAdmin ? '；超级管理员的角色不可修改' : '' }}
             </p>
           </el-form-item>
 
@@ -278,7 +278,10 @@ const rules: FormRules = {
     { required: true, message: '请输入真实姓名', trigger: 'blur' },
     { min: 2, max: 20, message: '真实姓名为 2-20 个字符', trigger: 'blur' }
   ],
-  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
+  phone: [
+    { required: true, message: '请输入手机号', trigger: 'blur' },
+    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
+  ],
   email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
   deptId: [
     {
@@ -295,8 +298,8 @@ const rules: FormRules = {
   roleIds: [
     {
       validator: (_rule: unknown, value: number[], callback: (error?: Error) => void) => {
-        if (form.userType === 1 && (!value || value.length === 0)) {
-          callback(new Error('内部员工至少需要分配 1 个角色'))
+        if (!value || value.length === 0) {
+          callback(new Error('请至少选择 1 个角色'))
           return
         }
         callback()
@@ -310,7 +313,6 @@ const rules: FormRules = {
 function onUserTypeChange() {
   if (form.userType === 2) {
     form.authOrgIds = []
-    form.roleIds = []
   }
   formRef.value?.validateField('deptId').catch(() => undefined)
 }
@@ -393,7 +395,7 @@ async function handleSubmit() {
   const payload: UserSavePayload = {
     username: form.username.trim(),
     realName: form.realName.trim(),
-    phone: form.phone.trim() || undefined,
+    phone: form.phone.trim(),
     email: form.email.trim() || undefined,
     userType: form.userType,
     deptId: form.deptId,

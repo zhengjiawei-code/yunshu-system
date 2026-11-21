@@ -3,6 +3,7 @@ package com.yunshu.modules.system.user.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -31,8 +32,8 @@ public class UserSaveRequest {
     @Size(min = 2, max = 20, message = "真实姓名长度需为 2-20 个字符")
     private String realName;
 
-    @Schema(description = "手机号：选填，1[3-9] 开头 11 位")
-    @Pattern(regexp = "^$|^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    @Schema(description = "手机号：必填，1[3-9] 开头 11 位；格式由 Service 二次校验")
+    @NotBlank(message = "请输入手机号")
     private String phone;
 
     @Schema(description = "邮箱：选填")
@@ -50,7 +51,8 @@ public class UserSaveRequest {
     @Schema(description = "可登录机构ID列表（不含主机构，主机构自动包含）")
     private List<Long> authOrgIds;
 
-    @Schema(description = "角色ID列表：内部员工至少 1 个")
+    @Schema(description = "角色ID列表：必填，至少 1 个")
+    @NotEmpty(message = "请至少选择 1 个角色")
     private List<Long> roleIds;
 
     @Schema(description = "状态：true 启用 / false 禁用")

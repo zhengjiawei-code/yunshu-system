@@ -135,6 +135,7 @@ public class SysUserServiceImpl implements SysUserService {
         }
 
         int userType = normalizeUserType(request.getUserType());
+        validatePhone(request.getPhone());
         validateDept(request.getDeptId(), userType);
         List<Long> roleIds = validateRoles(request.getRoleIds(), userType, currentUserId);
 
@@ -169,6 +170,7 @@ public class SysUserServiceImpl implements SysUserService {
         }
 
         int userType = normalizeUserType(request.getUserType());
+        validatePhone(request.getPhone());
         validateDept(request.getDeptId(), userType);
         List<Long> roleIds = validateRoles(request.getRoleIds(), userType, currentUserId);
 
@@ -421,6 +423,16 @@ public class SysUserServiceImpl implements SysUserService {
         return userType;
     }
 
+    private void validatePhone(String phone) {
+        String value = trim(phone);
+        if (!StringUtils.hasText(value)) {
+            throw new BizException("请输入手机号");
+        }
+        if (!value.matches("^1[3-9]\\d{9}$")) {
+            throw new BizException("手机号格式不正确");
+        }
+    }
+
     /** 内部员工必须有可用机构；客户允许为空，但填了就必须真实存在且启用 */
     private void validateDept(Long deptId, int userType) {
         if (deptId == null) {
@@ -443,11 +455,8 @@ public class SysUserServiceImpl implements SysUserService {
         if (roleIds != null) {
             roleIds.stream().filter(Objects::nonNull).forEach(requested::add);
         }
-        if (userType == TYPE_INTERNAL && requested.isEmpty()) {
-            throw new BizException("内部员工至少需要分配 1 个角色");
-        }
         if (requested.isEmpty()) {
-            return List.of();
+            throw new BizException("请至少分配 1 个角色");
         }
         List<SysRole> roles = roleMapper.selectBatchIds(requested);
         if (roles.size() != requested.size()) {
