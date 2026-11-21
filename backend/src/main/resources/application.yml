@@ -1,0 +1,57 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: yunshu-backend
+  datasource:
+    dynamic:
+      primary: master
+      strict: false
+      datasource:
+        # 读走 slave，写与事务走 master；初期两者指向同一个库，后续改配置即可切分
+        master:
+          url: ${YUNSHU_DB_URL:jdbc:mysql://127.0.0.1:3306/yunshu?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+          username: ${YUNSHU_DB_USER:root}
+          password: ${YUNSHU_DB_PASSWORD:}
+          driver-class-name: com.mysql.cj.jdbc.Driver
+        slave:
+          url: ${YUNSHU_DB_URL:jdbc:mysql://127.0.0.1:3306/yunshu?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+          username: ${YUNSHU_DB_USER:root}
+          password: ${YUNSHU_DB_PASSWORD:}
+          driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: true
+    # 独立数据源，避免动态数据源路由影响迁移执行
+    url: ${YUNSHU_DB_URL:jdbc:mysql://127.0.0.1:3306/yunshu?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    user: ${YUNSHU_DB_USER:root}
+    password: ${YUNSHU_DB_PASSWORD:}
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# 数据权限过滤开关：本期保持关闭，仅存档 sys_user.data_scope，不做行级过滤
+# 启用前置件与开关说明见 2026-11-20/system-management/outputs/system-management-design.md
+yunshu:
+  data-scope:
+    enabled: false
+
+logging:
+  level:
+    com.yunshu: info

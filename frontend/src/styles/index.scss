@@ -1,0 +1,15 @@
+@use './variables.css';
+@use './common.css';
+
+/* 应用级基础：布局高度依赖 100% 链路，禁止在局部重置 */
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#app {
+  overflow: hidden;
+}

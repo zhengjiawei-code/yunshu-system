@@ -1,0 +1,289 @@
+/**
+ * 落货管理系统 - 设计令牌（Design Tokens）
+ * ------------------------------------------------------------
+ * 视觉方向：「墨蓝 · 素笺」—— 低饱和、纸面感、精密线条
+ * 所有颜色、字号、间距、圆角、阴影、层级统一在此管理，
+ * 业务组件禁止写死色值，一律引用本文件变量。
+ *
+ * 命名规则：
+ *   --color-*      颜色
+ *   --font-*       字体
+ *   --spacing-*    间距（8px 基准）
+ *   --radius-*     圆角（旧名 --border-radius-* 保留兼容）
+ *   --shadow-*     阴影（由浅至深）
+ *   --z-*          层级
+ */
+
+:root {
+  /* ============================================================
+   *  品牌色 · 墨蓝（Primary）
+   *  钢蓝色，比默认蓝更沉、更低饱和，用于主按钮/选中态/链接
+   * ============================================================ */
+  --color-primary: #3f608f;
+  --color-primary-light-1: #4d709c;   /* hover */
+  --color-primary-light-2: #6b8bb4;
+  --color-primary-light-3: #9db3cd;   /* 次级边框 */
+  --color-primary-light-4: #c5d2e2;   /* 淡边框 */
+  --color-primary-light-5: #e8eef5;   /* 淡背景 */
+  --color-primary-dark-1: #365079;    /* active */
+  --color-primary-dark-2: #2d4466;
+  --color-primary-contrast: #ffffff;  /* 主色上的文字 */
+
+  /* ============================================================
+   *  状态色
+   *  每个状态提供三类：base（面）/ text（字，满足 4.5:1）/ surface（底）
+   * ============================================================ */
+
+  /* 成功 · 苔绿 */
+  --color-success: #4e7a60;
+  --color-success-text: #3d634c;
+  --color-success-light-1: #5f8a71;
+  --color-success-light-2: #85a693;
+  --color-success-light-3: #abc3b5;
+  --color-success-light-4: #d0dfd6;
+  --color-success-light-5: #e9f0ec;
+  --color-success-dark-1: #446b54;
+  --color-success-dark-2: #395c48;
+
+  /* 警告 · 琥珀 */
+  --color-warning: #b8863a;
+  --color-warning-text: #8a6520;
+  --color-warning-light-1: #c2964e;
+  --color-warning-light-2: #d4b077;
+  --color-warning-light-3: #e3cba2;
+  --color-warning-light-4: #f1e2c9;
+  --color-warning-light-5: #faf3e6;
+  --color-warning-dark-1: #a1752f;
+  --color-warning-dark-2: #8a6528;
+
+  /* 危险 · 砖红 */
+  --color-danger: #a95454;
+  --color-danger-text: #8f4444;
+  --color-danger-light-1: #b76565;
+  --color-danger-light-2: #cb8d8d;
+  --color-danger-light-3: #dfb6b2;
+  --color-danger-light-4: #eed6d2;
+  --color-danger-light-5: #f8eeec;
+  --color-danger-dark-1: #934848;
+  --color-danger-dark-2: #7d3c3c;
+
+  /* 信息 · 冷灰蓝 */
+  --color-info: #61728b;
+  --color-info-text: #4d5d74;
+  --color-info-light-1: #72829a;
+  --color-info-light-2: #94a1b3;
+  --color-info-light-3: #b6c0cb;
+  --color-info-light-4: #d8dde4;
+  --color-info-light-5: #eceff3;
+  --color-info-dark-1: #556479;
+  --color-info-dark-2: #485669;
+
+  /* ============================================================
+   *  中性色 · 墨阶
+   * ============================================================ */
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* 文字 */
+  --color-text-primary: #1e2a3a;      /* 标题、正文 */
+  --color-text-regular: #475467;      /* 常规正文 */
+  --color-text-secondary: #667085;    /* 辅助说明 */
+  --color-text-placeholder: #98a2b3;  /* 占位 */
+  --color-text-disabled: #c4ccd8;
+  --color-text-inverse: #ffffff;
+
+  /* 边框（纸面分割线） */
+  --color-border-base: #e4e8ef;
+  --color-border-light: #edf0f5;
+  --color-border-lighter: #f4f6fa;
+  --color-border-dark: #ced6e1;
+  --color-border-strong: #b6c0ce;
+
+  /* 表面 / 背景 */
+  --color-bg-page: #f4f6f9;           /* 页面底 */
+  --color-bg-card: #ffffff;           /* 卡片 */
+  --color-bg-subtle: #f8f9fb;         /* 次级区块（表头、工具条） */
+  --color-bg-hover: #f3f5f9;
+  --color-bg-active: #e9eff6;
+  --color-bg-disabled: #f7f8fa;
+  --color-bg-mask: rgba(16, 24, 40, 0.42);
+
+  /* ============================================================
+   *  侧边栏 · 墨色
+   * ============================================================ */
+
+  --color-sidebar-bg: #1a2432;
+  --color-sidebar-bg-light: #253040;   /* hover */
+  --color-sidebar-bg-active: rgba(255, 255, 255, 0.08);
+  --color-sidebar-text: #94a3b8;
+  --color-sidebar-text-active: #ffffff;
+  --color-sidebar-logo-bg: #16202c;
+  --color-sidebar-border: rgba(255, 255, 255, 0.07);
+  --color-sidebar-accent: #9db3cd;      /* 激活项左侧指示条 */
+
+  /* 大面积品牌底（登录页品牌面板等），需与侧边栏同族 */
+  --gradient-brand-panel: linear-gradient(160deg, #1a2432 0%, #223045 55%, #2a3b52 100%);
+
+  /* ============================================================
+   *  字体
+   * ============================================================ */
+
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  --font-family-number: 'SF Mono', 'DIN Alternate', ui-monospace, Menlo, Consolas,
+    monospace;
+
+  /* 字号（12 / 13 / 14 / 16 / 18 / 20 / 24 / 30） */
+  --font-size-extra-small: 12px;
+  --font-size-small: 13px;
+  --font-size-base: 14px;
+  --font-size-medium: 16px;
+  --font-size-large: 18px;
+  --font-size-extra-large: 20px;
+  --font-size-big: 24px;
+  --font-size-huge: 30px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+  --line-height-loose: 1.75;
+
+  /* 中文标题字距（小字号加宽一点更清晰） */
+  --letter-spacing-title: 0.01em;
+
+  /* ============================================================
+   *  间距 · 8px 基准
+   * ============================================================ */
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-xxl: 32px;
+  --spacing-section: 40px;
+
+  /* ============================================================
+   *  圆角
+   * ============================================================ */
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* 兼容旧命名（历史页面直接引用） */
+  --border-radius-none: 0;
+  --border-radius-small: var(--radius-sm);
+  --border-radius-base: var(--radius-md);
+  --border-radius-large: var(--radius-lg);
+  --border-radius-round: 20px;
+  --border-radius-circle: 50%;
+
+  /* ============================================================
+   *  阴影 · 纸面层次（克制，避免“浮起”感）
+   * ============================================================ */
+
+  --shadow-none: none;
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-light: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-base: 0 2px 6px -1px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-medium: 0 6px 16px -4px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.05);
+  --shadow-large: 0 16px 40px -8px rgba(16, 24, 40, 0.16), 0 4px 10px -4px rgba(16, 24, 40, 0.06);
+  --shadow-dark: 0 24px 60px -12px rgba(16, 24, 40, 0.22);
+  --shadow-focus: 0 0 0 3px rgba(63, 96, 143, 0.18);
+
+  /* ============================================================
+   *  动效
+   * ============================================================ */
+
+  --duration-fast: 0.12s;
+  --duration-base: 0.18s;
+  --duration-slow: 0.28s;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --transition-fast: all var(--duration-fast) var(--ease-out);
+  --transition-base: all var(--duration-base) var(--ease-out);
+  --transition-slow: all var(--duration-slow) var(--ease-out);
+
+  /* ============================================================
+   *  组件尺寸
+   *
+   *  按钮高度参考：Element Plus 默认 34 → 我们 32，比原生小 2px，
+   *  比"小号按钮 24"大 8px——刚好落在"稍小但不太小"的位置。
+   *  表头内嵌筛选控件用 small 档（28），操作栏默认用 base（32）。
+   * ============================================================ */
+
+  --button-height-small: 28px;
+  --button-height-base: 32px;
+  --button-height-large: 40px;
+
+  --input-height-small: 28px;
+  --input-height-base: 32px;
+  --input-height-large: 40px;
+
+  --card-padding: var(--spacing-base);
+
+  /* 表格 */
+  --table-row-height: 42px;
+  --table-header-bg: #f8f9fb;
+  --table-stripe-bg: #fbfcfd;
+  --table-hover-bg: #f4f7fb;
+
+  /* 标签 */
+  --tag-padding-vertical: 1px;
+  --tag-padding-horizontal: 8px;
+  --tag-border-radius: var(--radius-sm);
+
+  /* ============================================================
+   *  布局尺寸
+   *
+   *  目标：主内容区最大屏占比。
+   *  顶栏 56 / 标签栏 32 / Logo 60，压缩后主内容比原来多出约 12px 垂直空间。
+   *  侧边栏宽 208，折叠 56；内容区域左右 16px 内边距。
+   * ============================================================ */
+
+  --sidebar-width: 208px;
+  --sidebar-collapse-width: 56px;
+  --header-height: 56px;
+  --logo-height: 60px;
+  --tags-height: 32px;
+  --page-padding: var(--spacing-base);
+
+  /* ============================================================
+   *  表头内嵌筛选控件尺寸（全局）
+   *  单控件最小宽 88px，所在列最小 136px；
+   *  区间控件每格最小 60px，容器最小 128px，所在列最小 176px；
+   *  日期区间所在列最小 200px。
+   * ============================================================ */
+
+  --filter-input-min-width: 88px;
+  --filter-range-input-min-width: 60px;
+  --filter-range-min-width: 128px;
+
+  /* ============================================================
+   *  层级
+   * ============================================================ */
+
+  --z-index-normal: 1;
+  --z-index-dropdown: 1000;
+  --z-index-sticky: 1020;
+  --z-index-fixed: 1030;
+  --z-index-modal-backdrop: 1040;
+  --z-index-modal: 1050;
+  --z-index-popover: 2000;
+  --z-index-tooltip: 3000;
+  --z-index-message: 4000;
+
+  /* 兼容：z-index 旧名 */
+  --z-index-base: var(--z-index-normal);
+}

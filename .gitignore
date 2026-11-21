@@ -1,0 +1,30 @@
+# 依赖与构建产物
+node_modules/
+frontend/node_modules/
+frontend/dist/
+backend/target/
+
+# IDE 与系统文件
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# 日志与临时文件
+*.log
+logs/
+tmp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# 历史过程记录：正文含旧项目明文口令，不入库（家伟 2026-11-21 裁决）
+2026-11-13/initial-spec/work/mem_early.txt
+2026-11-13/initial-spec/work/mem_mid.txt
+2026-11-13/initial-spec/work/mem_filtered.txt
+
+# 本地环境变量实体（仅忽略本地覆盖文件，.env.development/.env.production 无凭据可提交）
+.env.local
+.env.*.local
+*.local.env

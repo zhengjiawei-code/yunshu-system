@@ -1,0 +1,582 @@
+[
+  {
+    "id": 1001,
+    "name": "系统管理",
+    "type": 1,
+    "icon": "Setting",
+    "path": "/system",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1101,
+        "name": "机构管理",
+        "type": 2,
+        "path": "/system/org",
+        "component": "system/org/index",
+        "terminal": "PC",
+        "source": "R01",
+        "portal": "ADMIN",
+        "remark": "集团架构+机构授权（能否发货/到货、现付未付开单、到付未付签收）"
+      },
+      {
+        "id": 1102,
+        "name": "用户管理",
+        "type": 2,
+        "path": "/system/user",
+        "component": "system/user/index",
+        "terminal": "PC",
+        "source": "R02",
+        "portal": "ADMIN",
+        "remark": "同 luohuo；账户直接功能授权，一账户多机构"
+      },
+      {
+        "id": 1103,
+        "name": "角色管理",
+        "type": 2,
+        "path": "/system/role",
+        "component": "system/role/index",
+        "terminal": "PC",
+        "source": "R03",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      },
+      {
+        "id": 1104,
+        "name": "路由管理",
+        "type": 2,
+        "path": "/system/route",
+        "component": "system/route/index",
+        "terminal": "PC",
+        "source": "R04",
+        "portal": "ADMIN",
+        "remark": "干线路由/短驳路由/转出直达路由，多 Tab"
+      },
+      {
+        "id": 1105,
+        "name": "菜单管理",
+        "type": 2,
+        "path": "/system/menu",
+        "component": "system/menu/index",
+        "terminal": "PC",
+        "source": "R05",
+        "portal": "ADMIN",
+        "remark": "多级目录自定义维护；树形表例外，不分页/合计/导出"
+      },
+      {
+        "id": 1106,
+        "name": "字典管理",
+        "type": 2,
+        "path": "/system/dict",
+        "component": "system/dict/index",
+        "terminal": "PC",
+        "source": "R06",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      },
+      {
+        "id": 1107,
+        "name": "承运商管理",
+        "type": 2,
+        "path": "/system/carrier",
+        "component": "system/carrier/index",
+        "terminal": "PC",
+        "source": "R07",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      },
+      {
+        "id": 1108,
+        "name": "系统配置",
+        "type": 2,
+        "path": "/system/config",
+        "component": "system/config/index",
+        "terminal": "PC",
+        "source": "R08",
+        "portal": "ADMIN",
+        "remark": "改单/删单/打印等配置，多 Tab"
+      },
+      {
+        "id": 1109,
+        "name": "区划管理",
+        "type": 2,
+        "path": "/system/region",
+        "component": "system/region/index",
+        "terminal": "PC",
+        "source": "R09",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      }
+    ]
+  },
+  {
+    "id": 1002,
+    "name": "运营管理",
+    "type": 1,
+    "icon": "Tickets",
+    "path": "/operation",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1201,
+        "name": "预开单",
+        "type": 2,
+        "path": "/operation/pre-create",
+        "component": "operation/preCreate/index",
+        "terminal": "PC",
+        "source": "R10",
+        "portal": "CLIENT",
+        "remark": "客户自助预开单入口（客户端），公司内部端菜单树不展示；客户只能提交/查看自己的预开单，不做揽收"
+      },
+      {
+        "id": 1202,
+        "name": "开单揽收",
+        "type": 2,
+        "path": "/operation/create",
+        "component": "operation/create/index",
+        "terminal": "PC",
+        "source": "R11",
+        "portal": "ADMIN",
+        "remark": "公司内部端。Tab1「接单」：接预开单→核对→确认揽收→转正式运单；Tab2「自开单」：开单员直接开单"
+      },
+      {
+        "id": 1203,
+        "name": "运单导入",
+        "type": 2,
+        "path": "/operation/import",
+        "component": "operation/import/index",
+        "terminal": "PC",
+        "source": "R12",
+        "portal": "ADMIN",
+        "remark": ""
+      },
+      {
+        "id": 1204,
+        "name": "运单管理",
+        "type": 2,
+        "path": "/operation/waybill",
+        "component": "operation/waybill/index",
+        "terminal": "PC",
+        "source": "R13",
+        "portal": "ADMIN",
+        "remark": ""
+      },
+      {
+        "id": 1205,
+        "name": "删单明细",
+        "type": 2,
+        "path": "/operation/deleted",
+        "component": "operation/deleted/index",
+        "terminal": "PC",
+        "source": "R14",
+        "portal": "ADMIN",
+        "remark": ""
+      }
+    ]
+  },
+  {
+    "id": 1003,
+    "name": "运输管理",
+    "type": 1,
+    "icon": "Van",
+    "path": "/transport",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1301,
+        "name": "装车配载",
+        "type": 2,
+        "path": "/transport/loading",
+        "component": "transport/loading/index",
+        "terminal": "PC,APP",
+        "source": "R15",
+        "portal": "ADMIN",
+        "remark": "多点装车/多点卸车/拆零配载（一单多车）；本期只做 PC"
+      }
+    ]
+  },
+  {
+    "id": 1004,
+    "name": "到货管理",
+    "type": 1,
+    "icon": "Download",
+    "path": "/arrival",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1401,
+        "name": "到货卸车",
+        "type": 2,
+        "path": "/arrival/unload",
+        "component": "arrival/unload/index",
+        "terminal": "PC,APP",
+        "source": "R16",
+        "portal": "ADMIN",
+        "remark": "同 luohuo；本期只做 PC"
+      }
+    ]
+  },
+  {
+    "id": 1005,
+    "name": "提货管理",
+    "type": 1,
+    "icon": "TakeawayBox",
+    "path": "/pickup",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1501,
+        "name": "客户提货",
+        "type": 2,
+        "path": "/pickup/customer",
+        "component": "pickup/customer/index",
+        "terminal": "PC,APP",
+        "source": "R17",
+        "portal": "ADMIN",
+        "remark": "同 luohuo；本期只做 PC"
+      }
+    ]
+  },
+  {
+    "id": 1006,
+    "name": "送货管理",
+    "type": 1,
+    "icon": "Location",
+    "path": "/delivery",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1601,
+        "name": "货物派送",
+        "type": 2,
+        "path": "/delivery/dispatch",
+        "component": "delivery/dispatch/index",
+        "terminal": "PC",
+        "source": "R18",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      }
+    ]
+  },
+  {
+    "id": 1007,
+    "name": "外转管理",
+    "type": 1,
+    "icon": "Switch",
+    "path": "/transfer",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1701,
+        "name": "货物转出",
+        "type": 2,
+        "path": "/transfer/out",
+        "component": "transfer/out/index",
+        "terminal": "PC",
+        "source": "R19",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      }
+    ]
+  },
+  {
+    "id": 1008,
+    "name": "签收管理",
+    "type": 1,
+    "icon": "Finished",
+    "path": "/sign",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1801,
+        "name": "运单签收",
+        "type": 2,
+        "path": "/sign/waybill",
+        "component": "sign/waybill/index",
+        "terminal": "PC,APP",
+        "source": "R20",
+        "portal": "ADMIN",
+        "remark": "同 luohuo；本期只做 PC"
+      }
+    ]
+  },
+  {
+    "id": 1009,
+    "name": "运力管理",
+    "type": 1,
+    "icon": "Van",
+    "path": "/capacity",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 1901,
+        "name": "司机管理",
+        "type": 2,
+        "path": "/capacity/driver",
+        "component": "capacity/driver/index",
+        "terminal": "PC",
+        "source": "R21",
+        "portal": "ADMIN",
+        "remark": "司机基础信息维护"
+      },
+      {
+        "id": 1902,
+        "name": "车辆管理",
+        "type": 2,
+        "path": "/capacity/vehicle",
+        "component": "capacity/vehicle/index",
+        "terminal": "PC",
+        "source": "R22",
+        "portal": "ADMIN",
+        "remark": "车辆基础信息维护"
+      },
+      {
+        "id": 1903,
+        "name": "车型管理",
+        "type": 2,
+        "path": "/capacity/vehicle-type",
+        "component": "capacity/vehicleType/index",
+        "terminal": "PC",
+        "source": "R23",
+        "portal": "ADMIN",
+        "remark": "车型、车长维护"
+      }
+    ]
+  },
+  {
+    "id": 1010,
+    "name": "客户管理",
+    "type": 1,
+    "icon": "User",
+    "path": "/customer",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 2001,
+        "name": "客户档案",
+        "type": 2,
+        "path": "/customer/archive",
+        "component": "customer/archive/index",
+        "terminal": "PC",
+        "source": "R24",
+        "portal": "ADMIN",
+        "remark": "发货客户基础信息维护（原名与一级同名，已改为“客户档案”）"
+      }
+    ]
+  },
+  {
+    "id": 1011,
+    "name": "异常管理",
+    "type": 1,
+    "icon": "Warning",
+    "path": "/exception",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 2101,
+        "name": "异常上报",
+        "type": 2,
+        "path": "/exception/report",
+        "component": "exception/report/index",
+        "terminal": "PC",
+        "source": "R25",
+        "portal": "ADMIN",
+        "remark": ""
+      },
+      {
+        "id": 2102,
+        "name": "异常处理",
+        "type": 2,
+        "path": "/exception/handle",
+        "component": "exception/handle/index",
+        "terminal": "PC",
+        "source": "R26",
+        "portal": "ADMIN",
+        "remark": ""
+      }
+    ]
+  },
+  {
+    "id": 1012,
+    "name": "回单管理",
+    "type": 1,
+    "icon": "Document",
+    "path": "/receipt",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 2201,
+        "name": "回单寄出",
+        "type": 2,
+        "path": "/receipt/send",
+        "component": "receipt/send/index",
+        "terminal": "PC",
+        "source": "R27",
+        "portal": "ADMIN",
+        "remark": "末端网点回寄回单"
+      },
+      {
+        "id": 2202,
+        "name": "回单接收",
+        "type": 2,
+        "path": "/receipt/receive",
+        "component": "receipt/receive/index",
+        "terminal": "PC",
+        "source": "R28",
+        "portal": "ADMIN",
+        "remark": "公司接收末端网点回寄的回单"
+      },
+      {
+        "id": 2203,
+        "name": "回单发放",
+        "type": 2,
+        "path": "/receipt/issue",
+        "component": "receipt/issue/index",
+        "terminal": "PC",
+        "source": "R29",
+        "portal": "ADMIN",
+        "remark": "公司向发货客户发放回单"
+      }
+    ]
+  },
+  {
+    "id": 1013,
+    "name": "财务管理",
+    "type": 1,
+    "icon": "Money",
+    "path": "/finance",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 2301,
+        "name": "核销管理",
+        "type": 2,
+        "path": "/finance/verification",
+        "component": "finance/verification/index",
+        "terminal": "PC",
+        "source": "R30",
+        "portal": "ADMIN",
+        "remark": "运单费用+车次费用核销，参考 luohuo"
+      },
+      {
+        "id": 2302,
+        "name": "网点对账",
+        "type": 2,
+        "path": "/finance/branch-recon",
+        "component": "finance/branchRecon/index",
+        "terminal": "PC",
+        "source": "R31",
+        "portal": "ADMIN",
+        "remark": "与末端网点对账结算，参考 luohuo"
+      },
+      {
+        "id": 2303,
+        "name": "承运商对账",
+        "type": 2,
+        "path": "/finance/carrier-recon",
+        "component": "finance/carrierRecon/index",
+        "terminal": "PC",
+        "source": "R32",
+        "portal": "ADMIN",
+        "remark": "与外转承运商对账结算，参考 luohuo"
+      },
+      {
+        "id": 2304,
+        "name": "费用录入",
+        "type": 2,
+        "path": "/finance/fee-entry",
+        "component": "finance/feeEntry/index",
+        "terminal": "PC",
+        "source": "R33",
+        "portal": "ADMIN",
+        "remark": "末端送货费、中转费快速录入"
+      },
+      {
+        "id": 2305,
+        "name": "账单中心",
+        "type": 2,
+        "path": "/finance/bill-center",
+        "component": "finance/billCenter/index",
+        "terminal": "PC",
+        "source": "R34",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      },
+      {
+        "id": 2306,
+        "name": "收支方式",
+        "type": 2,
+        "path": "/finance/pay-method",
+        "component": "finance/payMethod/index",
+        "terminal": "PC",
+        "source": "R35",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      },
+      {
+        "id": 2307,
+        "name": "科目管理",
+        "type": 2,
+        "path": "/finance/fee-subject",
+        "component": "finance/feeSubject/index",
+        "terminal": "PC",
+        "source": "R36",
+        "portal": "ADMIN",
+        "remark": "同 luohuo"
+      },
+      {
+        "id": 2308,
+        "name": "账户管理",
+        "type": 2,
+        "path": "/finance/account",
+        "component": "finance/account/index",
+        "terminal": "PC",
+        "source": "R37",
+        "portal": "ADMIN",
+        "remark": "网点预充值、提现、余额管理"
+      }
+    ]
+  },
+  {
+    "id": 1014,
+    "name": "审核管理",
+    "type": 1,
+    "icon": "DocumentChecked",
+    "path": "/audit",
+    "portal": "ADMIN",
+    "children": [
+      {
+        "id": 2401,
+        "name": "删单审批",
+        "type": 2,
+        "path": "/audit/delete",
+        "component": "audit/delete/index",
+        "terminal": "PC",
+        "source": "R38",
+        "portal": "ADMIN",
+        "remark": ""
+      },
+      {
+        "id": 2402,
+        "name": "改单审批",
+        "type": 2,
+        "path": "/audit/modify",
+        "component": "audit/modify/index",
+        "terminal": "PC",
+        "source": "R39",
+        "portal": "ADMIN",
+        "remark": ""
+      },
+      {
+        "id": 2403,
+        "name": "取消签收审批",
+        "type": 2,
+        "path": "/audit/cancel-sign",
+        "component": "audit/cancelSign/index",
+        "terminal": "PC",
+        "source": "R40",
+        "portal": "ADMIN",
+        "remark": ""
+      }
+    ]
+  }
+]
