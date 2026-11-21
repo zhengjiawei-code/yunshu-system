@@ -21,20 +21,15 @@
               <div class="action-right">
                 <el-button @click="resetRouteFilters">重置</el-button>
                 <el-button :icon="Download" @click="handleRouteExport">导出</el-button>
-                <el-popover placement="bottom-end" :width="560" trigger="click">
-                  <template #reference>
-                    <el-button :icon="Setting">列设置</el-button>
-                  </template>
-                  <column-setting
-                    :schema="routeSchema"
-                    :states="routeStates"
-                    :loading="routeColumnLoading"
-                    :saving="routeColumnSaving"
-                    @update:states="onRouteStatesUpdate"
-                    @save="saveRouteColumns"
-                    @reset="resetRouteColumns"
-                  />
-                </el-popover>
+                <column-setting-trigger
+                  :schema="routeSchema"
+                  :states="routeStates"
+                  :loading="routeColumnLoading"
+                  :saving="routeColumnSaving"
+                  @update:states="onRouteStatesUpdate"
+                  @save="saveRouteColumns"
+                  @reset="resetRouteColumns"
+                />
                 <el-pagination
                   v-model:current-page="routePage"
                   v-model:page-size="routePageSize"
@@ -353,47 +348,36 @@
                 />
                 <span class="transfer-toolbar__hint">路由按网点配置，切换网点后区划库与已配置列表同步刷新</span>
               </div>
-              <div class="transfer-toolbar__right">
-                <el-button v-if="isHq" @click="openBatchGrant('transfer')">批量授权</el-button>
-                <el-button @click="resetTransferFilters">重置</el-button>
-                <el-button :icon="Download" @click="handleTransferExport">导出</el-button>
-                <el-popover placement="bottom-end" :width="560" trigger="click">
-                  <template #reference>
-                    <el-button :icon="Setting">列设置</el-button>
-                  </template>
-                  <column-setting
-                    :schema="transferSchema"
-                    :states="transferStates"
-                    :loading="transferColumnLoading"
-                    :saving="transferColumnSaving"
-                    @update:states="onTransferStatesUpdate"
-                    @save="saveTransferColumns"
-                    @reset="resetTransferColumns"
-                  />
-                </el-popover>
-              </div>
             </div>
 
             <div class="transfer-columns">
               <section class="transfer-pane">
                 <div class="pane-header">
-                  <span class="pane-title">区划库</span>
+                  <div class="pane-title-group">
+                    <span class="pane-title">区划库</span>
+                    <el-input
+                      v-model="regionKeyword"
+                      class="pane-search"
+                      size="small"
+                      clearable
+                      placeholder="输入省份、城市、区县或乡镇名称"
+                      @input="onRegionFilterInput"
+                      @keyup.enter="reloadRegionFromFirstPage"
+                      @clear="reloadRegionFromFirstPage"
+                    />
+                  </div>
                   <div class="pane-header__actions">
                     <span class="pane-sub">共 {{ regionTotal }} 条</span>
-                    <el-popover placement="bottom-end" :width="560" trigger="click">
-                      <template #reference>
-                        <el-button size="small" :icon="Setting">列设置</el-button>
-                      </template>
-                      <column-setting
-                        :schema="regionSchema"
-                        :states="regionStates"
-                        :loading="regionColumnLoading"
-                        :saving="regionColumnSaving"
-                        @update:states="onRegionStatesUpdate"
-                        @save="saveRegionColumns"
-                        @reset="resetRegionColumns"
-                      />
-                    </el-popover>
+                    <column-setting-trigger
+                      size="small"
+                      :schema="regionSchema"
+                      :states="regionStates"
+                      :loading="regionColumnLoading"
+                      :saving="regionColumnSaving"
+                      @update:states="onRegionStatesUpdate"
+                      @save="saveRegionColumns"
+                      @reset="resetRegionColumns"
+                    />
                   </div>
                 </div>
                 <div class="pane-table">
@@ -415,100 +399,17 @@
                   >
                     <el-table-column type="selection" width="40" :selectable="regionSelectable" />
                     <el-table-column v-if="regionVisible('level')" prop="level" label="级别" width="110" align="center">
-                      <template #header>
-                        <div class="col-head">
-                          <span class="col-head__label">级别</span>
-                          <column-filter
-                            v-if="regionCol('level').filterType !== 'none'"
-                            v-model="regionFilters.level"
-                            :type="regionCol('level').filterType"
-                            :select-multiple="regionCol('level').selectMultiple === true"
-                            :options="regionCol('level').filterOptions"
-                            @change="reloadRegionFromFirstPage"
-                          />
-                        </div>
-                      </template>
                       <template #default="{ row }">
                         <status-tag type="info" :text="levelText(row.level)" />
                       </template>
                     </el-table-column>
-                    <el-table-column v-if="regionVisible('provinceName')" prop="provinceName" label="省" min-width="120" show-overflow-tooltip>
-                      <template #header>
-                        <div class="col-head">
-                          <span class="col-head__label">省</span>
-                          <column-filter
-                            v-if="regionCol('provinceName').filterType !== 'none'"
-                            v-model="regionFilters.provinceCode"
-                            :type="regionCol('provinceName').filterType"
-                            :options="provinceFilterOptions"
-                            @change="handleProvinceFilterChange"
-                          />
-                        </div>
-                      </template>
-                    </el-table-column>
-                    <el-table-column v-if="regionVisible('cityName')" prop="cityName" label="市" min-width="120" show-overflow-tooltip>
-                      <template #header>
-                        <div class="col-head">
-                          <span class="col-head__label">市</span>
-                          <column-filter
-                            v-if="regionCol('cityName').filterType !== 'none'"
-                            v-model="regionFilters.cityCode"
-                            :type="regionCol('cityName').filterType"
-                            :options="cityFilterOptions"
-                            @change="reloadRegionFromFirstPage"
-                          />
-                        </div>
-                      </template>
-                    </el-table-column>
-                    <el-table-column v-if="regionVisible('districtName')" prop="districtName" label="区县" min-width="120" show-overflow-tooltip>
-                      <template #header>
-                        <div class="col-head">
-                          <span class="col-head__label">区县</span>
-                          <column-filter
-                            v-if="regionCol('districtName').filterType !== 'none'"
-                            v-model="regionFilters.districtKeyword"
-                            :type="regionCol('districtName').filterType"
-                            :filter-mode="regionCol('districtName').filterMode"
-                            :text-mode="regionTextModes.districtKeyword"
-                            :options="regionCol('districtName').filterOptions"
-                            @update:mode="(mode) => (regionTextModes.districtKeyword = mode)"
-                            @change="onRegionFilterInput"
-                          />
-                        </div>
-                      </template>
-                    </el-table-column>
+                    <el-table-column v-if="regionVisible('provinceName')" prop="provinceName" label="省" min-width="120" show-overflow-tooltip />
+                    <el-table-column v-if="regionVisible('cityName')" prop="cityName" label="市" min-width="120" show-overflow-tooltip />
+                    <el-table-column v-if="regionVisible('districtName')" prop="districtName" label="区县" min-width="120" show-overflow-tooltip />
                     <el-table-column v-if="regionVisible('townName')" label="乡级" min-width="130" show-overflow-tooltip>
-                      <template #header>
-                        <div class="col-head">
-                          <span class="col-head__label">乡级</span>
-                          <column-filter
-                            v-if="regionCol('townName').filterType !== 'none'"
-                            v-model="regionFilters.townKeyword"
-                            :type="regionCol('townName').filterType"
-                            :filter-mode="regionCol('townName').filterMode"
-                            :text-mode="regionTextModes.townKeyword"
-                            :options="regionCol('townName').filterOptions"
-                            @update:mode="(mode) => (regionTextModes.townKeyword = mode)"
-                            @change="onRegionFilterInput"
-                          />
-                        </div>
-                      </template>
                       <template #default="{ row }">{{ row.level === 4 ? row.name : '—' }}</template>
                     </el-table-column>
                     <el-table-column v-if="regionVisible('configured')" label="配置" width="110" align="center">
-                      <template #header>
-                        <div class="col-head">
-                          <span class="col-head__label">配置</span>
-                          <column-filter
-                            v-if="regionCol('configured').filterType !== 'none'"
-                            v-model="regionFilters.configured"
-                            :type="regionCol('configured').filterType"
-                            :select-multiple="regionCol('configured').selectMultiple === true"
-                            :options="regionCol('configured').filterOptions"
-                            @change="reloadRegionFromFirstPage"
-                          />
-                        </div>
-                      </template>
                       <template #default="{ row }">
                         <span v-if="row.configured" class="configured-tag">已配置</span>
                         <span v-else class="muted">未配置</span>
@@ -557,29 +458,36 @@
                     </span>
                     <span class="pane-sub pane-sub--total">共 {{ transferTotal }} 条</span>
                   </div>
-                  <div class="pane-actions">
-                    <el-dropdown trigger="click" :disabled="!selectedTransferRows.length" @command="handleSwitchTypeCommand">
-                      <el-button size="small" :disabled="!selectedTransferRows.length">切换类型</el-button>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item :command="1">设为直达</el-dropdown-item>
-                          <el-dropdown-item :command="2">设为外转</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="openCarrierBatch">
-                      挂承运商
-                    </el-button>
-                    <el-dropdown trigger="click" :disabled="!selectedTransferRows.length" @command="handleStatusCommand">
-                      <el-button size="small" :disabled="!selectedTransferRows.length">状态</el-button>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item :command="true">启用</el-dropdown-item>
-                          <el-dropdown-item :command="false">停用</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                  </div>
+                </div>
+                <div class="pane-toolbar">
+                  <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(1)">
+                    切直达
+                  </el-button>
+                  <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(2)">
+                    切外转
+                  </el-button>
+                  <el-button size="small" :disabled="!selectedTransferRows.length" @click="openCarrierBatch">
+                    挂承运商
+                  </el-button>
+                  <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(true)">
+                    启用
+                  </el-button>
+                  <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(false)">
+                    停用
+                  </el-button>
+                  <el-button v-if="isHq" size="small" @click="openBatchGrant('transfer')">批量授权</el-button>
+                  <el-button size="small" @click="resetTransferFilters">重置</el-button>
+                  <el-button size="small" :icon="Download" @click="handleTransferExport">导出</el-button>
+                  <column-setting-trigger
+                    size="small"
+                    :schema="transferSchema"
+                    :states="transferStates"
+                    :loading="transferColumnLoading"
+                    :saving="transferColumnSaving"
+                    @update:states="onTransferStatesUpdate"
+                    @save="saveTransferColumns"
+                    @reset="resetTransferColumns"
+                  />
                 </div>
                 <div class="pane-table">
                   <smart-table
@@ -900,7 +808,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Setting } from '@element-plus/icons-vue'
+import { Download } from '@element-plus/icons-vue'
 import type { CarrierRecord } from '@/types/carrier'
 import type { ManageScopeNode } from '@/types/dept'
 import type {
@@ -923,11 +831,10 @@ import {
 } from '@/api/system/route'
 import { getCarrierPage } from '@/api/system/carrier'
 import { getManageScope } from '@/api/system/dept'
-import { getRegionChildren } from '@/api/system/region'
 import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import ColumnFilter from '@/components/base/ColumnFilter.vue'
-import ColumnSetting from '@/components/base/ColumnSetting.vue'
+import ColumnSettingTrigger from '@/components/base/ColumnSettingTrigger.vue'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
@@ -1044,32 +951,17 @@ const transferSchema = reactive<ColumnDef[]>([
 ])
 
 const regionSchema = reactive<ColumnDef[]>([
-  {
-    key: 'level',
-    label: '级别',
-    prop: 'level',
-    filterType: 'select',
-    sortable: true,
-    filterOptions: [
-      { label: '市', value: 2 },
-      { label: '区县', value: 3 },
-      { label: '乡级', value: 4 }
-    ]
-  },
-  { key: 'provinceName', label: '省', prop: 'provinceName', filterType: 'select', sortable: false, filterOptions: [] },
-  { key: 'cityName', label: '市', prop: 'cityName', filterType: 'select', sortable: false, filterOptions: [] },
-  { key: 'districtName', label: '区县', prop: 'districtName', filterType: 'text', sortable: false },
-  { key: 'townName', label: '乡级', elKey: 'label:乡级', filterType: 'text', sortable: false },
+  { key: 'level', label: '级别', prop: 'level', filterType: 'none', sortable: true },
+  { key: 'provinceName', label: '省', prop: 'provinceName', filterType: 'none', sortable: false },
+  { key: 'cityName', label: '市', prop: 'cityName', filterType: 'none', sortable: false },
+  { key: 'districtName', label: '区县', prop: 'districtName', filterType: 'none', sortable: false },
+  { key: 'townName', label: '乡级', elKey: 'label:乡级', filterType: 'none', sortable: false },
   {
     key: 'configured',
     label: '配置',
     elKey: 'label:配置',
-    filterType: 'select',
-    sortable: false,
-    filterOptions: [
-      { label: '已配置', value: true },
-      { label: '未配置', value: false }
-    ]
+    filterType: 'none',
+    sortable: false
   }
 ])
 
@@ -1123,16 +1015,13 @@ const {
   states: regionStates,
   loading: regionColumnLoading,
   saving: regionColumnSaving,
-  col: regionCol,
   isVisible: regionVisible,
   columnOrder: regionColumnOrder,
   hiddenKeys: regionHiddenKeys,
   sortableMap: regionSortableMap,
   load: loadRegionColumnConfig,
   save: saveRegionColumnConfig,
-  reset: resetRegionColumnConfig,
-  defaultFiltersRaw: regionDefaultFilters,
-  filterModesParam: regionFilterModesParam
+  reset: resetRegionColumnConfig
 } = useColumnConfig('system:route-library', regionSchema)
 
 const activeTab = ref<'route' | 'transfer'>('route')
@@ -1276,35 +1165,7 @@ const regionPage = ref(1)
 const regionPageSize = ref(20)
 const regionLoading = ref(false)
 const regionSort = reactive<{ sortBy?: string; sortOrder?: 'asc' | 'desc' }>({})
-const regionFilters = reactive<{
-  level: 2 | 3 | 4 | Array<2 | 3 | 4> | undefined
-  provinceCode: string | undefined
-  cityCode: string | undefined
-  districtKeyword: string
-  townKeyword: string
-  configured: boolean | boolean[] | undefined
-}>({
-  level: undefined,
-  provinceCode: undefined,
-  cityCode: undefined,
-  districtKeyword: '',
-  townKeyword: '',
-  configured: undefined
-})
-
-/** 区划库文本筛选列 key → 后端参数名 */
-const REGION_TEXT_FIELDS: Record<string, string> = {
-  districtKeyword: 'districtKeyword',
-  townKeyword: 'townKeyword'
-}
-
-/** 表头当前选择的文本匹配方式 */
-const regionTextModes = reactive<Record<string, TextMatchMode>>({
-  districtKeyword: 'like',
-  townKeyword: 'like'
-})
-const provinceFilterOptions = ref<Array<{ label: string; value: string }>>([])
-const cityFilterOptions = ref<Array<{ label: string; value: string }>>([])
+const regionKeyword = ref('')
 const selectedRegionCodes = ref<string[]>([])
 const carrierOptions = ref<CarrierRecord[]>([])
 const deptFilterOptions = computed(() => flattenDeptOptions(scopeTree.value))
@@ -1775,31 +1636,8 @@ function onTransferSelection(rows: TransferRecord[]) {
   selectedTransferRows.value = rows
 }
 
-function hasRegionLibraryFilter(): boolean {
-  const filled = (value: unknown) =>
-    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== ''
-  return (
-    filled(regionFilters.level) ||
-    filled(regionFilters.provinceCode) ||
-    filled(regionFilters.cityCode) ||
-    regionFilters.districtKeyword.trim() !== '' ||
-    regionFilters.townKeyword.trim() !== '' ||
-    filled(regionFilters.configured)
-  )
-}
-
-function buildRegionFilterModes(): string | undefined {
-  const modes = regionFilterModesParam(REGION_TEXT_FIELDS, regionTextModes)
-  return Object.keys(modes).length ? JSON.stringify(modes) : undefined
-}
-
 async function loadRegionLibrary() {
   if (!transferApplyDeptId.value) {
-    regionRows.value = []
-    regionTotal.value = 0
-    return
-  }
-  if (!hasRegionLibraryFilter()) {
     regionRows.value = []
     regionTotal.value = 0
     return
@@ -1808,13 +1646,7 @@ async function loadRegionLibrary() {
   try {
     const result = await getRegionLibrary({
       applyDeptId: transferApplyDeptId.value,
-      level: regionFilters.level,
-      configured: regionFilters.configured,
-      provinceCode: regionFilters.provinceCode,
-      cityCode: regionFilters.cityCode,
-      districtKeyword: regionFilters.districtKeyword.trim() || undefined,
-      townKeyword: regionFilters.townKeyword.trim() || undefined,
-      filterModes: buildRegionFilterModes(),
+      keyword: regionKeyword.value.trim() || undefined,
       sortBy: regionSort.sortBy,
       sortOrder: regionSort.sortOrder,
       pageNum: regionPage.value,
@@ -1854,33 +1686,6 @@ function onRegionFilterInput() {
   regionFilterTimer = window.setTimeout(() => {
     reloadRegionFromFirstPage()
   }, 300)
-}
-
-async function loadProvinceFilterOptions() {
-  try {
-    const provinces = await getRegionChildren('0')
-    provinceFilterOptions.value = provinces.map((item) => ({ label: item.name, value: item.code }))
-    const provinceColumn = regionSchema.find((item) => item.key === 'provinceName')
-    if (provinceColumn) provinceColumn.filterOptions = provinceFilterOptions.value
-  } catch {
-    // 省级选项失败不影响主流程
-  }
-}
-
-async function handleProvinceFilterChange() {
-  regionFilters.cityCode = undefined
-  cityFilterOptions.value = []
-  if (regionFilters.provinceCode) {
-    try {
-      const cities = await getRegionChildren(regionFilters.provinceCode)
-      cityFilterOptions.value = cities.map((item) => ({ label: item.name, value: item.code }))
-    } catch {
-      // 市级选项失败不阻断查询
-    }
-  }
-  const cityColumn = regionSchema.find((item) => item.key === 'cityName')
-  if (cityColumn) cityColumn.filterOptions = cityFilterOptions.value
-  reloadRegionFromFirstPage()
 }
 
 async function handleJoinRegions() {
@@ -1925,14 +1730,6 @@ async function handleRemoveSelected() {
   }
   selectedTransferRows.value = []
   await Promise.all([loadTransfers(), loadRegionLibrary()])
-}
-
-function handleSwitchTypeCommand(command: number) {
-  void handleSwitchType(command as 1 | 2)
-}
-
-function handleStatusCommand(command: boolean) {
-  void handleBatchStatus(command)
 }
 
 async function handleSwitchType(target: 1 | 2, row?: TransferRecord) {
@@ -2043,12 +1840,7 @@ function resetTransferFilters() {
   transferSort.sortOrder = undefined
   transferTableRef.value?.getTable()?.clearSort?.()
 
-  regionFilters.level = undefined
-  regionFilters.provinceCode = undefined
-  regionFilters.cityCode = undefined
-  regionFilters.districtKeyword = ''
-  regionFilters.townKeyword = ''
-  regionFilters.configured = undefined
+  regionKeyword.value = ''
   regionSort.sortBy = undefined
   regionSort.sortOrder = undefined
   regionTableRef.value?.getTable()?.clearSort?.()
@@ -2138,48 +1930,6 @@ function applyTransferTextDefault(key: string, value: unknown, setter: (value: s
     const item = value as { mode?: unknown; value?: unknown }
     setter(item.value === null || item.value === undefined ? '' : String(item.value))
     if (isTextMatchMode(item.mode)) transferTextModes[key] = item.mode
-    return
-  }
-  setter(String(value))
-}
-
-function applyRegionDefaultFilters() {
-  const defaults = regionDefaultFilters()
-  applyRegionTextDefault(
-    'districtKeyword',
-    defaults.districtName,
-    (value) => (regionFilters.districtKeyword = value)
-  )
-  applyRegionTextDefault(
-    'townKeyword',
-    defaults.townName,
-    (value) => (regionFilters.townKeyword = value)
-  )
-
-  const levels = toValueList(defaults.level).filter(
-    (item): item is 2 | 3 | 4 => item === 2 || item === 3 || item === 4
-  )
-  if (levels.length) {
-    regionFilters.level = levels.length === 1 ? levels[0] : levels
-  }
-
-  const configureds = toValueList(defaults.configured).filter(
-    (item): item is boolean => typeof item === 'boolean'
-  )
-  if (configureds.length) {
-    regionFilters.configured = configureds.length === 1 ? configureds[0] : configureds
-  }
-
-  if (defaults.provinceName != null) regionFilters.provinceCode = String(defaults.provinceName)
-  if (defaults.cityName != null) regionFilters.cityCode = String(defaults.cityName)
-}
-
-function applyRegionTextDefault(key: string, value: unknown, setter: (value: string) => void) {
-  if (value === null || value === undefined) return
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    const item = value as { mode?: unknown; value?: unknown }
-    setter(item.value === null || item.value === undefined ? '' : String(item.value))
-    if (isTextMatchMode(item.mode)) regionTextModes[key] = item.mode
     return
   }
   setter(String(value))
@@ -2311,7 +2061,6 @@ onMounted(async () => {
     loadRouteColumnConfig(),
     loadTransferColumnConfig(),
     loadRegionColumnConfig(),
-    loadProvinceFilterOptions(),
     loadCarrierFilterOptions()
   ])
   applyRouteDefaultFilters()
@@ -2322,7 +2071,6 @@ onMounted(async () => {
   const carrierColumn = transferSchema.find((item) => item.key === 'carrierName')
   if (carrierColumn) carrierColumn.filterOptions = carrierFilterOptions.value
   applyTransferDefaultFilters()
-  applyRegionDefaultFilters()
   await loadRoutes()
 })
 </script>
@@ -2456,6 +2204,7 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 10px;
+  flex-wrap: nowrap;
 }
 
 .transfer-toolbar__left {
@@ -2483,11 +2232,38 @@ onMounted(async () => {
   text-overflow: ellipsis;
 }
 
-.transfer-toolbar__right {
+/* 窄屏优先保证九按钮单行：隐藏提示文案，把宽度让给按钮组 */
+@media (max-width: 1360px) {
+  .transfer-toolbar__hint {
+    display: none;
+  }
+}
+
+/* 右栏列表配套操作行：九按钮单行、不换行，位于标题行与表格之间 */
+.pane-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-height: 28px;
+  padding-bottom: 8px;
+  overflow: hidden;
+}
+
+.pane-toolbar :deep(.el-button) {
+  font-size: 12px;
+  height: 28px;
+  padding: 0 6px;
+}
+
+.pane-toolbar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.pane-toolbar :deep(.column-setting-trigger) {
+  width: 28px;
+  padding: 0;
 }
 
 .transfer-columns {
@@ -2498,8 +2274,8 @@ onMounted(async () => {
 }
 
 .transfer-pane {
-  /* 两栏等宽：flex-basis 0 + flex-grow 1，可用宽度扣掉中间操作列与间距后 1:1 均分 */
-  flex: 1 1 0;
+  /* 左栏区划库占 43%，右栏已配置路由占 57%：给右栏九按钮单行留足宽度 */
+  flex: 43 1 0;
   min-width: 0;
   /* flex 子项默认 min-height:auto 会让表格撑开容器、导致内容被裁切且不出现内部滚动条 */
   min-height: 0;
@@ -2557,27 +2333,24 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+/* 区划名称搜索：放在左栏标题旁，不受列显隐影响 */
+.pane-search {
+  flex: none;
+  width: 190px;
+}
+
 .pane-sub--total {
   flex-shrink: 0;
-}
-
-.pane-actions {
-  display: flex;
-  gap: 4px;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.pane-actions::-webkit-scrollbar {
-  display: none;
 }
 
 .pane-table {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.transfer-pane--routes {
+  flex: 57 1 0;
 }
 
 /* 两栏底部同规格分页区：固定高度，保证分页与滚动条底部 y 坐标一致 */

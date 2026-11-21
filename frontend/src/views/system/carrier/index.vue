@@ -17,20 +17,15 @@
           <el-button @click="resetFilters">重置</el-button>
           <el-button :icon="Download" @click="handleExport">导出</el-button>
 
-          <el-popover placement="bottom-end" :width="560" trigger="click">
-            <template #reference>
-              <el-button :icon="Setting">列设置</el-button>
-            </template>
-            <column-setting
-              :schema="schema"
-              :states="states"
-              :loading="columnLoading"
-              :saving="columnSaving"
-              @update:states="onStatesUpdate"
-              @save="handleColumnSave"
-              @reset="handleColumnReset"
-            />
-          </el-popover>
+          <column-setting-trigger
+            :schema="schema"
+            :states="states"
+            :loading="columnLoading"
+            :saving="columnSaving"
+            @update:states="onStatesUpdate"
+            @save="handleColumnSave"
+            @reset="handleColumnReset"
+          />
 
           <el-pagination
             v-model:current-page="page"
@@ -299,7 +294,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Setting } from '@element-plus/icons-vue'
+import { Download } from '@element-plus/icons-vue'
 import type { CarrierQuery, CarrierRecord } from '@/types/carrier'
 import type { ManageScopeNode } from '@/types/dept'
 import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
@@ -310,7 +305,7 @@ import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import ColumnFilter from '@/components/base/ColumnFilter.vue'
-import ColumnSetting from '@/components/base/ColumnSetting.vue'
+import ColumnSettingTrigger from '@/components/base/ColumnSettingTrigger.vue'
 import CarrierFormDrawer from './components/CarrierFormDrawer.vue'
 
 defineOptions({ name: 'SystemCarrier' })

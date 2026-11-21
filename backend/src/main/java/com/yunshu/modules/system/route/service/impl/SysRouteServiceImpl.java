@@ -392,6 +392,8 @@ public class SysRouteServiceImpl implements SysRouteService {
                                              List<Boolean> configuredList, String parentCode,
                                              String provinceCode, String cityCode,
                                              String districtKeyword, String townKeyword,
+                                             String districtCode, String townCode,
+                                             String nameKeyword,
                                              String filterModes, String sortBy, String sortOrder,
                                              long pageNum, long pageSize) {
         UserOrgService.UserOrg org = userOrgService.current();
@@ -403,12 +405,11 @@ public class SysRouteServiceImpl implements SysRouteService {
         String cityPrefix = trim(cityCode);
         String districtKw = trim(districtKeyword);
         String townKw = trim(townKeyword);
+        String districtPrefix = trim(districtCode);
+        String townPrefix = trim(townCode);
+        String nameKw = trim(nameKeyword);
         boolean hasLevel = !CollectionUtils.isEmpty(levelList);
         boolean hasConfigured = !CollectionUtils.isEmpty(configuredList);
-        if (kw == null && !hasLevel && parent == null && provincePrefix == null && cityPrefix == null
-                && districtKw == null && townKw == null && !hasConfigured) {
-            throw new BizException("请输入筛选条件后再查询区划");
-        }
         if (hasLevel && levelList.stream().anyMatch(item -> item == null || item < 2 || item > 4)) {
             throw new BizException("区划级别仅支持市、区县、乡级");
         }
@@ -445,13 +446,25 @@ public class SysRouteServiceImpl implements SysRouteService {
                         SysRegion::getCode, provincePrefix == null ? "" : provincePrefix.substring(0, 2))
                 .likeRight(cityPrefix != null && cityPrefix.length() >= 4,
                         SysRegion::getCode, cityPrefix == null ? "" : cityPrefix.substring(0, 4))
-                .and(kw != null, q -> q.like(SysRegion::getCode, kw)
-                        .or().like(SysRegion::getName, kw)
-                        .or().like(SysRegion::getFullName, kw));
+                .likeRight(districtPrefix != null && districtPrefix.length() >= 6,
+                        SysRegion::getCode, districtPrefix == null ? "" : districtPrefix.substring(0, 6))
+                .likeRight(townPrefix != null, SysRegion::getCode, townPrefix == null ? "" : townPrefix)
+                // 关键词按名称模糊命中；命中多级时只取最高一级（如“山东”命中省与同名乡镇，只按山东省展开），
+                // 再按该级别编码前缀带出全部下级（省2位/市4位/区县6位/乡级全码），条件落在 SQL 层保证分页总数准确
+                .apply(kw != null,
+                        "EXISTS (SELECT 1 FROM sys_region kwr WHERE kwr.status = 1 AND kwr.name LIKE {0} "
+                                + "AND kwr.level = (SELECT MIN(k2.level) FROM sys_region k2 "
+                                + "WHERE k2.status = 1 AND k2.name LIKE {1}) "
+                                + "AND sys_region.code LIKE CONCAT(CASE kwr.level "
+                                + "WHEN 1 THEN LEFT(kwr.code, 2) WHEN 2 THEN LEFT(kwr.code, 4) "
+                                + "WHEN 3 THEN LEFT(kwr.code, 6) ELSE kwr.code END, '%'))",
+                        "%" + kw + "%", "%" + kw + "%");
         applyRegionTextCondition(wrapper, SysRegion::getFullName, districtKw,
                 TextFilterMode.modeOf(modes, "districtKeyword"));
         applyRegionTextCondition(wrapper, SysRegion::getName, townKw,
                 TextFilterMode.modeOf(modes, "townKeyword"));
+        // 区划名称：任意级别按名称/全称匹配，与级别/省/市/区县/乡级/配置可叠加
+        applyRegionNameCondition(wrapper, nameKw, TextFilterMode.modeOf(modes, "nameKeyword"));
         // 服务端排序：仅开放 level/name，其他字段忽略并回落编码升序
         boolean desc = "desc".equalsIgnoreCase(trim(sortOrder));
         String sortField = trim(sortBy);
@@ -1195,6 +1208,27 @@ public class SysRouteServiceImpl implements SysRouteService {
             }
             default -> wrapper.like(column, keyword);
         }
+    }
+
+    /**
+     * 区划名称筛选：同时匹配名称与全称，让“广东”这类上级关键词能命中其下属区划；
+     * 不等于语义需要两个字段同时不命中，否则会放大结果。
+     */
+    private void applyRegionNameCondition(LambdaQueryWrapper<SysRegion> wrapper,
+                                          String keyword, TextFilterMode mode) {
+        if (keyword == null) {
+            return;
+        }
+        TextFilterMode effective = mode == null ? TextFilterMode.LIKE : mode;
+        if (effective == TextFilterMode.NE) {
+            wrapper.ne(SysRegion::getName, keyword).ne(SysRegion::getFullName, keyword);
+            return;
+        }
+        wrapper.and(q -> {
+            applyRegionTextCondition(q, SysRegion::getName, keyword, effective);
+            q.or();
+            applyRegionTextCondition(q, SysRegion::getFullName, keyword, effective);
+        });
     }
 
     private boolean grantFilterMatch(String grantScope, List<SysRouteCompany> rows) {

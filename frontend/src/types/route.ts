@@ -155,6 +155,9 @@ export interface RegionLibraryQuery {
   cityCode?: string
   districtKeyword?: string
   townKeyword?: string
+  districtCode?: string
+  townCode?: string
+  nameKeyword?: string
   filterModes?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'

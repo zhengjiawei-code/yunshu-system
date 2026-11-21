@@ -2,6 +2,7 @@ package com.yunshu.modules.system.role.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
 import com.yunshu.common.filter.TextFilterMode;
 import com.yunshu.modules.auth.service.PermissionService;
@@ -117,6 +118,9 @@ public class SysRoleServiceImpl implements SysRoleService {
         role.setRoleDesc(trim(request.getRoleDesc()));
         role.setStatus(request.getStatus() == null || request.getStatus());
         role.setRemark(trim(request.getRemark()));
+        Long operator = currentUserId();
+        role.setCreateBy(operator);
+        role.setUpdateBy(operator);
         roleMapper.insert(role);
         permissionService.evictAll();
         return role.getId();
@@ -146,7 +150,8 @@ public class SysRoleServiceImpl implements SysRoleService {
                 .set(SysRole::getRoleName, name)
                 .set(SysRole::getRoleDesc, trim(request.getRoleDesc()))
                 .set(SysRole::getStatus, status)
-                .set(SysRole::getRemark, trim(request.getRemark())));
+                .set(SysRole::getRemark, trim(request.getRemark()))
+                .set(SysRole::getUpdateBy, currentUserId()));
         permissionService.evictAll();
     }
 
@@ -348,6 +353,12 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     private String trim(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /** 当前操作人：由数据权限拦截器写入上下文，定时任务等无上下文时返回 null */
+    private Long currentUserId() {
+        DataScopeContext context = DataScopeContext.current();
+        return context == null ? null : context.getUserId();
     }
 
     private LocalDateTime parseStart(String value) {

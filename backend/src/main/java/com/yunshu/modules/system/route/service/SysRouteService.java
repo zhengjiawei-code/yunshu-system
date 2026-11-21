@@ -43,6 +43,8 @@ public interface SysRouteService {
                                       List<Boolean> configuredList, String parentCode,
                                       String provinceCode, String cityCode,
                                       String districtKeyword, String townKeyword,
+                                      String districtCode, String townCode,
+                                      String nameKeyword,
                                       String filterModes, String sortBy, String sortOrder,
                                       long pageNum, long pageSize);
 

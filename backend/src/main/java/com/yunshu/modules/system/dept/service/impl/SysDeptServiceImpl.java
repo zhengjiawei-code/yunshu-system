@@ -243,6 +243,9 @@ public class SysDeptServiceImpl implements SysDeptService {
         node.setSortOrder(request.getSortOrder());
         node.setStatus(request.getStatus() == null || request.getStatus());
         node.setRemark(trim(request.getRemark()));
+        Long operator = currentUserId();
+        node.setCreateBy(operator);
+        node.setUpdateBy(operator);
 
         deptMapper.insert(node);
         saveApplyCompanies(node.getId(), applyCompanyIds);
@@ -372,7 +375,8 @@ public class SysDeptServiceImpl implements SysDeptService {
                 .set(SysDept::getDistrictCode, node.getDistrictCode())
                 .set(SysDept::getSortOrder, node.getSortOrder())
                 .set(SysDept::getStatus, node.getStatus())
-                .set(SysDept::getRemark, node.getRemark()));
+                .set(SysDept::getRemark, node.getRemark())
+                .set(SysDept::getUpdateBy, currentUserId()));
         replaceApplyCompanies(id, leaf, applyCompanyIds);
     }
 

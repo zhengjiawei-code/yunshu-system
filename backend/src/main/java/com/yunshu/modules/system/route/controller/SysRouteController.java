@@ -110,6 +110,9 @@ public class SysRouteController {
             @RequestParam(required = false) String cityCode,
             @RequestParam(required = false) String districtKeyword,
             @RequestParam(required = false) String townKeyword,
+            @RequestParam(required = false) String districtCode,
+            @RequestParam(required = false) String townCode,
+            @RequestParam(required = false) String nameKeyword,
             @RequestParam(required = false) String filterModes,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortOrder,
@@ -117,6 +120,7 @@ public class SysRouteController {
             @RequestParam(defaultValue = "20") long pageSize) {
         return ApiResult.ok(routeService.regionLibrary(applyDeptId, keyword, level, configured,
                 parentCode, provinceCode, cityCode, districtKeyword, townKeyword,
+                districtCode, townCode, nameKeyword,
                 filterModes, sortBy, sortOrder, pageNum, pageSize));
     }
 

@@ -20,20 +20,15 @@
           <el-button class="tool-reset" @click="resetFilters">重置</el-button>
           <el-button :icon="Refresh" :loading="loading" @click="loadData">刷新</el-button>
 
-          <el-popover placement="bottom-end" :width="560" trigger="click">
-            <template #reference>
-              <el-button :icon="Setting">列设置</el-button>
-            </template>
-            <column-setting
-              :schema="schema"
-              :states="states"
-              :loading="columnLoading"
-              :saving="columnSaving"
-              @update:states="onStatesUpdate"
-              @save="handleColumnSave"
-              @reset="handleColumnReset"
-            />
-          </el-popover>
+          <column-setting-trigger
+            :schema="schema"
+            :states="states"
+            :loading="columnLoading"
+            :saving="columnSaving"
+            @update:states="onStatesUpdate"
+            @save="handleColumnSave"
+            @reset="handleColumnReset"
+          />
         </div>
       </div>
 
@@ -389,7 +384,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Refresh, Setting } from '@element-plus/icons-vue'
+import { ArrowDown, Refresh } from '@element-plus/icons-vue'
 import type { MenuNode } from '@/types/menu'
 import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteMenu, getMenuTree, sortMenus } from '@/api/system/menu'
@@ -400,7 +395,7 @@ import { collectExpandKeys, filterTree } from '@/utils/tree'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import ColumnFilter from '@/components/base/ColumnFilter.vue'
-import ColumnSetting from '@/components/base/ColumnSetting.vue'
+import ColumnSettingTrigger from '@/components/base/ColumnSettingTrigger.vue'
 import MenuFormDrawer from './components/MenuFormDrawer.vue'
 import ButtonFormDrawer from './components/ButtonFormDrawer.vue'
 

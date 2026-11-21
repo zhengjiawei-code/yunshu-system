@@ -2,6 +2,7 @@ package com.yunshu.modules.system.menu.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
 import com.yunshu.modules.auth.service.PermissionService;
 import com.yunshu.modules.system.menu.dto.MenuSaveRequest;
@@ -55,6 +56,9 @@ public class SysMenuServiceImpl implements SysMenuService {
         SysMenu node = new SysMenu();
         applyRequest(node, request);
         validate(node, null);
+        Long operator = currentUserId();
+        node.setCreateBy(operator);
+        node.setUpdateBy(operator);
         menuMapper.insert(node);
         permissionService.evictAll();
         return node.getId();
@@ -101,7 +105,8 @@ public class SysMenuServiceImpl implements SysMenuService {
                 .set(SysMenu::getStatus, node.getStatus())
                 .set(SysMenu::getKeepAlive, node.getKeepAlive())
                 .set(SysMenu::getAffix, node.getAffix())
-                .set(SysMenu::getRemark, node.getRemark()));
+                .set(SysMenu::getRemark, node.getRemark())
+                .set(SysMenu::getUpdateBy, currentUserId()));
         permissionService.evictAll();
     }
 
@@ -544,5 +549,11 @@ public class SysMenuServiceImpl implements SysMenuService {
 
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /** 当前操作人：由数据权限拦截器写入上下文，无上下文时返回 null */
+    private Long currentUserId() {
+        DataScopeContext context = DataScopeContext.current();
+        return context == null ? null : context.getUserId();
     }
 }
