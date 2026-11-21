@@ -681,7 +681,17 @@ public class SysRouteServiceImpl implements SysRouteService {
     @DS("master")
     public void deleteTransfer(Long id) {
         UserOrgService.UserOrg org = userOrgService.current();
-        requireOwnerTransfer(id, org);
+        SysRouteTransfer route = id == null ? null : transferMapper.selectById(id);
+        if (route == null) {
+            throw new BizException("路由不存在或已删除");
+        }
+        if (!org.hq() && !Objects.equals(route.getOwnerCompanyId(), org.companyId())) {
+            // 非创建公司：有授权说明该路由正被本公司使用，按“使用中”拦截；无授权则直接无权
+            if (existsGrant(SCOPE_TRANSFER, id, org.companyId())) {
+                throw new BizException(BLOCK_DELETE);
+            }
+            throw new BizException(403, "只有创建公司可以操作该路由");
+        }
         List<SysRouteCompany> grants = grantsOf(SCOPE_TRANSFER, id);
         // 0 号行为总部自身的“全部分公司”授权，不算他公司在用
         boolean otherUsing = org.hq()

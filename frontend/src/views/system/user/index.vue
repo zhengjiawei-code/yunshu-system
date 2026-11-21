@@ -275,9 +275,12 @@
               </div>
             </template>
             <template #default="{ row }">
-              <el-tag :type="row.status ? 'success' : 'info'" effect="plain" size="small">
-                {{ row.status ? '启用' : '禁用' }}
-              </el-tag>
+              <el-switch
+                :model-value="row.status"
+                :loading="statusChangingIds.has(row.id)"
+                :before-change="() => confirmStatusChange(row)"
+                @change="(value: boolean) => applyStatusChange(row, value)"
+              />
             </template>
           </el-table-column>
 
@@ -380,7 +383,7 @@ import { Download, Setting } from '@element-plus/icons-vue'
 import type { DeptNode } from '@/types/dept'
 import type { RoleRecord } from '@/types/role'
 import type { UserQuery, UserRecord } from '@/types/user'
-import { deleteUser, getUserPage, resetUserPassword } from '@/api/system/user'
+import { deleteUser, getUserPage, resetUserPassword, changeUserStatus } from '@/api/system/user'
 import { getDeptOptions } from '@/api/system/dept'
 import { getRoleOptions } from '@/api/system/role'
 import SmartTable from '@/components/base/SmartTable.vue'
@@ -408,6 +411,7 @@ const columnOptions: Array<{ key: string; label: string; locked?: boolean }> = [
 const userTableRef = ref<InstanceType<typeof SmartTable>>()
 const loading = ref(false)
 const rows = ref<UserRecord[]>([])
+const statusChangingIds = ref<Set<number>>(new Set())
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -722,6 +726,45 @@ async function handleResetPassword(row: UserRecord) {
   } catch (error) {
     const message = (error as { message?: string })?.message
     if (message) ElMessage.error(message)
+  }
+}
+
+/** 行内启停：二次确认；失败时重拉列表回滚为服务端状态 */
+async function confirmStatusChange(row: UserRecord): Promise<boolean> {
+  const next = !row.status
+  const action = next ? '启用' : '停用'
+  const impact = next
+    ? '启用后该账号可正常登录并按权限访问系统。'
+    : '停用后该账号将无法登录，已登录会话会在服务端失效。'
+  try {
+    await ElMessageBox.confirm(`确定${action}用户「${row.realName}（${row.username}）」吗？${impact}`, `${action}确认`, {
+      confirmButtonText: action,
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function applyStatusChange(row: UserRecord, value: boolean) {
+  const next = new Set(statusChangingIds.value)
+  next.add(row.id)
+  statusChangingIds.value = next
+  try {
+    await changeUserStatus(row.id, value)
+    row.status = value
+    ElMessage.success(value ? '已启用' : '已停用')
+  } catch (error) {
+    const message = (error as { message?: string })?.message
+    ElMessage.error(message || '状态更新失败')
+    // 回滚界面与服务端一致（超管/本人等拦截场景）
+    await loadPage()
+  } finally {
+    const done = new Set(statusChangingIds.value)
+    done.delete(row.id)
+    statusChangingIds.value = done
   }
 }
 

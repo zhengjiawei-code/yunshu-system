@@ -4,6 +4,7 @@ import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.yunshu.common.exception.BizException;
 import com.yunshu.modules.auth.service.PermissionService;
+import com.yunshu.modules.auth.service.TokenStore;
 import com.yunshu.modules.system.dept.entity.SysDept;
 import com.yunshu.modules.system.dept.mapper.SysDeptMapper;
 import com.yunshu.modules.system.menu.entity.SysMenu;
@@ -66,6 +67,7 @@ public class SysUserServiceImpl implements SysUserService {
     private final SysDeptMapper deptMapper;
     private final PermissionService permissionService;
     private final PasswordEncoder passwordEncoder;
+    private final TokenStore tokenStore;
 
     @Override
     @DS("slave")
@@ -256,6 +258,10 @@ public class SysUserServiceImpl implements SysUserService {
                 .eq(SysUser::getId, id)
                 .set(SysUser::getStatus, status)
                 .set(SysUser::getUpdateBy, currentUserId));
+        if (Boolean.FALSE.equals(status)) {
+            // luohuo 用无状态 JWT，停用后旧 token 到期前仍可用；yunshu 服务端会话可立即失效，按更严格口径处理
+            tokenStore.revokeByUser(id);
+        }
     }
 
     @Override
