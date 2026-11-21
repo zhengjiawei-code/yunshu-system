@@ -17,4 +17,7 @@ public class DeptRowVO extends DeptVO {
 
     @Schema(description = "完整路径，如 总部 / 华东公司 / 上海分拨中心")
     private String parentPath;
+
+    @Schema(description = "所在地区，如 广东省广州市白云区；未维护时为空")
+    private String regionName;
 }

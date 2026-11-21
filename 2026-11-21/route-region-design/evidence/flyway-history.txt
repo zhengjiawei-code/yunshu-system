@@ -1,0 +1,8 @@
+installed_rank	version	description	type	script	success	installed_on
+1	1	init sys menu	SQL	V1__init_sys_menu.sql	1	2026-11-20 15:00:49
+2	2	init sys menu seed	SQL	V2__init_sys_menu_seed.sql	1	2026-11-20 15:00:49
+3	3	drop sys menu portal	SQL	V3__drop_sys_menu_portal.sql	1	2026-11-20 16:37:30
+4	4	init sys dept	SQL	V4__init_sys_dept.sql	1	2026-11-20 18:00:38
+5	5	init sys role	SQL	V5__init_sys_role.sql	1	2026-11-20 18:41:43
+6	6	init sys user	SQL	V6__init_sys_user.sql	1	2026-11-21 08:45:42
+7	7	init region and dept area	SQL	V7__init_region_and_dept_area.sql	1	2026-11-21 11:48:14

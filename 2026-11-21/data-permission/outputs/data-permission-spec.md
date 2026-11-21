@@ -27,12 +27,30 @@ sys_user_role
 sys_user_org
 sys_user_menu
 sys_dept
+sys_region
+sys_region_sync_log
+sys_dept_apply_company
 flyway_schema_history
 ```
 
 另外，数据库系统 schema 自动豁免：`information_schema`、`mysql`、`performance_schema`、`sys`（元数据查询）。
 
-**豁免申请方式**：新增平台配置表时，在 `DataScopeTables.EXEMPT_TABLES` 增加表名，并在本文件同步登记，提交说明写清"平台配置类，不含业务数据"；业务表一律不得豁免。
+**豁免申请方式**：新增平台配置表时，在 `DataScopeTables.EXEMPT_TABLES` 增加表名，并在本文件同步登记，提交说明写清"平台配置类，不含业务数据"。
+
+**2026-11-21 路由/区域方案补充（家伟裁定）**：跨公司共享的配置类表可申请豁免，但必须同时满足：
+1. 表本身不含需按机构隔离的业务数据（如区划、机构关系、路由授权）；
+2. 在下方「豁免表可见性责任」逐表登记服务层过滤规则；
+3. 越权验证覆盖列表、详情、编辑、删除、导出、匹配等入口，并留证据。
+
+### 2.1 豁免表可见性责任（服务层负责，不允许依赖拦截器）
+
+| 表 | 定位 | 可见性责任 |
+|---|---|---|
+| `sys_region` | 区划基础数据 | 平台共享，所有登录人可读；导入/同步仅总部 |
+| `sys_region_sync_log` | 区划任务日志 | 平台共享，日志列表按需展示；`triggered_by` 由服务层显式写入 |
+| `sys_dept_apply_company` | 末端网点适用分公司 | 跨公司关系数据；机构选择器与管理范围按登录人所属公司显式计算，`create_by` 由服务层显式写入 |
+
+后续新增同类表（路由、承运商、路由授权）在同一小节登记后方可加入豁免清单。
 
 ## 3. 四档规则
 

@@ -45,6 +45,30 @@ public class DeptVO {
 
     private String address;
 
+    @Schema(description = "省编码")
+    private String provinceCode;
+
+    @Schema(description = "市编码")
+    private String cityCode;
+
+    @Schema(description = "区县编码")
+    private String districtCode;
+
+    @Schema(description = "省名称，由 sys_region 解析")
+    private String provinceName;
+
+    @Schema(description = "市名称，由 sys_region 解析")
+    private String cityName;
+
+    @Schema(description = "区县名称，由 sys_region 解析")
+    private String districtName;
+
+    @Schema(description = "末端网点适用分公司ID列表")
+    private List<Long> applyCompanyIds;
+
+    @Schema(description = "末端网点适用分公司名称，逗号分隔")
+    private String applyCompanyNames;
+
     private Integer sortOrder;
 
     private Boolean status;

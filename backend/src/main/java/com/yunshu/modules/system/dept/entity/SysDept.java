@@ -53,6 +53,15 @@ public class SysDept {
 
     private String address;
 
+    /** 省编码，引用 sys_region.code（level=1） */
+    private String provinceCode;
+
+    /** 市编码，引用 sys_region.code（level=2） */
+    private String cityCode;
+
+    /** 区县编码，引用 sys_region.code（level=3） */
+    private String districtCode;
+
     private Integer sortOrder;
 
     private Boolean status;

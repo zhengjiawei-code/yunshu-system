@@ -296,6 +296,54 @@
               </el-table-column>
 
               <el-table-column
+                v-if="columnState.regionName"
+                prop="regionName"
+                label="所在地区"
+                min-width="240"
+                sortable="custom"
+              >
+                <template #header>
+                  <div class="col-head">
+                    <span class="col-head__label">所在地区</span>
+                    <div class="region-filter">
+                      <el-select
+                        v-model="filters.provinceCode"
+                        size="small"
+                        placeholder="省"
+                        clearable
+                        filterable
+                        @change="handleProvinceFilter"
+                      >
+                        <el-option
+                          v-for="item in provinceOptions"
+                          :key="item.code"
+                          :label="item.name"
+                          :value="item.code"
+                        />
+                      </el-select>
+                      <el-select
+                        v-model="filters.cityCode"
+                        size="small"
+                        placeholder="市"
+                        clearable
+                        filterable
+                        :disabled="!filters.provinceCode"
+                        @change="onFilterChange"
+                      >
+                        <el-option
+                          v-for="item in filterCityOptions"
+                          :key="item.code"
+                          :label="item.name"
+                          :value="item.code"
+                        />
+                      </el-select>
+                    </div>
+                  </div>
+                </template>
+                <template #default="{ row }">{{ row.regionName || '—' }}</template>
+              </el-table-column>
+
+              <el-table-column
                 v-if="columnState.isLeaf"
                 prop="isLeaf"
                 label="是否末端"
@@ -323,6 +371,41 @@
                     :type="row.isLeaf ? 'primary' : 'info'"
                     :text="row.isLeaf ? '是' : '否'"
                   />
+                  <span v-else>—</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column
+                v-if="columnState.applyCompanyNames"
+                prop="applyCompanyNames"
+                label="适用公司"
+                min-width="200"
+                sortable="custom"
+              >
+                <template #header>
+                  <div class="col-head">
+                    <span class="col-head__label">适用公司</span>
+                    <el-select
+                      v-model="filters.applyCompanyId"
+                      size="small"
+                      placeholder="全部"
+                      clearable
+                      filterable
+                      @change="onFilterChange"
+                    >
+                      <el-option
+                        v-for="item in companyOptions"
+                        :key="item.id"
+                        :label="item.deptName"
+                        :value="item.id"
+                      />
+                    </el-select>
+                  </div>
+                </template>
+                <template #default="{ row }">
+                  <span v-if="row.deptType === 5 && row.isLeaf">
+                    {{ row.applyCompanyNames || '未配置' }}
+                  </span>
                   <span v-else>—</span>
                 </template>
               </el-table-column>
@@ -495,7 +578,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Expand, Fold, Setting } from '@element-plus/icons-vue'
 import type { DeptNature, DeptNode, DeptQuery, DeptRow, DeptType } from '@/types/dept'
+import type { RegionNode } from '@/types/region'
 import { deleteDept, getDeptPage, getDeptTree } from '@/api/system/dept'
+import { getRegionChildren } from '@/api/system/region'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import DeptFormDrawer from './components/DeptFormDrawer.vue'
@@ -528,7 +613,9 @@ const columnOptions: Array<{ key: string; label: string; locked?: boolean }> = [
   { key: 'deptCode', label: '机构编码' },
   { key: 'leader', label: '负责人' },
   { key: 'phone', label: '联系电话' },
+  { key: 'regionName', label: '所在地区' },
   { key: 'isLeaf', label: '是否末端' },
+  { key: 'applyCompanyNames', label: '适用公司' },
   { key: 'status', label: '状态' },
   { key: 'createByName', label: '创建人' },
   { key: 'createTime', label: '创建时间' },
@@ -556,6 +643,9 @@ const filters = reactive<{
   parentId: number | undefined
   leader: string
   phone: string
+  provinceCode: string
+  cityCode: string
+  applyCompanyId: number | undefined
   isLeaf: boolean | undefined
   status: boolean | undefined
   createByName: string
@@ -570,12 +660,32 @@ const filters = reactive<{
   parentId: undefined,
   leader: '',
   phone: '',
+  provinceCode: '',
+  cityCode: '',
+  applyCompanyId: undefined,
   isLeaf: undefined,
   status: undefined,
   createByName: '',
   updateByName: '',
   createRange: [],
   updateRange: []
+})
+
+/** 省市筛选下拉：省份来自区划根节点，城市随省份联动 */
+const provinceOptions = ref<RegionNode[]>([])
+const filterCityOptions = ref<RegionNode[]>([])
+
+/** 适用公司候选：机构树中所有启用的公司 */
+const companyOptions = computed(() => {
+  const result: DeptNode[] = []
+  const walk = (nodes: DeptNode[]) => {
+    nodes.forEach((node) => {
+      if (node.deptType === 2 && node.status) result.push(node)
+      if (node.children) walk(node.children)
+    })
+  }
+  walk(treeData.value)
+  return result
 })
 
 /** 服务端排序状态：sortBy 为空表示默认 sort_order asc, id asc */
@@ -662,6 +772,9 @@ function buildQuery(pageNum = page.value, size = pageSize.value): DeptQuery {
     parentId: isEmpty(filters.parentId) ? undefined : filters.parentId,
     leader: filters.leader.trim() || undefined,
     phone: filters.phone.trim() || undefined,
+    provinceCode: filters.provinceCode || undefined,
+    cityCode: filters.cityCode || undefined,
+    applyCompanyId: isEmpty(filters.applyCompanyId) ? undefined : filters.applyCompanyId,
     isLeaf: isEmpty(filters.isLeaf) ? undefined : filters.isLeaf,
     status: isEmpty(filters.status) ? undefined : filters.status,
     createByName: filters.createByName.trim() || undefined,
@@ -703,6 +816,30 @@ function onTextFilter() {
 function onFilterChange() {
   page.value = 1
   loadPage()
+}
+
+/** 省份变更：清空已选城市并按新省份加载城市，再触发查询 */
+async function handleProvinceFilter() {
+  filters.cityCode = ''
+  filterCityOptions.value = []
+  if (filters.provinceCode) {
+    try {
+      filterCityOptions.value = await getRegionChildren(filters.provinceCode)
+    } catch (error) {
+      const message = (error as { message?: string })?.message
+      if (message) ElMessage.error(message)
+    }
+  }
+  onFilterChange()
+}
+
+async function loadProvinceOptions() {
+  try {
+    provinceOptions.value = await getRegionChildren('0')
+  } catch (error) {
+    const message = (error as { message?: string })?.message
+    if (message) ElMessage.error(message)
+  }
 }
 
 async function loadPage() {
@@ -763,6 +900,10 @@ function resetFilters() {
   filters.parentId = undefined
   filters.leader = ''
   filters.phone = ''
+  filters.provinceCode = ''
+  filters.cityCode = ''
+  filters.applyCompanyId = undefined
+  filterCityOptions.value = []
   filters.isLeaf = undefined
   filters.status = undefined
   filters.createByName = ''
@@ -801,7 +942,13 @@ const FILTER_RESET: Record<string, () => void> = {
   deptCode: () => (filters.deptCode = ''),
   leader: () => (filters.leader = ''),
   phone: () => (filters.phone = ''),
+  regionName: () => {
+    filters.provinceCode = ''
+    filters.cityCode = ''
+    filterCityOptions.value = []
+  },
   isLeaf: () => (filters.isLeaf = undefined),
+  applyCompanyNames: () => (filters.applyCompanyId = undefined),
   status: () => (filters.status = undefined),
   createByName: () => (filters.createByName = ''),
   updateByName: () => (filters.updateByName = ''),
@@ -938,7 +1085,10 @@ async function handleSaved() {
   await loadData()
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  loadProvinceOptions()
+})
 </script>
 
 <style scoped>
@@ -1086,6 +1236,17 @@ onMounted(loadData)
   flex-direction: column;
   gap: 4px;
   align-items: stretch;
+}
+
+/* 所在地区：省、市两个下拉并排放进 240px 列宽 */
+.region-filter {
+  display: flex;
+  gap: 4px;
+}
+
+.region-filter :deep(.el-select) {
+  flex: 1;
+  min-width: 0;
 }
 
 .col-head__label {

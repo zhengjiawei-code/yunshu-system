@@ -88,8 +88,89 @@
         <el-input v-model="form.phone" maxlength="20" placeholder="选填，手机号或座机号" />
       </el-form-item>
 
-      <el-form-item label="机构地址" prop="address">
-        <el-input v-model="form.address" maxlength="200" placeholder="选填" />
+      <el-form-item label="所在地区" prop="provinceCode">
+        <div class="region-row">
+          <el-select
+            v-model="form.provinceCode"
+            placeholder="省"
+            clearable
+            filterable
+            class="region-select"
+            @change="handleProvinceChange"
+          >
+            <el-option
+              v-for="item in provinceOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.code"
+            />
+          </el-select>
+          <el-select
+            v-model="form.cityCode"
+            placeholder="市"
+            clearable
+            filterable
+            class="region-select"
+            :disabled="!form.provinceCode"
+            @change="handleCityChange"
+          >
+            <el-option
+              v-for="item in cityOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.code"
+            />
+          </el-select>
+          <el-select
+            v-model="form.districtCode"
+            placeholder="区县"
+            clearable
+            filterable
+            class="region-select"
+            :disabled="!form.cityCode"
+            @change="clearRegionValidate"
+          >
+            <el-option
+              v-for="item in districtOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.code"
+            />
+          </el-select>
+        </div>
+        <p class="form-hint">
+          {{ regionRequired ? '分拨中心、网点必须选择省/市/区县' : '选填；填写时需省/市/区县同时选择' }}
+        </p>
+      </el-form-item>
+
+      <el-form-item label="详细地址" prop="address">
+        <el-input v-model="form.address" maxlength="200" placeholder="选填，街道门牌等详细地址" />
+      </el-form-item>
+
+      <el-form-item
+        v-if="form.deptType === 5 && form.isLeaf"
+        label="适用公司"
+        prop="applyCompanyIds"
+      >
+        <el-select
+          v-model="form.applyCompanyIds"
+          multiple
+          filterable
+          collapse-tags
+          collapse-tags-tooltip
+          class="form-control"
+          placeholder="请选择适用分公司"
+        >
+          <el-option
+            v-for="item in companyOptions"
+            :key="item.id"
+            :label="item.deptName"
+            :value="item.id"
+          />
+        </el-select>
+        <p class="form-hint">
+          末端网点可被多个分公司共用；分公司管理员默认本公司，总部创建需手动选择
+        </p>
       </el-form-item>
 
       <el-form-item label="排序" prop="sortOrder">
@@ -137,7 +218,10 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Lock } from '@element-plus/icons-vue'
 import type { DeptNature, DeptNode, DeptSavePayload, DeptType } from '@/types/dept'
+import type { RegionNode } from '@/types/region'
 import { createDept, updateDept } from '@/api/system/dept'
+import { getRegionChildren } from '@/api/system/region'
+import { useUserStore } from '@/stores/user'
 import PageDrawer from '@/components/base/PageDrawer.vue'
 
 const props = defineProps<{
@@ -191,6 +275,7 @@ const visible = computed({
 
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const userStore = useUserStore()
 
 const form = reactive({
   parentId: 0 as number | null,
@@ -202,9 +287,43 @@ const form = reactive({
   leader: '',
   phone: '',
   address: '',
+  provinceCode: '',
+  cityCode: '',
+  districtCode: '',
+  applyCompanyIds: [] as number[],
   sortOrder: 10,
   status: true,
   remark: ''
+})
+
+const provinceOptions = ref<RegionNode[]>([])
+const cityOptions = ref<RegionNode[]>([])
+const districtOptions = ref<RegionNode[]>([])
+
+const regionRequired = computed(() => form.deptType === 4 || form.deptType === 5)
+
+const companyOptions = computed(() => {
+  const result: DeptNode[] = []
+  const walk = (nodes: DeptNode[]) => {
+    nodes.forEach((node) => {
+      if (node.deptType === 2 && node.status) result.push(node)
+      if (node.children) walk(node.children)
+    })
+  }
+  walk(props.tree)
+  return result
+})
+
+/** 当前登录人所属公司：主机构向上最近的公司；总部返回 undefined */
+const defaultCompanyId = computed(() => {
+  let current = userStore.user?.deptId ? findDept(props.tree, userStore.user.deptId) : undefined
+  let guard = 0
+  while (current && guard++ < 100) {
+    if (current.deptType === 2) return current.id
+    if (current.deptType === 1) return undefined
+    current = current.parentId ? findDept(props.tree, current.parentId) : undefined
+  }
+  return undefined
 })
 
 const isEdit = computed(() => props.mode === 'edit')
@@ -270,6 +389,58 @@ function nameExists(name: string, parentId: number | null): boolean {
   )
 }
 
+/* ---------- 区划联动 ---------- */
+async function loadProvinces() {
+  provinceOptions.value = await getRegionChildren('0')
+}
+
+async function loadCities(provinceCode: string) {
+  cityOptions.value = provinceCode ? await getRegionChildren(provinceCode) : []
+}
+
+async function loadDistricts(cityCode: string) {
+  districtOptions.value = cityCode ? await getRegionChildren(cityCode) : []
+}
+
+async function initRegionOptions() {
+  try {
+    await loadProvinces()
+    if (form.provinceCode) await loadCities(form.provinceCode)
+    if (form.cityCode) await loadDistricts(form.cityCode)
+  } catch (error) {
+    const message = (error as { message?: string })?.message
+    if (message) ElMessage.error(message)
+  }
+}
+
+async function handleProvinceChange(value: string) {
+  form.cityCode = ''
+  form.districtCode = ''
+  districtOptions.value = []
+  try {
+    await loadCities(value)
+  } catch (error) {
+    const message = (error as { message?: string })?.message
+    if (message) ElMessage.error(message)
+  }
+  clearRegionValidate()
+}
+
+async function handleCityChange(value: string) {
+  form.districtCode = ''
+  try {
+    await loadDistricts(value)
+  } catch (error) {
+    const message = (error as { message?: string })?.message
+    if (message) ElMessage.error(message)
+  }
+  clearRegionValidate()
+}
+
+function clearRegionValidate() {
+  formRef.value?.clearValidate('provinceCode')
+}
+
 const rules: FormRules = {
   parentId: [
     {
@@ -317,7 +488,34 @@ const rules: FormRules = {
       trigger: 'blur'
     }
   ],
-  address: [{ max: 200, message: '机构地址不能超过 200 个字符', trigger: 'blur' }],
+  provinceCode: [
+    {
+      validator: (_rule, _value, callback) => {
+        const hasAny = !!(form.provinceCode || form.cityCode || form.districtCode)
+        const complete = !!(form.provinceCode && form.cityCode && form.districtCode)
+        if (regionRequired.value && !complete) {
+          return callback(new Error('请选择省、市、区县'))
+        }
+        if (!regionRequired.value && hasAny && !complete) {
+          return callback(new Error('省、市、区县需同时选择'))
+        }
+        callback()
+      },
+      trigger: 'change'
+    }
+  ],
+  address: [{ max: 200, message: '详细地址不能超过 200 个字符', trigger: 'blur' }],
+  applyCompanyIds: [
+    {
+      validator: (_rule, _value, callback) => {
+        if (form.deptType === 5 && form.isLeaf && form.applyCompanyIds.length === 0) {
+          return callback(new Error('请选择末端网点的适用公司'))
+        }
+        callback()
+      },
+      trigger: 'change'
+    }
+  ],
   sortOrder: [{ required: true, message: '请输入排序号', trigger: 'blur' }],
   remark: [{ max: 500, message: '备注不能超过 500 字', trigger: 'blur' }]
 }
@@ -336,6 +534,10 @@ function resetForm() {
     form.leader = node.leader || ''
     form.phone = node.phone || ''
     form.address = node.address || ''
+    form.provinceCode = node.provinceCode || ''
+    form.cityCode = node.cityCode || ''
+    form.districtCode = node.districtCode || ''
+    form.applyCompanyIds = [...(node.applyCompanyIds || [])]
     form.sortOrder = node.sortOrder
     form.status = node.status
     form.remark = node.remark || ''
@@ -351,6 +553,10 @@ function resetForm() {
     form.leader = ''
     form.phone = ''
     form.address = ''
+    form.provinceCode = ''
+    form.cityCode = ''
+    form.districtCode = ''
+    form.applyCompanyIds = []
     form.sortOrder = siblings.reduce((max, item) => Math.max(max, item.sortOrder || 0), 0) + 10
     form.status = true
     form.remark = ''
@@ -361,15 +567,31 @@ function resetForm() {
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) resetForm()
+    if (open) {
+      resetForm()
+      void initRegionOptions()
+    }
   }
 )
 
-/** 类型切换：非网点时清空“是否末端”，避免提交脏值 */
+/** 类型切换：非网点时清空“是否末端”与适用公司，避免提交脏值 */
 watch(
   () => form.deptType,
   (value) => {
-    if (value !== 5) form.isLeaf = false
+    if (value !== 5) {
+      form.isLeaf = false
+      form.applyCompanyIds = []
+    }
+  }
+)
+
+/** 勾选末端网点时，分公司管理员默认本公司 */
+watch(
+  () => form.isLeaf,
+  (value) => {
+    if (value && form.deptType === 5 && form.applyCompanyIds.length === 0 && defaultCompanyId.value) {
+      form.applyCompanyIds = [defaultCompanyId.value]
+    }
   }
 )
 
@@ -448,6 +670,10 @@ async function handleSubmit() {
     leader: form.leader.trim() || undefined,
     phone: form.phone.trim() || undefined,
     address: form.address.trim() || undefined,
+    provinceCode: form.provinceCode || undefined,
+    cityCode: form.cityCode || undefined,
+    districtCode: form.districtCode || undefined,
+    applyCompanyIds: form.deptType === 5 && form.isLeaf ? [...form.applyCompanyIds] : [],
     sortOrder: form.sortOrder,
     status: form.status,
     remark: form.remark.trim() || undefined
@@ -504,6 +730,17 @@ function buildParentOptions(
 
 .form-control {
   width: 100%;
+}
+
+.region-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.region-select {
+  flex: 1;
+  min-width: 0;
 }
 
 .readonly-text {

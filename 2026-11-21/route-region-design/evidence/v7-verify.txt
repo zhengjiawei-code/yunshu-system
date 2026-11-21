@@ -1,0 +1,17 @@
+Field	Type	Null	Key	Default	Extra
+dept_code	varchar(50)	NO	MUL	NULL	
+province_code	varchar(12)	YES	MUL	NULL	
+city_code	varchar(12)	YES		NULL	
+district_code	varchar(12)	YES		NULL	
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+sys_dept	1	idx_region	1	province_code	A	1	NULL	NULL	YES	BTREE			YES	NULL
+sys_dept	1	idx_region	2	city_code	A	1	NULL	NULL	YES	BTREE			YES	NULL
+sys_dept	1	idx_region	3	district_code	A	1	NULL	NULL	YES	BTREE			YES	NULL
+dept_count
+1
+region_count
+3429
+log_count
+2
+apply_count
+0

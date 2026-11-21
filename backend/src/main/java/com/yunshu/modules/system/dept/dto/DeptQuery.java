@@ -34,6 +34,18 @@ public class DeptQuery {
     @Schema(description = "联系电话，模糊匹配")
     private String phone;
 
+    @Schema(description = "省编码，精确匹配")
+    private String provinceCode;
+
+    @Schema(description = "市编码，精确匹配")
+    private String cityCode;
+
+    @Schema(description = "区县编码，精确匹配")
+    private String districtCode;
+
+    @Schema(description = "末端网点适用分公司ID；仅命中该分公司的末端网点")
+    private Long applyCompanyId;
+
     @Schema(description = "创建人姓名，模糊匹配（依赖 sys_user；表不存在时忽略）")
     private String createByName;
 
@@ -52,7 +64,7 @@ public class DeptQuery {
     @Schema(description = "最后修改时间止")
     private String updateTimeEnd;
 
-    @Schema(description = "排序字段：deptName/parentName/deptType/deptNature/deptCode/leader/phone/isLeaf/status/createTime/updateTime/createByName/updateByName")
+    @Schema(description = "排序字段：deptName/parentName/deptType/deptNature/deptCode/leader/phone/isLeaf/status/regionName/applyCompanyNames/createTime/updateTime/createByName/updateByName")
     private String sortBy;
 
     @Schema(description = "排序方向：asc / desc")

@@ -20,7 +20,18 @@ export interface DeptNode {
   allowCollectUnpaidSign: boolean
   leader?: string
   phone?: string
+  /** 详细地址（街道门牌），与省/市/区县编码并存 */
   address?: string
+  provinceCode?: string
+  cityCode?: string
+  districtCode?: string
+  provinceName?: string
+  cityName?: string
+  districtName?: string
+  /** 末端网点适用分公司ID列表（仅 is_leaf=1） */
+  applyCompanyIds?: number[]
+  /** 末端网点适用分公司名称，逗号分隔 */
+  applyCompanyNames?: string
   sortOrder: number
   status: boolean
   remark?: string
@@ -39,6 +50,8 @@ export interface DeptNode {
 export interface DeptRow extends DeptNode {
   parentName: string
   parentPath: string
+  /** 所在地区：省+市+区县，未维护时为空 */
+  regionName?: string
 }
 
 /** 机构列表查询参数：筛选、排序与分页均走服务端 */
@@ -53,6 +66,10 @@ export interface DeptQuery {
   phone?: string
   isLeaf?: boolean
   status?: boolean
+  provinceCode?: string
+  cityCode?: string
+  districtCode?: string
+  applyCompanyId?: number
   createByName?: string
   updateByName?: string
   createTimeStart?: string
@@ -88,6 +105,10 @@ export interface DeptSavePayload {
   leader?: string
   phone?: string
   address?: string
+  provinceCode?: string
+  cityCode?: string
+  districtCode?: string
+  applyCompanyIds?: number[]
   sortOrder: number
   status: boolean
   remark?: string

@@ -2,12 +2,17 @@ package com.yunshu.modules.system.dept.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
 import com.yunshu.modules.system.dept.dto.DeptQuery;
 import com.yunshu.modules.system.dept.dto.DeptSaveRequest;
 import com.yunshu.modules.system.dept.entity.SysDept;
+import com.yunshu.modules.system.dept.entity.SysDeptApplyCompany;
+import com.yunshu.modules.system.dept.mapper.SysDeptApplyCompanyMapper;
 import com.yunshu.modules.system.dept.mapper.SysDeptMapper;
 import com.yunshu.modules.system.dept.service.SysDeptService;
+import com.yunshu.modules.system.region.entity.SysRegion;
+import com.yunshu.modules.system.region.mapper.SysRegionMapper;
 import com.yunshu.modules.system.dept.vo.DeptPageVO;
 import com.yunshu.modules.system.dept.vo.DeptRowVO;
 import com.yunshu.modules.system.dept.vo.DeptVO;
@@ -61,11 +66,16 @@ public class SysDeptServiceImpl implements SysDeptService {
     );
 
     private final SysDeptMapper deptMapper;
+    private final SysRegionMapper regionMapper;
+    private final SysDeptApplyCompanyMapper applyCompanyMapper;
 
     @Override
     @DS("slave")
     public List<DeptVO> tree() {
-        return buildTree(selectAll());
+        List<SysDept> list = selectAll();
+        Map<Long, SysDept> map = new LinkedHashMap<>();
+        list.forEach(item -> map.put(item.getId(), item));
+        return buildTree(list, regionNameMap(), applyCompanyMap(), map);
     }
 
     @Override
@@ -79,6 +89,8 @@ public class SysDeptServiceImpl implements SysDeptService {
         // sys_user 未建表时：姓名列显示“—”，姓名筛选项整体忽略（不能把所有行过滤掉），用户表建好后自动生效
         boolean userTableReady = deptMapper.countTable("sys_user") > 0;
         Map<Long, String> userNames = userTableReady ? resolveUserNames(descendants) : Map.of();
+        Map<String, String> regionNames = regionNameMap();
+        Map<Long, List<Long>> applyCompanies = applyCompanyMap();
 
         String name = trim(query.getDeptName());
         String code = trim(query.getDeptCode());
@@ -86,6 +98,9 @@ public class SysDeptServiceImpl implements SysDeptService {
         String phone = trim(query.getPhone());
         String createByName = trim(query.getCreateByName());
         String updateByName = trim(query.getUpdateByName());
+        String provinceCode = trim(query.getProvinceCode());
+        String cityCode = trim(query.getCityCode());
+        String districtCode = trim(query.getDistrictCode());
         LocalDateTime createStart = parseStart(query.getCreateTimeStart());
         LocalDateTime createEnd = parseEnd(query.getCreateTimeEnd());
         LocalDateTime updateStart = parseStart(query.getUpdateTimeStart());
@@ -120,7 +135,13 @@ public class SysDeptServiceImpl implements SysDeptService {
                         || Objects.equals(Boolean.TRUE.equals(item.getIsLeaf()), query.getIsLeaf()))
                 .filter(item -> query.getStatus() == null
                         || Objects.equals(item.getStatus(), query.getStatus()))
-                .sorted(buildComparator(query, map, userNames))
+                .filter(item -> provinceCode == null || provinceCode.equals(item.getProvinceCode()))
+                .filter(item -> cityCode == null || cityCode.equals(item.getCityCode()))
+                .filter(item -> districtCode == null || districtCode.equals(item.getDistrictCode()))
+                .filter(item -> query.getApplyCompanyId() == null
+                        || (Boolean.TRUE.equals(item.getIsLeaf())
+                        && applyCompanies.getOrDefault(item.getId(), List.of()).contains(query.getApplyCompanyId())))
+                .sorted(buildComparator(query, map, userNames, regionNames, applyCompanies))
                 .toList();
 
         int pageNum = query.getPageNum() == null || query.getPageNum() < 1 ? 1 : query.getPageNum();
@@ -130,7 +151,7 @@ public class SysDeptServiceImpl implements SysDeptService {
         int to = Math.min(from + pageSize, filtered.size());
 
         List<DeptRowVO> records = filtered.subList(from, to).stream()
-                .map(item -> toRow(item, map, userNames))
+                .map(item -> toRow(item, map, userNames, regionNames, applyCompanies))
                 .toList();
 
         DeptPageVO result = new DeptPageVO();
@@ -148,6 +169,11 @@ public class SysDeptServiceImpl implements SysDeptService {
         Map<Long, String> names = resolveUserNames(List.of(dept));
         vo.setCreateByName(nameOf(names, dept.getCreateBy()));
         vo.setUpdateByName(nameOf(names, dept.getUpdateBy()));
+        fillRegionNames(vo, regionNameMap());
+        Map<Long, SysDept> map = loadMap();
+        List<Long> applyIds = applyCompaniesFor(id);
+        vo.setApplyCompanyIds(applyIds);
+        vo.setApplyCompanyNames(joinCompanyNames(applyIds, map));
         return vo;
     }
 
@@ -175,6 +201,9 @@ public class SysDeptServiceImpl implements SysDeptService {
         checkMatrix(parent.getDeptType(), type);
         checkLeaf(type, request.getIsLeaf());
         checkNature(request.getDeptNature());
+        validateRegion(type, request);
+        boolean leaf = type == TYPE_OUTLET && Boolean.TRUE.equals(request.getIsLeaf());
+        List<Long> applyCompanyIds = validateApplyCompanies(leaf, request.getApplyCompanyIds(), map);
 
         int depth = depthOf(parentId, map) + 1;
         if (depth > MAX_DEPTH) {
@@ -192,7 +221,7 @@ public class SysDeptServiceImpl implements SysDeptService {
         node.setDeptCode(code);
         node.setDeptType(type);
         node.setDeptNature(request.getDeptNature());
-        node.setIsLeaf(type == TYPE_OUTLET && Boolean.TRUE.equals(request.getIsLeaf()));
+        node.setIsLeaf(leaf);
         node.setAllowShip(request.getAllowShip() == null || request.getAllowShip());
         node.setAllowArrival(request.getAllowArrival() == null || request.getAllowArrival());
         node.setAllowPrepaidUnpaid(Boolean.TRUE.equals(request.getAllowPrepaidUnpaid()));
@@ -200,11 +229,15 @@ public class SysDeptServiceImpl implements SysDeptService {
         node.setLeader(trim(request.getLeader()));
         node.setPhone(trim(request.getPhone()));
         node.setAddress(trim(request.getAddress()));
+        node.setProvinceCode(trim(request.getProvinceCode()));
+        node.setCityCode(trim(request.getCityCode()));
+        node.setDistrictCode(trim(request.getDistrictCode()));
         node.setSortOrder(request.getSortOrder());
         node.setStatus(request.getStatus() == null || request.getStatus());
         node.setRemark(trim(request.getRemark()));
 
         deptMapper.insert(node);
+        saveApplyCompanies(node.getId(), applyCompanyIds);
         return node.getId();
     }
 
@@ -229,6 +262,8 @@ public class SysDeptServiceImpl implements SysDeptService {
                 && (request.getIsLeaf() == null
                     ? Boolean.TRUE.equals(existing.getIsLeaf())
                     : request.getIsLeaf());
+        validateRegion(type, request);
+        List<Long> applyCompanyIds = validateApplyCompanies(leaf, request.getApplyCompanyIds(), map);
 
         if (id == HQ_ID) {
             // 总部保护：不可移动、类型不可改、不可禁用；名称等展示字段可维护
@@ -301,6 +336,9 @@ public class SysDeptServiceImpl implements SysDeptService {
         node.setLeader(trim(request.getLeader()));
         node.setPhone(trim(request.getPhone()));
         node.setAddress(trim(request.getAddress()));
+        node.setProvinceCode(trim(request.getProvinceCode()));
+        node.setCityCode(trim(request.getCityCode()));
+        node.setDistrictCode(trim(request.getDistrictCode()));
         node.setSortOrder(request.getSortOrder());
         node.setStatus(request.getStatus() == null || request.getStatus());
         node.setRemark(trim(request.getRemark()));
@@ -321,9 +359,13 @@ public class SysDeptServiceImpl implements SysDeptService {
                 .set(SysDept::getLeader, node.getLeader())
                 .set(SysDept::getPhone, node.getPhone())
                 .set(SysDept::getAddress, node.getAddress())
+                .set(SysDept::getProvinceCode, node.getProvinceCode())
+                .set(SysDept::getCityCode, node.getCityCode())
+                .set(SysDept::getDistrictCode, node.getDistrictCode())
                 .set(SysDept::getSortOrder, node.getSortOrder())
                 .set(SysDept::getStatus, node.getStatus())
                 .set(SysDept::getRemark, node.getRemark()));
+        replaceApplyCompanies(id, leaf, applyCompanyIds);
     }
 
     @Override
@@ -340,6 +382,8 @@ public class SysDeptServiceImpl implements SysDeptService {
         if (countUserRef(id) > 0) {
             throw new BizException("该机构下存在用户（主机构或可登录机构），请先调整用户归属");
         }
+        applyCompanyMapper.delete(Wrappers.<SysDeptApplyCompany>lambdaQuery()
+                .eq(SysDeptApplyCompany::getLeafDeptId, id));
         deptMapper.deleteById(id);
     }
 
@@ -350,7 +394,9 @@ public class SysDeptServiceImpl implements SysDeptService {
                 .filter(item -> Boolean.TRUE.equals(item.getStatus()))
                 .filter(item -> type == null || Objects.equals(item.getDeptType(), type))
                 .toList();
-        List<DeptVO> tree = buildTree(list);
+        Map<Long, SysDept> map = new LinkedHashMap<>();
+        selectAll().forEach(item -> map.put(item.getId(), item));
+        List<DeptVO> tree = buildTree(list, regionNameMap(), applyCompanyMap(), map);
         pruneToOption(tree);
         return tree;
     }
@@ -410,9 +456,11 @@ public class SysDeptServiceImpl implements SysDeptService {
         return count;
     }
 
-    private List<DeptVO> buildTree(List<SysDept> list) {
+    private List<DeptVO> buildTree(List<SysDept> list, Map<String, String> regionNames,
+                                   Map<Long, List<Long>> applyCompanies, Map<Long, SysDept> map) {
         Map<Long, DeptVO> voMap = new LinkedHashMap<>();
-        list.forEach(item -> voMap.put(item.getId(), toVO(item)));
+        list.forEach(item -> voMap.put(item.getId(),
+                toVO(item, regionNames, applyCompanies, map)));
 
         List<DeptVO> roots = new ArrayList<>();
         voMap.values().forEach(vo -> {
@@ -440,9 +488,14 @@ public class SysDeptServiceImpl implements SysDeptService {
         });
     }
 
-    private DeptVO toVO(SysDept dept) {
+    private DeptVO toVO(SysDept dept, Map<String, String> regionNames,
+                        Map<Long, List<Long>> applyCompanies, Map<Long, SysDept> map) {
         DeptVO vo = new DeptVO();
         BeanUtils.copyProperties(dept, vo);
+        fillRegionNames(vo, regionNames);
+        List<Long> applyIds = applyCompanies.getOrDefault(dept.getId(), List.of());
+        vo.setApplyCompanyIds(applyIds);
+        vo.setApplyCompanyNames(joinCompanyNames(applyIds, map));
         return vo;
     }
 
@@ -456,7 +509,8 @@ public class SysDeptServiceImpl implements SysDeptService {
         }
     }
 
-    private DeptRowVO toRow(SysDept dept, Map<Long, SysDept> map, Map<Long, String> userNames) {
+    private DeptRowVO toRow(SysDept dept, Map<Long, SysDept> map, Map<Long, String> userNames,
+                            Map<String, String> regionNames, Map<Long, List<Long>> applyCompanies) {
         DeptRowVO row = new DeptRowVO();
         BeanUtils.copyProperties(dept, row);
         SysDept parent = map.get(dept.getParentId());
@@ -464,7 +518,191 @@ public class SysDeptServiceImpl implements SysDeptService {
         row.setParentPath(buildPath(dept, map));
         row.setCreateByName(nameOf(userNames, dept.getCreateBy()));
         row.setUpdateByName(nameOf(userNames, dept.getUpdateBy()));
+        fillRegionNames(row, regionNames);
+        row.setRegionName(regionNameOf(dept, regionNames));
+        List<Long> applyIds = applyCompanies.getOrDefault(dept.getId(), List.of());
+        row.setApplyCompanyIds(applyIds);
+        row.setApplyCompanyNames(joinCompanyNames(applyIds, map));
         return row;
+    }
+
+    private void fillRegionNames(DeptVO vo, Map<String, String> regionNames) {
+        vo.setProvinceName(nameOfRegion(regionNames, vo.getProvinceCode()));
+        vo.setCityName(nameOfRegion(regionNames, vo.getCityCode()));
+        vo.setDistrictName(nameOfRegion(regionNames, vo.getDistrictCode()));
+    }
+
+    private String nameOfRegion(Map<String, String> regionNames, String code) {
+        return StringUtils.hasText(code) ? regionNames.get(code) : null;
+    }
+
+    private String regionNameOf(SysDept dept, Map<String, String> regionNames) {
+        String province = nameOfRegion(regionNames, dept.getProvinceCode());
+        String city = nameOfRegion(regionNames, dept.getCityCode());
+        String district = nameOfRegion(regionNames, dept.getDistrictCode());
+        if (province == null && city == null && district == null) {
+            return null;
+        }
+        StringBuilder text = new StringBuilder();
+        if (province != null) {
+            text.append(province);
+        }
+        if (city != null && !Objects.equals(city, province)) {
+            text.append(city);
+        }
+        if (district != null) {
+            text.append(district);
+        }
+        return text.toString();
+    }
+
+    private Map<String, String> regionNameMap() {
+        Map<String, String> names = new HashMap<>();
+        regionMapper.selectList(null).forEach(item -> names.put(item.getCode(), item.getName()));
+        return names;
+    }
+
+    private Map<Long, List<Long>> applyCompanyMap() {
+        Map<Long, List<Long>> result = new HashMap<>();
+        applyCompanyMapper.selectList(null).forEach(item -> result
+                .computeIfAbsent(item.getLeafDeptId(), key -> new ArrayList<>())
+                .add(item.getCompanyDeptId()));
+        return result;
+    }
+
+    private List<Long> applyCompaniesFor(Long leafDeptId) {
+        return applyCompanyMapper.selectList(Wrappers.<SysDeptApplyCompany>lambdaQuery()
+                        .eq(SysDeptApplyCompany::getLeafDeptId, leafDeptId)
+                        .orderByAsc(SysDeptApplyCompany::getCompanyDeptId))
+                .stream()
+                .map(SysDeptApplyCompany::getCompanyDeptId)
+                .toList();
+    }
+
+    private String joinCompanyNames(List<Long> ids, Map<Long, SysDept> map) {
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        return ids.stream()
+                .map(id -> map.containsKey(id) ? map.get(id).getDeptName() : "机构#" + id)
+                .collect(java.util.stream.Collectors.joining("、"));
+    }
+
+    /**
+     * 省/市/区县校验：分拨中心、网点必填；其余类型选填，但一旦填写必须完整且层级/父子链正确。
+     */
+    private void validateRegion(int type, DeptSaveRequest request) {
+        boolean required = type == 4 || type == TYPE_OUTLET;
+        String province = trim(request.getProvinceCode());
+        String city = trim(request.getCityCode());
+        String district = trim(request.getDistrictCode());
+        boolean any = province != null || city != null || district != null;
+        if (!required && !any) {
+            return;
+        }
+        if (province == null || city == null || district == null) {
+            throw new BizException(required
+                    ? "分拨中心/网点必须选择省、市、区县"
+                    : "省、市、区县需同时填写或同时留空");
+        }
+        List<SysRegion> regions = regionMapper.selectList(Wrappers.<SysRegion>lambdaQuery()
+                .in(SysRegion::getCode, province, city, district));
+        Map<String, SysRegion> regionMap = new HashMap<>();
+        regions.forEach(item -> regionMap.put(item.getCode(), item));
+        SysRegion p = regionMap.get(province);
+        SysRegion c = regionMap.get(city);
+        SysRegion d = regionMap.get(district);
+        if (p == null || !Objects.equals(p.getLevel(), 1)) {
+            throw new BizException("省编码不存在或不是省级区划");
+        }
+        if (c == null || !Objects.equals(c.getLevel(), 2)) {
+            throw new BizException("市编码不存在或不是市级区划");
+        }
+        if (d == null || !Objects.equals(d.getLevel(), 3)) {
+            throw new BizException("区县编码不存在或不是区县级区划");
+        }
+        if (!Objects.equals(c.getParentCode(), province) || !Objects.equals(d.getParentCode(), city)) {
+            throw new BizException("省/市/区县不匹配，请重新选择");
+        }
+        request.setProvinceCode(province);
+        request.setCityCode(city);
+        request.setDistrictCode(district);
+    }
+
+    /**
+     * 适用公司校验：仅末端网点需要；为空时分公司管理员默认本公司，总部管理员必须选择。
+     */
+    private List<Long> validateApplyCompanies(boolean leaf, List<Long> ids, Map<Long, SysDept> map) {
+        if (!leaf) {
+            return List.of();
+        }
+        List<Long> cleaned = ids == null ? new ArrayList<>()
+                : ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (cleaned.isEmpty()) {
+            Long companyId = currentCompanyId(map);
+            if (companyId == null) {
+                throw new BizException("请选择末端网点的适用公司");
+            }
+            cleaned = List.of(companyId);
+        }
+        for (Long companyId : cleaned) {
+            SysDept company = map.get(companyId);
+            if (company == null || !Objects.equals(company.getDeptType(), 2)) {
+                throw new BizException("适用公司必须是有效的公司机构");
+            }
+            if (!Boolean.TRUE.equals(company.getStatus())) {
+                throw new BizException("适用公司已禁用：" + company.getDeptName());
+            }
+        }
+        return cleaned;
+    }
+
+    /** 当前登录人所属公司：主机构向上最近的公司；总部或无公司祖先返回 null */
+    private Long currentCompanyId(Map<Long, SysDept> map) {
+        DataScopeContext context = DataScopeContext.current();
+        if (context == null || context.getDeptId() == null) {
+            return null;
+        }
+        SysDept current = map.get(context.getDeptId());
+        int guard = 0;
+        while (current != null && guard++ < 100) {
+            if (Objects.equals(current.getDeptType(), 2)) {
+                return current.getId();
+            }
+            if (Objects.equals(current.getDeptType(), TYPE_HQ)) {
+                return null;
+            }
+            current = map.get(current.getParentId());
+        }
+        return null;
+    }
+
+    private void saveApplyCompanies(Long leafDeptId, List<Long> companyIds) {
+        if (companyIds == null || companyIds.isEmpty()) {
+            return;
+        }
+        Long userId = currentUserId();
+        for (Long companyId : companyIds) {
+            SysDeptApplyCompany relation = new SysDeptApplyCompany();
+            relation.setLeafDeptId(leafDeptId);
+            relation.setCompanyDeptId(companyId);
+            relation.setCreateBy(userId);
+            relation.setCreateTime(LocalDateTime.now());
+            applyCompanyMapper.insert(relation);
+        }
+    }
+
+    private void replaceApplyCompanies(Long leafDeptId, boolean leaf, List<Long> companyIds) {
+        applyCompanyMapper.delete(Wrappers.<SysDeptApplyCompany>lambdaQuery()
+                .eq(SysDeptApplyCompany::getLeafDeptId, leafDeptId));
+        if (leaf) {
+            saveApplyCompanies(leafDeptId, companyIds);
+        }
+    }
+
+    private Long currentUserId() {
+        DataScopeContext context = DataScopeContext.current();
+        return context == null ? null : context.getUserId();
     }
 
     /** 批量解析 create_by / update_by 的姓名；sys_user 未建表时返回空 Map，不报错 */
@@ -523,7 +761,9 @@ public class SysDeptServiceImpl implements SysDeptService {
 
     /** 服务端排序白名单；未识别字段回落到默认 sort_order asc, id asc */
     private Comparator<SysDept> buildComparator(DeptQuery query, Map<Long, SysDept> map,
-                                                 Map<Long, String> userNames) {
+                                                 Map<Long, String> userNames,
+                                                 Map<String, String> regionNames,
+                                                 Map<Long, List<Long>> applyCompanies) {
         String by = query.getSortBy();
         Comparator<SysDept> comparator;
         if (by == null) {
@@ -547,6 +787,12 @@ public class SysDeptServiceImpl implements SysDeptService {
                     Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
             case "isLeaf" -> comparator = Comparator.comparing(item -> Boolean.TRUE.equals(item.getIsLeaf()));
             case "status" -> comparator = Comparator.comparing(item -> Boolean.TRUE.equals(item.getStatus()));
+            case "regionName" -> comparator = Comparator.<SysDept, String>comparing(
+                    item -> regionNameOf(item, regionNames),
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            case "applyCompanyNames" -> comparator = Comparator.<SysDept, String>comparing(
+                    item -> joinCompanyNames(applyCompanies.getOrDefault(item.getId(), List.of()), map),
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
             case "createTime" -> comparator = Comparator.comparing(SysDept::getCreateTime,
                     Comparator.nullsLast(LocalDateTime::compareTo));
             case "updateTime" -> comparator = Comparator.comparing(SysDept::getUpdateTime,

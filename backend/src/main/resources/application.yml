@@ -51,6 +51,10 @@ springdoc:
 yunshu:
   data-scope:
     enabled: true
+  # 区划数据：离线 JSON 导入为主；在线同步默认关闭，无外网时页面会明确提示改用离线导入
+  region:
+    online-sync-enabled: false
+    online-data-url: https://raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/pca-code.json
 
 logging:
   level:

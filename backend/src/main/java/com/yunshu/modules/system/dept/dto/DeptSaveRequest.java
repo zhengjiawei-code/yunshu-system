@@ -68,9 +68,24 @@ public class DeptSaveRequest {
     @Schema(description = "联系电话，手机或座机")
     private String phone;
 
-    @Size(max = 200, message = "机构地址不能超过 200 个字符")
-    @Schema(description = "机构地址")
+    @Size(max = 200, message = "详细地址不能超过 200 个字符")
+    @Schema(description = "详细地址（街道门牌），与省/市/区县并存")
     private String address;
+
+    @Size(max = 12, message = "省编码不能超过 12 位")
+    @Schema(description = "省编码，引用 sys_region.code；分拨中心/网点必填")
+    private String provinceCode;
+
+    @Size(max = 12, message = "市编码不能超过 12 位")
+    @Schema(description = "市编码，引用 sys_region.code；分拨中心/网点必填")
+    private String cityCode;
+
+    @Size(max = 12, message = "区县编码不能超过 12 位")
+    @Schema(description = "区县编码，引用 sys_region.code；分拨中心/网点必填")
+    private String districtCode;
+
+    @Schema(description = "末端网点适用分公司ID列表；isLeaf=true 时必填")
+    private List<Long> applyCompanyIds;
 
     @NotNull(message = "请输入排序号")
     @Min(value = 0, message = "排序号范围为 0-9999")

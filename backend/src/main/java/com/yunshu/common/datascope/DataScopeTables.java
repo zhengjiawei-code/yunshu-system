@@ -6,6 +6,9 @@ import java.util.Set;
 /**
  * 数据权限表清单：平台配置表豁免，其余表默认参与过滤（黑名单模式）。
  * 豁免表不参与行级过滤；新增业务表无需登记，必须自带 dept_id / create_by 列。
+ * <p>
+ * 注意：豁免表的可见性由服务层显式负责（例如区划为平台共享数据、末端网点适用公司为跨公司关系数据），
+ * 不能依赖拦截器兜底。清单任何变更需评审，并同步登记到数据权限规范文档。
  */
 public final class DataScopeTables {
 
@@ -19,6 +22,9 @@ public final class DataScopeTables {
             "sys_user_org",
             "sys_user_menu",
             "sys_dept",
+            "sys_region",
+            "sys_region_sync_log",
+            "sys_dept_apply_company",
             "flyway_schema_history"
     );
 
