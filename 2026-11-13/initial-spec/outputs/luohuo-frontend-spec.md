@@ -389,7 +389,7 @@
 
 ### 3.1.1 列设置固定条款（2026-11-21 家伟定稿，全局标准能力）
 
-> 以下能力是**全局统一能力**，由 `components/base/ColumnSetting.vue` + `composables/useColumnConfig.ts` 单点实现，所有已有列表页（用户/机构/角色/承运商/路由两 Tab/双栏区划库）必须接入同一套组件与协议，禁止各页自写列设置。
+> 以下能力是**全局统一能力**，由 `components/base/ColumnSetting.vue` + `composables/useColumnConfig.ts` 单点实现，所有已有列表页（菜单/用户/机构/角色/承运商/路由两 Tab/双栏区划库）必须接入同一套组件与协议，禁止各页自写列设置。
 
 1. **能力范围**：列顺序拖拽、列显隐、每列是否可排序、每列筛选控件类型、每列默认查询值；修改后保存立即生效。
 2. **筛选控件类型枚举**（固定）：`none / text / select / multiselect / date / daterange / numberrange`。页面声明默认类型，用户可按列切换；某字段后端没有对应筛选参数时只能选 `none`，并在字段清单登记原因，禁止擅自降级为文本。

@@ -58,6 +58,7 @@
           persist-key="system:carrier"
           :column-order="columnOrder"
           :column-hidden="hiddenKeys"
+          :column-sortable="sortableMap"
           show-summary
           :summary-method="summaryMethod"
           show-overflow-tooltip
@@ -332,6 +333,7 @@ const {
   isVisible,
   columnOrder,
   hiddenKeys,
+  sortableMap,
   load: loadColumnConfig,
   save: saveColumnConfig,
   reset: resetColumnConfig,

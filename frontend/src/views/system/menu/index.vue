@@ -14,32 +14,32 @@
           <el-button @click="openCreateMenu()">新增菜单</el-button>
           <el-button link type="primary" @click="expandAll">展开全部</el-button>
           <el-button link @click="collapseAll">收起全部</el-button>
-
-          <el-input
-            v-model="filters.menuName"
-            class="filter-name"
-            placeholder="菜单名称"
-            clearable
-          />
-          <el-select v-model="filters.menuType" class="filter-select" placeholder="类型" clearable>
-            <el-option label="目录" :value="1" />
-            <el-option label="菜单" :value="2" />
-            <el-option label="按钮" :value="3" />
-          </el-select>
-          <el-select v-model="filters.status" class="filter-select" placeholder="状态" clearable>
-            <el-option label="启用" :value="true" />
-            <el-option label="禁用" :value="false" />
-          </el-select>
         </div>
 
         <div class="action-right">
           <el-button class="tool-reset" @click="resetFilters">重置</el-button>
           <el-button :icon="Refresh" :loading="loading" @click="loadData">刷新</el-button>
+
+          <el-popover placement="bottom-end" :width="440" trigger="click">
+            <template #reference>
+              <el-button :icon="Setting">列设置</el-button>
+            </template>
+            <column-setting
+              :schema="schema"
+              :states="states"
+              :loading="columnLoading"
+              :saving="columnSaving"
+              @update:states="onStatesUpdate"
+              @save="handleColumnSave"
+              @reset="handleColumnReset"
+            />
+          </el-popover>
         </div>
       </div>
 
       <div class="menu-table-wrap">
         <smart-table
+          ref="menuTableRef"
           v-loading="loading"
           :data="displayTree"
           row-key="id"
@@ -48,12 +48,32 @@
           :expand-row-keys="expandRowKeys"
           :empty-text="emptyText"
           persist-key="system:menu"
+          :column-order="columnOrder"
+          :column-hidden="hiddenKeys"
+          :column-sortable="sortableMap"
           show-overflow-tooltip
           scrollbar-always-on
           class="menu-table"
           @sort-change="handleSortChange"
         >
-          <el-table-column prop="menuName" label="菜单名称" min-width="240">
+          <el-table-column
+            v-if="isVisible('menuName')"
+            prop="menuName"
+            label="菜单名称"
+            min-width="240"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">菜单名称</span>
+                <column-filter
+                  v-if="col('menuName').filterType !== 'none'"
+                  v-model="filters.menuName"
+                  :type="col('menuName').filterType"
+                  :options="col('menuName').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">
               <span class="menu-name" :class="{ 'is-directory': row.menuType === 1 }">
                 <el-icon v-if="row.menuType !== 3" class="menu-name__icon">
@@ -64,33 +84,152 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="menuType" label="类型" width="90" align="center">
+          <el-table-column
+            v-if="isVisible('menuType')"
+            prop="menuType"
+            label="类型"
+            width="110"
+            align="center"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">类型</span>
+                <column-filter
+                  v-if="col('menuType').filterType !== 'none'"
+                  v-model="filters.menuType"
+                  :type="col('menuType').filterType"
+                  :options="col('menuType').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">
               <status-tag :type="typeTag(row.menuType).type" :text="typeTag(row.menuType).text" />
             </template>
           </el-table-column>
 
-          <el-table-column prop="routePath" label="路由地址" min-width="200">
+          <el-table-column
+            v-if="isVisible('routePath')"
+            prop="routePath"
+            label="路由地址"
+            min-width="200"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">路由地址</span>
+                <column-filter
+                  v-if="col('routePath').filterType !== 'none'"
+                  v-model="filters.routePath"
+                  :type="col('routePath').filterType"
+                  :options="col('routePath').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">{{ row.routePath || '—' }}</template>
           </el-table-column>
 
-          <el-table-column prop="component" label="组件路径" min-width="180">
+          <el-table-column
+            v-if="isVisible('component')"
+            prop="component"
+            label="组件路径"
+            min-width="180"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">组件路径</span>
+                <column-filter
+                  v-if="col('component').filterType !== 'none'"
+                  v-model="filters.component"
+                  :type="col('component').filterType"
+                  :options="col('component').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">{{ row.component || '—' }}</template>
           </el-table-column>
 
-          <el-table-column prop="perms" label="权限标识" min-width="160">
+          <el-table-column v-if="isVisible('perms')" prop="perms" label="权限标识" min-width="160">
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">权限标识</span>
+                <column-filter
+                  v-if="col('perms').filterType !== 'none'"
+                  v-model="filters.perms"
+                  :type="col('perms').filterType"
+                  :options="col('perms').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">
               <span :class="{ 'mono': row.perms }">{{ row.perms || '—' }}</span>
             </template>
           </el-table-column>
 
-          <el-table-column prop="terminalType" label="终端" min-width="90" align="center">
+          <el-table-column
+            v-if="isVisible('terminalType')"
+            prop="terminalType"
+            label="终端"
+            min-width="110"
+            align="center"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">终端</span>
+                <column-filter
+                  v-if="col('terminalType').filterType !== 'none'"
+                  v-model="filters.terminalType"
+                  :type="col('terminalType').filterType"
+                  :options="col('terminalType').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">{{ row.terminalType || '—' }}</template>
           </el-table-column>
 
-          <el-table-column prop="sortOrder" label="排序" width="80" align="right" />
+          <el-table-column
+            v-if="isVisible('sortOrder')"
+            prop="sortOrder"
+            label="排序"
+            width="110"
+            align="right"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">排序</span>
+                <column-filter
+                  v-if="col('sortOrder').filterType !== 'none'"
+                  v-model="filters.sortRange"
+                  :type="col('sortOrder').filterType"
+                  :options="col('sortOrder').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
+          </el-table-column>
 
-          <el-table-column prop="visible" label="显示" width="80" align="center">
+          <el-table-column
+            v-if="isVisible('visible')"
+            prop="visible"
+            label="显示"
+            width="110"
+            align="center"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">显示</span>
+                <column-filter
+                  v-if="col('visible').filterType !== 'none'"
+                  v-model="filters.visible"
+                  :type="col('visible').filterType"
+                  :options="col('visible').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">
               <status-tag
                 v-if="row.menuType !== 3"
@@ -101,7 +240,25 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="status" label="状态" width="80" align="center">
+          <el-table-column
+            v-if="isVisible('status')"
+            prop="status"
+            label="状态"
+            width="110"
+            align="center"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">状态</span>
+                <column-filter
+                  v-if="col('status').filterType !== 'none'"
+                  v-model="filters.status"
+                  :type="col('status').filterType"
+                  :options="col('status').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">
               <status-tag
                 :type="row.status ? 'success' : 'danger'"
@@ -110,11 +267,36 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="updateTime" label="最后修改时间" min-width="170" align="center">
+          <el-table-column
+            v-if="isVisible('updateTime')"
+            prop="updateTime"
+            label="最后修改时间"
+            min-width="200"
+            align="center"
+          >
+            <template #header>
+              <div class="col-head">
+                <span class="col-head__label">最后修改时间</span>
+                <column-filter
+                  v-if="col('updateTime').filterType !== 'none'"
+                  v-model="filters.updateRange"
+                  :type="col('updateTime').filterType"
+                  :options="col('updateTime').filterOptions"
+                  @change="onFilterChange"
+                />
+              </div>
+            </template>
             <template #default="{ row }">{{ row.updateTime || '—' }}</template>
           </el-table-column>
 
-          <el-table-column label="操作" width="240" fixed="right" align="right">
+          <el-table-column
+            v-if="isVisible('operation')"
+            label="操作"
+            width="240"
+            fixed="right"
+            align="right"
+            :sortable="false"
+          >
             <template #default="{ row }">
               <div class="row-actions">
                 <template v-if="row.menuType === 1">
@@ -166,18 +348,93 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Setting } from '@element-plus/icons-vue'
 import type { MenuNode } from '@/types/menu'
+import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import { deleteMenu, getMenuTree } from '@/api/system/menu'
+import { useColumnConfig } from '@/composables/useColumnConfig'
 import { resolveIcon } from '@/utils/icon'
 import { collectExpandKeys, filterTree } from '@/utils/tree'
 import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
+import ColumnFilter from '@/components/base/ColumnFilter.vue'
+import ColumnSetting from '@/components/base/ColumnSetting.vue'
 import MenuFormDrawer from './components/MenuFormDrawer.vue'
 import ButtonFormDrawer from './components/ButtonFormDrawer.vue'
 
 defineOptions({ name: 'SystemMenu' })
 
+const schema = reactive<ColumnDef[]>([
+  { key: 'menuName', label: '菜单名称', prop: 'menuName', filterType: 'text', locked: true },
+  {
+    key: 'menuType',
+    label: '类型',
+    prop: 'menuType',
+    filterType: 'select',
+    filterOptions: [
+      { label: '目录', value: 1 },
+      { label: '菜单', value: 2 },
+      { label: '按钮', value: 3 }
+    ]
+  },
+  { key: 'routePath', label: '路由地址', prop: 'routePath', filterType: 'text' },
+  { key: 'component', label: '组件路径', prop: 'component', filterType: 'text' },
+  { key: 'perms', label: '权限标识', prop: 'perms', filterType: 'text' },
+  { key: 'terminalType', label: '终端', prop: 'terminalType', filterType: 'text' },
+  { key: 'sortOrder', label: '排序', prop: 'sortOrder', filterType: 'numberrange', align: 'right' },
+  {
+    key: 'visible',
+    label: '显示',
+    prop: 'visible',
+    filterType: 'select',
+    filterOptions: [
+      { label: '显示', value: true },
+      { label: '隐藏', value: false }
+    ]
+  },
+  {
+    key: 'status',
+    label: '状态',
+    prop: 'status',
+    filterType: 'select',
+    filterOptions: [
+      { label: '启用', value: true },
+      { label: '禁用', value: false }
+    ]
+  },
+  {
+    key: 'updateTime',
+    label: '最后修改时间',
+    prop: 'updateTime',
+    filterType: 'daterange',
+    align: 'center'
+  },
+  {
+    key: 'operation',
+    label: '操作',
+    elKey: 'label:操作',
+    filterType: 'none',
+    sortable: false,
+    locked: true
+  }
+])
+
+const {
+  states,
+  loading: columnLoading,
+  saving: columnSaving,
+  col,
+  isVisible,
+  columnOrder,
+  hiddenKeys,
+  sortableMap,
+  load: loadColumnConfig,
+  save: saveColumnConfig,
+  reset: resetColumnConfig,
+  defaultFilters
+} = useColumnConfig('system:menu', schema)
+
+const menuTableRef = ref<InstanceType<typeof SmartTable>>()
 const loading = ref(false)
 const treeData = ref<MenuNode[]>([])
 const expandRowKeys = ref<number[]>([])
@@ -185,11 +442,25 @@ const expandRowKeys = ref<number[]>([])
 const filters = reactive<{
   menuName: string
   menuType: number | '' | undefined
+  routePath: string
+  component: string
+  perms: string
+  terminalType: string
+  sortRange: [number | undefined, number | undefined]
+  visible: boolean | '' | undefined
   status: boolean | '' | undefined
+  updateRange: string[]
 }>({
   menuName: '',
   menuType: '',
-  status: ''
+  routePath: '',
+  component: '',
+  perms: '',
+  terminalType: '',
+  sortRange: [undefined, undefined],
+  visible: '',
+  status: '',
+  updateRange: []
 })
 
 /** 服务端排序状态：菜单是树表，排序只作用于同级节点 */
@@ -211,25 +482,57 @@ function handleSortChange({ prop, order }: { prop?: string; order?: 'ascending' 
 
 /** 下拉清空时 Element Plus 可能给 undefined，这里统一归一化 */
 const normalized = computed(() => ({
-  keyword: filters.menuName.trim().toLowerCase(),
+  menuName: filters.menuName.trim().toLowerCase(),
+  routePath: filters.routePath.trim().toLowerCase(),
+  component: filters.component.trim().toLowerCase(),
+  perms: filters.perms.trim().toLowerCase(),
+  terminalType: filters.terminalType.trim().toLowerCase(),
   menuType: filters.menuType === '' || filters.menuType === undefined ? null : filters.menuType,
-  status: filters.status === '' || filters.status === undefined ? null : filters.status
+  visible: filters.visible === '' || filters.visible === undefined ? null : filters.visible,
+  status: filters.status === '' || filters.status === undefined ? null : filters.status,
+  sortMin: filters.sortRange[0] ?? null,
+  sortMax: filters.sortRange[1] ?? null,
+  updateStart: filters.updateRange[0] || null,
+  updateEnd: filters.updateRange[1] || null
 }))
 
-const filterActive = computed(
-  () =>
-    !!normalized.value.keyword ||
-    normalized.value.menuType !== null ||
-    normalized.value.status !== null
-)
+const filterActive = computed(() => {
+  const n = normalized.value
+  return (
+    !!n.menuName ||
+    !!n.routePath ||
+    !!n.component ||
+    !!n.perms ||
+    !!n.terminalType ||
+    n.menuType !== null ||
+    n.visible !== null ||
+    n.status !== null ||
+    n.sortMin !== null ||
+    n.sortMax !== null ||
+    n.updateStart !== null ||
+    n.updateEnd !== null
+  )
+})
 
 const displayTree = computed(() => {
   if (!filterActive.value) return treeData.value
-  const { keyword, menuType, status } = normalized.value
+  const n = normalized.value
+  const contains = (value: unknown, keyword: string) =>
+    !keyword || String(value ?? '').toLowerCase().includes(keyword)
   return filterTree(treeData.value, (node) => {
-    if (keyword && !node.menuName.toLowerCase().includes(keyword)) return false
-    if (menuType !== null && node.menuType !== menuType) return false
-    if (status !== null && node.status !== status) return false
+    if (!contains(node.menuName, n.menuName)) return false
+    if (!contains(node.routePath, n.routePath)) return false
+    if (!contains(node.component, n.component)) return false
+    if (!contains(node.perms, n.perms)) return false
+    if (!contains(node.terminalType, n.terminalType)) return false
+    if (n.menuType !== null && node.menuType !== n.menuType) return false
+    if (n.visible !== null && Boolean(node.visible) !== n.visible) return false
+    if (n.status !== null && Boolean(node.status) !== n.status) return false
+    if (n.sortMin !== null && (node.sortOrder ?? 0) < n.sortMin) return false
+    if (n.sortMax !== null && (node.sortOrder ?? 0) > n.sortMax) return false
+    const updateDate = (node.updateTime || '').slice(0, 10)
+    if (n.updateStart && (!updateDate || updateDate < n.updateStart)) return false
+    if (n.updateEnd && (!updateDate || updateDate > n.updateEnd)) return false
     return true
   })
 })
@@ -295,15 +598,74 @@ function collapseAll() {
 function resetFilters() {
   filters.menuName = ''
   filters.menuType = ''
+  filters.routePath = ''
+  filters.component = ''
+  filters.perms = ''
+  filters.terminalType = ''
+  filters.sortRange = [undefined, undefined]
+  filters.visible = ''
   filters.status = ''
+  filters.updateRange = []
+}
+
+/** 表头筛选变化：纯前端筛选，立即重算树与展开项 */
+function onFilterChange() {
+  expandRowKeys.value = filterActive.value
+    ? collectExpandKeys(displayTree.value)
+    : collectExpandKeys(treeData.value, true)
 }
 
 watch(
-  () => [filters.menuName, filters.menuType, filters.status],
-  () => {
-    expandRowKeys.value = filterActive.value ? collectExpandKeys(displayTree.value) : collectExpandKeys(treeData.value, true)
-  }
+  () => [
+    filters.menuName,
+    filters.menuType,
+    filters.routePath,
+    filters.component,
+    filters.perms,
+    filters.terminalType,
+    filters.sortRange[0],
+    filters.sortRange[1],
+    filters.visible,
+    filters.status,
+    filters.updateRange[0],
+    filters.updateRange[1]
+  ],
+  onFilterChange
 )
+
+/* ---------- 统一列设置（后端按用户+页面持久化） ---------- */
+function onStatesUpdate(next: ColumnItemState[]) {
+  states.value = next
+}
+
+async function handleColumnSave() {
+  await saveColumnConfig()
+}
+
+async function handleColumnReset() {
+  await resetColumnConfig()
+  menuTableRef.value?.resetColumnWidths()
+}
+
+/** 首次进入按默认查询值自动带出筛选 */
+function applyDefaultFilters() {
+  const defaults = defaultFilters()
+  for (const key of ['menuName', 'routePath', 'component', 'perms', 'terminalType'] as const) {
+    if (defaults[key] != null) filters[key] = String(defaults[key])
+  }
+  if (defaults.menuType != null) filters.menuType = Number(defaults.menuType)
+  if (defaults.visible != null) filters.visible = Boolean(defaults.visible)
+  if (defaults.status != null) filters.status = Boolean(defaults.status)
+  if (Array.isArray(defaults.sortOrder)) {
+    filters.sortRange = [
+      defaults.sortOrder[0] == null ? undefined : Number(defaults.sortOrder[0]),
+      defaults.sortOrder[1] == null ? undefined : Number(defaults.sortOrder[1])
+    ]
+  }
+  if (Array.isArray(defaults.updateTime)) {
+    filters.updateRange = defaults.updateTime.map((item) => String(item))
+  }
+}
 
 function openCreateDirectory(parentId = 0) {
   menuDrawer.mode = 'create'
@@ -378,7 +740,11 @@ function handleSaved() {
   loadData()
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  await loadColumnConfig()
+  applyDefaultFilters()
+  await loadData()
+})
 </script>
 
 <style scoped>
@@ -387,12 +753,37 @@ onMounted(loadData)
   min-height: 0;
 }
 
-.filter-name {
-  width: 180px;
+/* 表头内的筛选控件 */
+.col-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
 }
 
-.filter-select {
-  width: 120px;
+.col-head__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--font-weight-medium);
+}
+
+.col-head :deep(.el-date-editor) {
+  width: 100%;
+}
+
+.col-head :deep(.el-range-separator) {
+  flex: 0 0 auto;
+  padding: 0 2px;
+}
+
+.col-head :deep(.el-range-input) {
+  font-size: 12px;
+}
+
+.menu-table :deep(.el-table__header th .cell) {
+  overflow: visible;
+  line-height: 1.4;
 }
 
 .menu-name {

@@ -191,6 +191,15 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
     states.value.filter((item) => !item.visible).map((item) => renderKeyOf(item.key))
   )
 
+  /** 每列是否可排序（键为渲染键），供 SmartTable 真实应用 */
+  const sortableMap = computed(() => {
+    const result: Record<string, boolean> = {}
+    states.value.forEach((item) => {
+      result[renderKeyOf(item.key)] = item.sortable
+    })
+    return result
+  })
+
   /** 列在 el-table-column 上的匹配键：prop 优先，其次显式 elKey，最后 label */
   function renderKeyOf(key: string): string {
     const def = schema.find((item) => item.key === key)
@@ -223,6 +232,7 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
     isVisible,
     columnOrder,
     hiddenKeys,
+    sortableMap,
     defaultFilters
   }
 }

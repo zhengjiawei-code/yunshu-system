@@ -51,8 +51,14 @@ const ColumnNodes = () => {
       }
       const name = (node.type as { name?: string } | null)?.name
       const columnProps = (node.props || {}) as Record<string, unknown>
-      if (name === 'ElTableColumn' && columnProps.prop && columnProps.sortable === undefined) {
-        out.push(cloneVNode(node, { ...columnProps, sortable: 'custom' }))
+      if (name === 'ElTableColumn' && columnProps.prop) {
+        if (columnProps.sortable === undefined) {
+          const key = String(columnProps.prop)
+          const allowed = props.columnSortable?.[key] !== false
+          out.push(cloneVNode(node, { ...columnProps, sortable: allowed ? 'custom' : false }))
+          return
+        }
+        out.push(node)
         return
       }
       out.push(node)
@@ -116,6 +122,8 @@ const props = withDefaults(
     columnOrder?: string[]
     /** 隐藏列（统一列设置） */
     columnHidden?: string[]
+    /** 每列是否可排序（统一列设置）；键为 prop，未声明的列默认可排序 */
+    columnSortable?: Record<string, boolean>
   }>(),
   {
     autoWidth: true,
@@ -123,7 +131,8 @@ const props = withDefaults(
     autoWidthExclude: () => [],
     persistKey: '',
     columnOrder: () => [],
-    columnHidden: () => []
+    columnHidden: () => [],
+    columnSortable: () => ({})
   }
 )
 
@@ -131,7 +140,9 @@ const props = withDefaults(
  * el-table 的列顺序由列注册顺序决定，仅调整 vnode 顺序不会重排；
  * 顺序变化时整体重建 el-table，确保列按新顺序注册（列宽会按持久化值重新应用）。
  */
-const columnSignature = computed(() => (props.columnOrder || []).join('|'))
+const columnSignature = computed(
+  () => `${(props.columnOrder || []).join('|')}#${JSON.stringify(props.columnSortable || {})}`
+)
 
 const MIN_COLUMN_WIDTH = 80
 

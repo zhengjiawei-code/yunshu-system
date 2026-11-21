@@ -61,6 +61,7 @@
                 persist-key="system:route"
                 :column-order="routeColumnOrder"
                 :column-hidden="routeHiddenKeys"
+                :column-sortable="routeSortableMap"
                 show-summary
                 :summary-method="routeSummary"
                 show-overflow-tooltip
@@ -315,6 +316,7 @@
                     scrollbar-always-on
                     :column-order="regionColumnOrder"
                     :column-hidden="regionHiddenKeys"
+                    :column-sortable="regionSortableMap"
                     class="region-table"
                     @selection-change="onRegionSelection"
                   >
@@ -465,6 +467,7 @@
                     persist-key="system:route-transfer"
                     :column-order="transferColumnOrder"
                     :column-hidden="transferHiddenKeys"
+                    :column-sortable="transferSortableMap"
                     show-summary
                     :summary-method="transferSummary"
                     show-overflow-tooltip
@@ -908,6 +911,7 @@ const {
   col: routeCol,
   columnOrder: routeColumnOrder,
   hiddenKeys: routeHiddenKeys,
+  sortableMap: routeSortableMap,
   load: loadRouteColumnConfig,
   save: saveRouteColumnConfig,
   reset: resetRouteColumnConfig,
@@ -929,6 +933,7 @@ const {
   col,
   columnOrder: transferColumnOrder,
   hiddenKeys: transferHiddenKeys,
+  sortableMap: transferSortableMap,
   load: loadTransferColumnConfig,
   save: saveTransferColumnConfig,
   reset: resetTransferColumnConfig,
@@ -951,6 +956,7 @@ const {
   isVisible: regionVisible,
   columnOrder: regionColumnOrder,
   hiddenKeys: regionHiddenKeys,
+  sortableMap: regionSortableMap,
   load: loadRegionColumnConfig,
   save: saveRegionColumnConfig,
   reset: resetRegionColumnConfig

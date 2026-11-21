@@ -24,6 +24,7 @@ public class ColumnConfigServiceImpl implements ColumnConfigService {
 
     /** 已接入统一列设置的页面标识；新增页面必须在此登记，避免脏 key 写库 */
     static final Set<String> PAGE_KEYS = Set.of(
+            "system:menu",
             "system:user",
             "system:org",
             "system:role",
