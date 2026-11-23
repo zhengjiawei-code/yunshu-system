@@ -1110,7 +1110,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .op-page {
   height: calc(100vh - var(--header-height));
-  min-width: 1100px;
+  min-width: 980px;
   box-sizing: border-box;
   padding: 6px 10px;
   display: flex;
