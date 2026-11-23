@@ -215,8 +215,14 @@ function defaultState(def: ColumnDef): ColumnItemState {
  * 统一列设置：所有列表页共用同一协议。
  * 后端按「用户 + 页面标识」持久化，本地只保留列宽（SmartTable persistKey）。
  */
-export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
+export function useColumnConfig(
+  pageKey: string,
+  schema: ColumnDef[],
+  options: { leadingKeys?: string[] } = {}
+) {
   const configurable = computed(() => schema.filter((item) => !item.ignored))
+  /** 页面指定的前置列：存量配置与默认配置都需保证这些列排在最前，顺序以数组为准 */
+  const leadingKeys = options.leadingKeys ?? []
   const states = ref<ColumnItemState[]>(configurable.value.map(defaultState))
   const loading = ref(false)
   const saving = ref(false)
@@ -238,7 +244,23 @@ export function useColumnConfig(pageKey: string, schema: ColumnDef[]) {
     for (const def of configurable.value) {
       if (!seen.has(def.key)) result.push(defaultState(def))
     }
-    return result
+    return applyLeadingOrder(result)
+  }
+
+  /**
+   * 强制前置列排在首位：存量配置保存的是旧顺序，仅改 schema 默认顺序不会生效；
+   * 这里按页面声明的 leadingKeys 调整内存顺序，未声明的页面原样返回。
+   */
+  function applyLeadingOrder(list: ColumnItemState[]): ColumnItemState[] {
+    if (!leadingKeys.length) return list
+    const front = leadingKeys
+      .map((key) => list.find((item) => item.key === key))
+      .filter((item): item is ColumnItemState => !!item)
+    if (!front.length) return list
+    const prefix = list.slice(0, front.length).map((item) => item.key)
+    if (prefix.join('|') === front.map((item) => item.key).join('|')) return list
+    const frontKeys = new Set(front.map((item) => item.key))
+    return [...front, ...list.filter((item) => !frontKeys.has(item.key))]
   }
 
   async function load() {

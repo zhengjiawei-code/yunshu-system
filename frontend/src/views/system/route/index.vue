@@ -1123,6 +1123,26 @@ const routeSchema = reactive<ColumnDef[]>([
 ])
 
 const transferSchema = reactive<ColumnDef[]>([
+  {
+    key: 'status',
+    label: '状态',
+    prop: 'status',
+    filterType: 'select',
+    filterOptions: [
+      { label: '启用', value: true },
+      { label: '停用', value: false }
+    ]
+  },
+  {
+    key: 'grantScope',
+    label: '授权范围',
+    prop: 'grantScope',
+    filterType: 'select',
+    filterOptions: [
+      { label: '全部', value: 'ALL' },
+      { label: '部分', value: 'PARTIAL' }
+    ]
+  },
   // 路由编码/路由名称默认隐藏：路由名称与目的地重复、编码对操作人员无意义；列定义保留，可在列设置勾回
   {
     key: 'routeCode',
@@ -1183,29 +1203,9 @@ const transferSchema = reactive<ColumnDef[]>([
     ]
   },
   { key: 'carrierName', label: '承运商', prop: 'carrierName', filterType: 'select', filterOptions: [] },
-  {
-    key: 'status',
-    label: '状态',
-    prop: 'status',
-    filterType: 'select',
-    filterOptions: [
-      { label: '启用', value: true },
-      { label: '停用', value: false }
-    ]
-  },
   { key: 'sortOrder', label: '排序', prop: 'sortOrder', filterType: 'none', filterHidden: true, align: 'right' },
   { key: 'updateByName', label: '修改人', prop: 'updateByName', filterType: 'text' },
   { key: 'updateTime', label: '修改时间', prop: 'updateTime', filterType: 'daterange', align: 'center' },
-  {
-    key: 'grantScope',
-    label: '授权范围',
-    prop: 'grantScope',
-    filterType: 'select',
-    filterOptions: [
-      { label: '全部', value: 'ALL' },
-      { label: '部分', value: 'PARTIAL' }
-    ]
-  },
   { key: 'ownerCompanyName', label: '创建公司', prop: 'ownerCompanyName', filterType: 'select', selectMultiple: true, filterOptions: [] },
   {
     key: 'operation',
@@ -1283,7 +1283,9 @@ const {
   reset: resetTransferColumnConfig,
   defaultFiltersRaw: transferDefaultFilters,
   filterModesParam: transferFilterModesParam
-} = useColumnConfig('system:route-transfer', transferSchema)
+} = useColumnConfig('system:route-transfer', transferSchema, {
+  leadingKeys: ['status', 'grantScope']
+})
 
 const transferColumnState = computed(
   () =>
