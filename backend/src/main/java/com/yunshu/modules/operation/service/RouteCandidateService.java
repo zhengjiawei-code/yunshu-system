@@ -386,12 +386,20 @@ public class RouteCandidateService {
         vo.setProvinceName(province == null ? null : province.getName());
         vo.setDestName(joinRegionName(province, city, district));
         SysDept hub = resolveDestHub(district.getCode(), context.depts());
+        if (hub == null) {
+            // 末段区划本身无归属网点时，再取末段起点/适用机构（若其本身是网点，
+            // 如"济南分拨中心 → 广州 → 荔湾区"应取广州网点，而不是链路首节点）
+            SysDept applyDept = transfer.getApplyDeptId() == null ? null
+                    : context.depts().get(transfer.getApplyDeptId());
+            if (isHubDept(applyDept)) {
+                hub = applyDept;
+            }
+        }
         if (hub != null) {
-            // 末段目标区划有归属网点（type=5 且启用）：运达网点取该网点
             vo.setDestHubId(hub.getId());
             vo.setDestHubName(hub.getDeptName());
         } else {
-            // 末段外转/直达只到区划、无归属网点：运达网点回落为始发网点（路由首节点出发网点），
+            // 末段外转/直达只到区划、无归属网点：运达网点回落为始发网点（链路首节点），
             // 不得取路由中间分拨中心或与始发无关的节点
             RouteCandidateVO.Node originNode = nodes.get(0);
             vo.setDestHubId(originNode.getFromDeptId());
@@ -454,11 +462,16 @@ public class RouteCandidateService {
 
     private SysDept resolveDestHub(String districtCode, Map<Long, SysDept> depts) {
         return depts.values().stream()
-                .filter(item -> Integer.valueOf(5).equals(item.getDeptType()))
-                .filter(item -> Boolean.TRUE.equals(item.getStatus()))
+                .filter(this::isHubDept)
                 .filter(item -> districtCode.equals(item.getDistrictCode()))
                 .min(Comparator.comparing(SysDept::getId))
                 .orElse(null);
+    }
+
+    private boolean isHubDept(SysDept dept) {
+        return dept != null
+                && Integer.valueOf(5).equals(dept.getDeptType())
+                && Boolean.TRUE.equals(dept.getStatus());
     }
 
     private String deptName(Map<Long, SysDept> depts, Long deptId) {
