@@ -115,7 +115,7 @@
                   </div>
                   <div v-if="!item.noRoute" class="cand-line2">
                     <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
-                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')">目的网点 {{ item.destHubName || '—' }}</span>
+                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')"><span class="cand-hub-label">目的网点</span> {{ item.destHubName || '—' }}</span>
                   </div>
                 </button>
               </template>
@@ -166,7 +166,7 @@
                   </div>
                   <div class="cand-line2">
                     <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
-                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')">目的网点 {{ item.destHubName || '—' }}</span>
+                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')"><span class="cand-hub-label">目的网点</span> {{ item.destHubName || '—' }}</span>
                   </div>
                 </button>
               </div>
@@ -1573,6 +1573,10 @@ onBeforeUnmount(() => {
   color: var(--color-danger);
   font-size: 11px;
   font-weight: 400;
+}
+
+.cand-hub-label {
+  color: #303133;
 }
 
 .cand-dest {
