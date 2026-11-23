@@ -34,6 +34,9 @@ public class RouteTransferVO {
 
     private String destTownName;
 
+    /** 目的地最末级区划名称（列表显示与筛选口径），园区划层级取对应名称 */
+    private String destLeafName;
+
     private Long carrierId;
 
     private String carrierName;

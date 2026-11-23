@@ -691,6 +691,7 @@
                           />
                         </div>
                       </template>
+                      <template #default="{ row }">{{ row.destLeafName || '—' }}</template>
                     </el-table-column>
 
                     <el-table-column
@@ -2578,6 +2579,7 @@ async function handleTransferExport() {
     const body = result.records.map((row, index) => [
       String(index + 1),
       ...columns.map((item) => {
+        if (item.key === 'regionFullName') return row.destLeafName || '—'
         if (item.key === 'transferType') return row.transferType === 1 ? '直达' : '外转'
         if (item.key === 'status') return row.status ? '启用' : '停用'
         if (item.key === 'regionLevel') return levelText(row.regionLevel)

@@ -312,6 +312,8 @@ public class SysRouteServiceImpl implements SysRouteService {
         Set<Long> ownerCompanyIds = parseIds(query.getOwnerCompanyIds());
 
         List<SysRouteTransfer> allTransfers = transferMapper.selectList(Wrappers.<SysRouteTransfer>lambdaQuery());
+        // 目的地显示/筛选统一取最末级区划名，先解析区划名称供筛选、排序、VO 共用
+        Map<String, String> regionNames = resolveRegionNames(allTransfers);
         // 修改人姓名筛选需要先按姓名解析，再由匹配方式决定命中范围
         Map<Long, String> updateNames = modifyName == null ? Map.of()
                 : resolveUserNames(allTransfers.stream().map(SysRouteTransfer::getUpdateBy)
@@ -342,7 +344,7 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .filter(item -> region == null
                         || TextFilterMode.match(item.getRegionCode(), region,
                         TextFilterMode.modeOf(modes, "regionFullName"))
-                        || TextFilterMode.match(item.getRegionFullName(), region,
+                        || TextFilterMode.match(destLeafName(item, regionNames), region,
                         TextFilterMode.modeOf(modes, "regionFullName")))
                 .filter(item -> modifyName == null
                         || TextFilterMode.match(updateNames.get(item.getUpdateBy()), modifyName,
@@ -365,7 +367,6 @@ public class SysRouteServiceImpl implements SysRouteService {
             }
         });
         Map<Long, String> names = resolveUserNames(userIds);
-        Map<String, String> regionNames = resolveRegionNames(candidates);
         List<SysRouteTransfer> visible = candidates.stream()
                 .sorted(buildTransferComparator(query, depts, grants, names, regionNames))
                 .toList();
@@ -1557,17 +1558,12 @@ public class SysRouteServiceImpl implements SysRouteService {
         vo.setRegionFullName(item.getRegionFullName());
         String regionCode = item.getRegionCode();
         if (regionCode != null && regionCode.length() >= 2) {
-            vo.setDestProvinceName(regionNames.get(regionCode.substring(0, 2) + "0000"));
-            if (regionCode.length() >= 4) {
-                vo.setDestCityName(regionNames.get(regionCode.substring(0, 4) + "00"));
-            }
-            if (regionCode.length() >= 6) {
-                vo.setDestDistrictName(regionNames.get(regionCode.substring(0, 6)));
-            }
-            if (regionCode.length() > 6) {
-                vo.setDestTownName(regionNames.get(regionCode));
-            }
+            vo.setDestProvinceName(destLevelName(item, regionNames, 1));
+            vo.setDestCityName(destLevelName(item, regionNames, 2));
+            vo.setDestDistrictName(destLevelName(item, regionNames, 3));
+            vo.setDestTownName(destLevelName(item, regionNames, 4));
         }
+        vo.setDestLeafName(destLeafName(item, regionNames));
         vo.setCarrierId(item.getCarrierId());
         SysCarrier carrier = item.getCarrierId() == null ? null : carriers.get(item.getCarrierId());
         vo.setCarrierName(carrier == null ? null : carrier.getCarrierName());
@@ -1701,19 +1697,20 @@ public class SysRouteServiceImpl implements SysRouteService {
             case "applyDeptName" -> Comparator.<SysRouteTransfer, String>comparing(
                     item -> deptName(depts, item.getApplyDeptId()),
                     Comparator.nullsLast(Comparator.naturalOrder()));
-            case "regionFullName" -> Comparator.comparing(SysRouteTransfer::getRegionFullName,
+            case "regionFullName" -> Comparator.<SysRouteTransfer, String>comparing(
+                    item -> destLeafName(item, regionNames),
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "destProvinceName" -> Comparator.<SysRouteTransfer, String>comparing(
-                    item -> destRegionName(regionNames, item.getRegionCode(), 2),
+                    item -> destLevelName(item, regionNames, 1),
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "destCityName" -> Comparator.<SysRouteTransfer, String>comparing(
-                    item -> destRegionName(regionNames, item.getRegionCode(), 4),
+                    item -> destLevelName(item, regionNames, 2),
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "destDistrictName" -> Comparator.<SysRouteTransfer, String>comparing(
-                    item -> destRegionName(regionNames, item.getRegionCode(), 6),
+                    item -> destLevelName(item, regionNames, 3),
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "destTownName" -> Comparator.<SysRouteTransfer, String>comparing(
-                    item -> destRegionName(regionNames, item.getRegionCode(), 9),
+                    item -> destLevelName(item, regionNames, 4),
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "regionLevel" -> Comparator.comparing(SysRouteTransfer::getRegionLevel,
                     Comparator.nullsLast(Comparator.naturalOrder()));
@@ -1896,21 +1893,57 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .stream().collect(Collectors.toMap(SysRegion::getCode, SysRegion::getName, (a, b) -> a));
     }
 
-    /** 取目的地某一级区划名称：levelLen=2 省、4 市、6 区县、9 乡级 */
-    private String destRegionName(Map<String, String> regionNames, String regionCode, int levelLen) {
-        if (regionCode == null) {
+    /** 取目的地某一级区划名称：targetLevel=1 省、2 市、3 区县、4 乡级；未录入到该级返回 null */
+    private String destLevelName(SysRouteTransfer item, Map<String, String> regionNames, int targetLevel) {
+        String regionCode = item.getRegionCode();
+        if (!StringUtils.hasText(regionCode)) {
             return null;
         }
-        if (levelLen == 2) {
-            return regionCode.length() >= 2 ? regionNames.get(regionCode.substring(0, 2) + "0000") : null;
+        Integer level = item.getRegionLevel();
+        if (level != null && level < targetLevel) {
+            return null;
         }
-        if (levelLen == 4) {
-            return regionCode.length() >= 4 ? regionNames.get(regionCode.substring(0, 4) + "00") : null;
+        return switch (targetLevel) {
+            case 1 -> regionCode.length() >= 2 ? regionNames.get(regionCode.substring(0, 2) + "0000") : null;
+            case 2 -> regionCode.length() >= 4 ? regionNames.get(regionCode.substring(0, 4) + "00") : null;
+            case 3 -> regionCode.length() >= 6 ? regionNames.get(regionCode.substring(0, 6)) : null;
+            default -> regionCode.length() > 6 ? regionNames.get(regionCode) : null;
+        };
+    }
+
+    /**
+     * 目的地最末级区划名称：按录入层级取对应名称，省份录入显示省名、市级显示市名，
+     * 区县/乡级只显示本级名称；缺 level 的历史数据按编码能解析到的最深一级兜底。
+     */
+    private String destLeafName(SysRouteTransfer item, Map<String, String> regionNames) {
+        String regionCode = item.getRegionCode();
+        if (!StringUtils.hasText(regionCode)) {
+            return null;
         }
-        if (levelLen == 6) {
-            return regionCode.length() >= 6 ? regionNames.get(regionCode.substring(0, 6)) : null;
+        String province = destLevelName(item, regionNames, 1);
+        String city = destLevelName(item, regionNames, 2);
+        String district = destLevelName(item, regionNames, 3);
+        String town = destLevelName(item, regionNames, 4);
+        Integer level = item.getRegionLevel();
+        if (level != null) {
+            return switch (level) {
+                case 1 -> province;
+                case 2 -> city;
+                case 3 -> district;
+                case 4 -> town;
+                default -> null;
+            };
         }
-        return regionCode.length() > 6 ? regionNames.get(regionCode) : null;
+        if (town != null) {
+            return town;
+        }
+        if (district != null) {
+            return district;
+        }
+        if (city != null) {
+            return city;
+        }
+        return province;
     }
 
     /** 区划编码前缀匹配：省取 2 位、市取 4 位、区县取 6 位、乡级取全码 */

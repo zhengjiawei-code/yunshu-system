@@ -95,6 +95,8 @@ export interface TransferRecord {
   destCityName?: string
   destDistrictName?: string
   destTownName?: string
+  /** 目的地最末级区划名称，列表显示与筛选同口径 */
+  destLeafName?: string | null
   carrierId?: number
   carrierName?: string
   ownerCompanyId: number
