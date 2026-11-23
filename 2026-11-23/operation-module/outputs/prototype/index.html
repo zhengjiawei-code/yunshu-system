@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>云枢运输管理系统 · 运营管理原型</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">云枢<span>运输管理</span></div>
+    <nav class="nav">
+      <a class="nav-item">首页</a>
+      <div class="nav-group">
+        <div class="nav-group-title">运营管理</div>
+        <a class="nav-item active" data-page="create">开单揽收</a>
+        <a class="nav-item" data-page="waybill">运单管理</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">系统管理</div>
+        <a class="nav-item muted">路由管理</a>
+        <a class="nav-item muted">承运商管理</a>
+        <a class="nav-item muted">区划管理</a>
+      </div>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="header">
+      <div class="tags">
+        <button class="tag-tab active" data-page="create">开单揽收</button>
+        <button class="tag-tab" data-page="waybill">运单管理</button>
+      </div>
+      <div class="header-right">
+        <span>当前机构：<b>济南程驰</b></span>
+        <span class="divider-v"></span>
+        <span>张三</span>
+      </div>
+    </header>
+
+    <!-- ================= 开单揽收 ================= -->
+    <main class="page page--create" id="page-create">
+      <div class="create-head">
+        <div class="create-head__left">
+          <div class="tabs tabs--inline">
+            <button class="tab active" data-tab="self">开单揽收</button>
+            <button class="tab" data-tab="pre">预开单揽收 <span class="tab-count" id="preCount">3</span></button>
+          </div>
+        </div>
+        <div class="context-bar context-bar--inline">
+          <div><span>开单网点</span><b>济南程驰</b></div>
+          <div><span>开单员</span><b>张三</b></div>
+          <div><span>开单时间</span><b id="contextTime">2026-11-23 10:12:08</b></div>
+          <div><span>运单号</span><b id="contextWaybill" class="muted">保存后生成</b></div>
+        </div>
+      </div>
+
+      <!-- 预开单揽收列表（仅 Tab2） -->
+      <section class="card card--pre hidden" id="preOrderCard">
+        <div class="list-head">
+          <div class="card-title" style="margin-bottom:0">预开单列表</div>
+          <div class="list-tools">
+            <button class="btn btn-sm" id="preResetFilter">重置筛选</button>
+            <button class="btn btn-sm" id="preExport">导出</button>
+            <div class="column-setting">
+              <button class="btn btn-sm" id="preColumnBtn">列设置</button>
+              <div class="column-panel hidden" id="preColumnPanel">
+                <div class="column-panel__head">
+                  <b>预开单列设置</b>
+                  <span id="preColumnCount"></span>
+                </div>
+                <div class="column-panel__body" id="preColumnList"></div>
+                <div class="column-panel__foot">
+                  <button class="btn btn-sm" id="preColumnResetBtn">恢复默认</button>
+                </div>
+              </div>
+            </div>
+            <div class="pager" id="prePager"></div>
+          </div>
+        </div>
+        <div class="pre-table-wrap">
+          <table class="data-table" id="preTable"></table>
+        </div>
+      </section>
+
+      <div class="pre-empty hidden" id="preEmpty">
+        <div class="pre-empty__title">请选择预开单并接单</div>
+        <div class="pre-empty__desc">在上方列表点击「接单」后，客户申报信息将带入下方表单；核对补录并确认揽收后生成正式运单。</div>
+      </div>
+
+      <!-- 开单表单（Tab1 直接显示；Tab2 接单后显示） -->
+      <div class="create-wrap">
+      <div id="formArea">
+
+      <!-- 来源条 -->
+      <div class="source-banner hidden" id="sourceBanner">
+        <span class="source-banner__label">来源预开单</span>
+        <span id="sourceText"></span>
+        <button class="link-btn" id="clearSource">清除来源</button>
+      </div>
+
+      <div class="form-error hidden" id="formError"></div>
+      <div class="form-success hidden" id="formSuccess"></div>
+
+      <div class="create-body create-body--stack">
+        <!-- 1 基本信息 -->
+        <section class="section">
+          <div class="section-title">基本信息
+            <div class="section-hubs">
+              <span class="hub-chip">始发网点 <b id="originHub">济南程驰</b></span>
+              <span class="hub-chip">运达网点 <b id="destHub">—</b></span>
+            </div>
+          </div>
+          <div class="section-body grid grid-4">
+            <div class="field field--row">
+              <label>运单号</label>
+              <input id="waybillNoPreview" class="readonly" readonly value="保存后自动生成">
+            </div>
+            <div class="field field--row">
+              <label>关联单号</label>
+              <input id="relatedNo" type="text" placeholder="客户/上游单据号">
+            </div>
+            <div class="field field--row">
+              <label>业务员</label>
+              <select id="salesName">
+                <option value="">请选择</option>
+                <option>李强</option>
+                <option>王敏</option>
+                <option>赵磊</option>
+                <option>孙倩</option>
+              </select>
+            </div>
+            <div class="field field--row required">
+              <label>业务类型</label>
+              <select id="bizType" class="req">
+                <option value="1">整车</option>
+                <option value="2" selected>零担</option>
+              </select>
+            </div>
+            <div class="field field--row required dest-field">
+              <label>目的地</label>
+              <div class="dest-input-wrap">
+                <input id="destInput" type="text" class="req" autocomplete="off"
+                       placeholder="输入区县/城市，如 白云区，回车立即搜索">
+                <button type="button" class="btn btn-sm" id="destClearBtn">清空</button>
+              </div>
+              <div class="dest-menu hidden" id="destMenu"></div>
+            </div>
+            <div class="field field--row span-3">
+              <label>线路</label>
+              <div class="route-box route-box--line" id="routeBox"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2 发货方 / 收货方 -->
+        <div class="dual dual--sections">
+          <section class="section">
+            <div class="section-title">发货方</div>
+            <div class="section-body grid grid-2">
+              <div class="field field--row required">
+                <label>发货人</label>
+                <input id="senderName" type="text" class="req" placeholder="必填">
+              </div>
+              <div class="field field--row required">
+                <label>发货电话</label>
+                <input id="senderPhone" type="text" class="req" placeholder="必填">
+              </div>
+              <div class="field field--row span-2">
+                <label>客户名称</label>
+                <div class="customer-match" id="customerMatch">
+                  <span class="customer-match__idle">录入发货人后自动匹配客户</span>
+                </div>
+                <div class="customer-pick hidden" id="customerPick"></div>
+              </div>
+              <div class="field field--row span-2">
+                <label>发货单位</label>
+                <input id="senderCompany" type="text" placeholder="选填">
+              </div>
+              <div class="field field--row span-2 required">
+                <label>发货地址</label>
+                <input id="senderAddress" type="text" class="req" placeholder="请输入详细地址，无需重复填写省市区县">
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-title">收货方</div>
+            <div class="section-body grid grid-2">
+              <div class="field field--row required">
+                <label>收货人</label>
+                <input id="receiverName" type="text" class="req" placeholder="必填">
+              </div>
+              <div class="field field--row required">
+                <label>收货电话</label>
+                <input id="receiverPhone" type="text" class="req" placeholder="必填">
+              </div>
+              <div class="field field--row span-2">
+                <label>收货单位</label>
+                <input id="receiverCompany" type="text" placeholder="选填">
+              </div>
+              <div class="field field--row span-2 required">
+                <label>收货地址</label>
+                <div class="addr-row">
+                  <input id="receiverAddress" type="text" class="req" placeholder="请输入详细地址，无需重复填写省市区县">
+                  <button type="button" class="btn btn-sm" id="addrParseBtn">识别</button>
+                </div>
+              </div>
+              <div class="field field--row span-2 region-row">
+                <label>所在地区</label>
+                <div class="region-selects">
+                  <select id="rcvProvince"><option value="">省</option></select>
+                  <select id="rcvCity"><option value="">市</option></select>
+                  <select id="rcvDistrict"><option value="">区/县</option></select>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 3 货物明细 -->
+        <section class="section">
+          <div class="section-title">
+            货物明细
+            <div class="section-sum">
+              件数 <b id="sumCount">0</b>
+              <span>·</span> 重量 <b id="sumWeight">0.000</b> kg
+              <span>·</span> 体积 <b id="sumVolume">0.000</b> m³
+            </div>
+          </div>
+          <div class="goods-table-wrap">
+            <table class="goods-table">
+              <thead>
+                <tr>
+                  <th style="width:44px">序号</th>
+                  <th style="width:150px" class="req-th">货物名称</th>
+                  <th style="width:96px">货物类型</th>
+                  <th style="width:96px">包装类型</th>
+                  <th style="width:70px" class="req-th">件数</th>
+                  <th style="width:86px" class="req-th">体积(m³)</th>
+                  <th style="width:86px" class="req-th">重量(kg)</th>
+                  <th style="width:150px">货物备注</th>
+                  <th style="width:56px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="goodsBody"></tbody>
+            </table>
+          </div>
+          <button type="button" class="btn btn-sm add-row" id="addGoodsBtn">+ 添加一行</button>
+        </section>
+
+        <!-- 4 费用项 / 支付与配送 -->
+        <div class="dual dual--sections">
+          <section class="section">
+            <div class="section-title">
+              费用项
+              <div class="section-sum">运费合计 <b id="totalText">¥1,340.00</b></div>
+            </div>
+            <div class="section-body">
+              <div class="fee-grid">
+                <div class="fee-cell"><label>运费</label><div class="fee-input-wrap"><input class="fee" data-fee="freightFee" type="number" min="0" step="0.01" value="1200"><span class="fee-std" title="标准价暂无数据源，仅展示">标准 —</span></div></div>
+                <div class="fee-cell"><label>现返</label><input class="fee" data-fee="cashBack" type="number" min="0" step="0.01" value="0"></div>
+                <div class="fee-cell"><label>欠返</label><input class="fee" data-fee="oweBack" type="number" min="0" step="0.01" value="0"></div>
+
+                <div class="fee-cell"><label>送货费</label><div class="fee-input-wrap"><input class="fee" data-fee="deliveryFee" type="number" min="0" step="0.01" value="80"><span class="fee-std" title="标准价暂无数据源，仅展示">标准 —</span></div></div>
+                <div class="fee-cell"><label>声明价值</label><input id="declaredValue" type="number" min="0" step="0.01" value="0"></div>
+                <div class="fee-cell"><label>保费</label><input class="fee" data-fee="insuranceFee" type="number" min="0" step="0.01" value="30"></div>
+
+                <div class="fee-cell"><label>提货费</label><div class="fee-input-wrap"><input class="fee" data-fee="pickupFee" type="number" min="0" step="0.01" value="0"><span class="fee-std" title="标准价暂无数据源，仅展示">标准 —</span></div></div>
+                <div class="fee-cell"><label>其他费</label><input class="fee" data-fee="otherFee" type="number" min="0" step="0.01" value="0"></div>
+                <div class="fee-cell"><label>回单费</label><input class="fee" data-fee="receiptFee" type="number" min="0" step="0.01" value="20"></div>
+
+                <div class="fee-cell"><label>制单费</label><input class="fee" data-fee="makeBillFee" type="number" min="0" step="0.01" value="10"></div>
+              </div>
+            </div>
+            <div class="fee-totals">
+              <span>返款合计</span><b id="rebateText">¥0.00</b>
+              <span style="margin-left:14px">有效运费</span><b id="validText">¥1,340.00</b>
+              <em>有效运费 = 运费合计 − 现返 − 欠返</em>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-title">支付与配送</div>
+            <div class="section-body">
+              <div class="field field--row required req-block" id="payBlock">
+                <label>支付方式</label>
+                <div class="segmented segmented--sm" id="payMethods">
+                  <button data-paymethod="1">现付</button>
+                  <button data-paymethod="2">到付</button>
+                  <button data-paymethod="3">月结</button>
+                  <button data-paymethod="4">回付</button>
+                  <button data-paymethod="5">多笔付</button>
+                </div>
+              </div>
+              <div class="pay-fields" id="payFields"></div>
+              <div class="diff-bar hidden" id="diffBar"></div>
+              <div class="field field--row required req-block" id="deliveryBlock">
+                <label>送货方式</label>
+                <div class="radio-row" id="deliveryMethods">
+                  <label><input type="radio" name="deliveryMethod" value="2"> 自提</label>
+                  <label><input type="radio" name="deliveryMethod" value="1"> 送货</label>
+                  <label><input type="radio" name="deliveryMethod" value="3"> 大车直送</label>
+                </div>
+              </div>
+              <div class="grid grid-2" style="margin-top:6px">
+                <div class="field field--row">
+                  <label>是否回单</label>
+                  <select id="needReceipt"><option value="0">否</option><option value="1">是</option></select>
+                </div>
+                <div class="field field--row">
+                  <label>回单数量</label>
+                  <input id="receiptCount" type="number" min="0" value="0" placeholder="回单为是时必填">
+                </div>
+              </div>
+              <div class="grid grid-2" style="margin-top:5px">
+                <div class="field field--row">
+                  <label>是否等通知</label>
+                  <select id="waitNotice"><option value="0">否</option><option value="1">是</option></select>
+                </div>
+                <div class="field field--row">
+                  <label>备注</label>
+                  <input id="remark" type="text" maxlength="100" placeholder="选填，最多 100 字">
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 5 增值服务·代收款 -->
+        <section class="section">
+          <div class="section-title">增值服务 · 代收款</div>
+          <div class="section-body grid grid-4">
+            <div class="field field--row"><label>代收货款</label><input id="codAmount" type="number" min="0" step="0.01" value="0"></div>
+            <div class="field field--row"><label>收款人</label><input id="payeeName" type="text" placeholder="代收&gt;0 时必填"></div>
+            <div class="field field--row"><label>银行名称</label><input id="bankName" type="text" placeholder="代收&gt;0 时必填"></div>
+            <div class="field field--row"><label>银行卡号</label><input id="bankCardNo" type="text" placeholder="代收&gt;0 时必填"></div>
+          </div>
+          <div class="section-hint">代收货款大于 0 时，收款人、银行名称、银行卡号必填；代收金额不计入运费合计，也不参与支付分摊。</div>
+        </section>
+      </div>
+
+      <div class="form-footer">
+        <span class="legend">运费合计 = 运费+送货费+提货费+其他费+回单费+制单费+保费；不含代收货款，返款不计入合计</span>
+        <div class="form-footer__actions">
+          <button class="btn btn-danger hidden" id="returnBtn">退回预开单</button>
+          <button class="btn" id="resetBtn">重置</button>
+          <button class="btn btn-primary" id="saveBtn">保存</button>
+          <button class="btn btn-primary" id="saveNextBtn">保存并继续开单</button>
+        </div>
+      </div>
+      </div><!-- /formArea -->
+      </div><!-- /create-wrap -->
+    </main>
+
+    <!-- ================= 运单管理 ================= -->
+    <main class="page hidden" id="page-waybill">
+      <div class="page-header">
+        <div>
+          <h2 class="page-header__title">运单管理</h2>
+          <p class="page-header__desc">按数据权限查询运单；表头筛选行固定 61px，默认 18 列，其余 38 列在列设置中勾选</p>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <div class="action-left">
+          <button class="btn btn-ghost" id="refreshBtn">刷新</button>
+        </div>
+        <div class="action-right">
+          <button class="btn" id="resetFilterBtn">重置筛选</button>
+          <button class="btn" id="exportBtn">导出</button>
+          <div class="column-setting">
+            <button class="btn" id="columnBtn">列设置</button>
+            <div class="column-panel hidden" id="columnPanel">
+              <div class="column-panel__head">
+                <b>列设置</b>
+                <span id="columnCount"></span>
+              </div>
+              <div class="column-panel__body" id="columnList"></div>
+              <div class="column-panel__foot">
+                <button class="btn btn-sm" id="columnResetBtn">恢复默认</button>
+              </div>
+            </div>
+          </div>
+          <div class="pager" id="pager"></div>
+        </div>
+      </div>
+
+      <div class="table-wrap" id="tableWrap">
+        <table class="data-table" id="waybillTable"></table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 详情抽屉 -->
+<div class="drawer-mask hidden" id="drawerMask">
+  <div class="drawer">
+    <div class="drawer-header">
+      <div class="drawer-title">运单详情 <span id="drawerNo"></span></div>
+      <button class="icon-btn" id="drawerClose">×</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-footer">
+      <button class="btn" id="drawerClose2">关闭</button>
+      <button class="btn" disabled title="本期不开放编辑">编辑</button>
+      <button class="btn btn-danger" id="drawerVoid">作废</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

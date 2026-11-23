@@ -30,6 +30,8 @@ public final class DataScopeTables {
             "sys_route_transfer",
             "sys_route_company",
             "sys_column_config",
+            "biz_waybill_no_seq",
+            "biz_pre_waybill_no_seq",
             "flyway_schema_history"
     );
 

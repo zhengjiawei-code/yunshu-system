@@ -35,6 +35,8 @@ sys_route
 sys_route_transfer
 sys_route_company
 sys_column_config
+biz_waybill_no_seq
+biz_pre_waybill_no_seq
 flyway_schema_history
 ```
 
@@ -46,6 +48,8 @@ flyway_schema_history
 1. 表本身不含需按机构隔离的业务数据（如区划、机构关系、路由授权）；
 2. 在下方「豁免表可见性责任」逐表登记服务层过滤规则；
 3. 越权验证覆盖列表、详情、编辑、删除、导出、匹配等入口，并留证据。
+
+**2026-11-23 运单编号序列补充（家伟批准执行 V13）**：`biz_waybill_no_seq`、`biz_pre_waybill_no_seq` 为按日期分配运单号/预开单号的计数表，**无 `dept_id`/`create_by`、不含业务数据**；仅由取号 SQL 在事务内 `INSERT ... ON DUPLICATE KEY UPDATE`，不提供列表/详情入口。若不豁免，拦截器会追加不存在的 `dept_id` 列导致取号失败，故加入豁免清单。
 
 ### 2.1 豁免表可见性责任（服务层负责，不允许依赖拦截器）
 
