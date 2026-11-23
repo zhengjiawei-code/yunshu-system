@@ -11,20 +11,10 @@
       </div>
       <div class="op-context">
         <span class="ctx-item">
-          开单网点
-          <el-select
-            v-model="form.originDeptId"
-            class="ctx-select"
-            size="small"
-            :teleported="false"
-            @change="onOriginChange"
-          >
-            <el-option v-for="item in deptOptions" :key="item.id" :label="item.deptName" :value="item.id" />
-          </el-select>
+          开单网点 <b class="ctx-org">{{ originDeptName }}</b>
         </span>
         <span class="ctx-item">开单员 <b>{{ userStore.displayName }}</b></span>
         <span class="ctx-item">开单时间 <b>{{ nowText }}</b></span>
-        <span class="ctx-item">运单号 <b class="muted">保存后生成</b></span>
       </div>
     </div>
 
@@ -78,12 +68,12 @@
           <label class="field"><span class="lbl">运单号</span><el-input model-value="保存后自动生成" disabled /></label>
           <label class="field"><span class="lbl">关联单号</span><el-input v-model="form.relatedNo" placeholder="客户/上游单据号" /></label>
           <label class="field"><span class="lbl">业务员</span><el-input v-model="form.salesName" placeholder="选填" /></label>
-          <label class="field"><span class="lbl">业务类型</span>
+          <div class="field"><span class="lbl">业务类型</span>
             <el-radio-group v-model="form.bizType" class="seg">
               <el-radio-button :value="1">整车</el-radio-button>
               <el-radio-button :value="2">零担</el-radio-button>
             </el-radio-group>
-          </label>
+          </div>
         </div>
         <div class="grid dest-row">
           <label ref="destFieldRef" class="field dest-field">
@@ -215,7 +205,7 @@
             <label class="field"><span class="lbl"><i class="star">*</i>收货电话</span>
               <el-input v-model="form.receiverPhone" :class="{ 'is-empty': !form.receiverPhone }" />
             </label>
-            <label class="field span2">
+            <div class="field span2">
               <span class="lbl">所在地区</span>
               <div class="region-selects">
                 <el-select
@@ -248,7 +238,7 @@
                   <el-option v-for="item in districtOptions" :key="item.code" :label="item.name" :value="item.code" />
                 </el-select>
               </div>
-            </label>
+            </div>
             <div v-if="receiverRegionHint" class="region-hint span2">{{ receiverRegionHint }}</div>
             <label class="field span2"><span class="lbl"><i class="star">*</i>收货地址</span>
               <el-input v-model="form.receiverAddress" :class="{ 'is-empty': !form.receiverAddress }" />
@@ -268,13 +258,13 @@
           <thead>
             <tr>
               <th class="col-idx">序号</th>
-              <th>货物名称 <i class="star">*</i></th>
-              <th>货物类型</th>
-              <th>包装类型</th>
-              <th class="col-num">件数 <i class="star">*</i></th>
-              <th class="col-num">体积(m³) <i class="star">*</i></th>
-              <th class="col-num">重量(kg) <i class="star">*</i></th>
-              <th>备注</th>
+              <th class="col-name">货物名称 <i class="star">*</i></th>
+              <th class="col-type">货物类型</th>
+              <th class="col-pack">包装类型</th>
+              <th class="col-num col-qty">件数 <i class="star">*</i></th>
+              <th class="col-num col-vol">体积(m³) <i class="star">*</i></th>
+              <th class="col-num col-weight">重量(kg) <i class="star">*</i></th>
+              <th class="col-remark">备注</th>
               <th class="col-op">操作</th>
             </tr>
           </thead>
@@ -285,7 +275,11 @@
                 <el-input v-model="row.goodsName" size="small" :class="{ 'is-empty': !row.goodsName }" />
               </td>
               <td><el-input v-model="row.goodsType" size="small" /></td>
-              <td><el-input v-model="row.packageType" size="small" /></td>
+              <td>
+                <el-select v-model="row.packageType" size="small" clearable>
+                  <el-option v-for="opt in PACKAGE_TYPES" :key="opt" :label="opt" :value="opt" />
+                </el-select>
+              </td>
               <td>
                 <el-input-number
                   v-model="row.quantity"
@@ -336,8 +330,15 @@
             <div class="fee-total">运费合计 <b>¥{{ money(totalCents) }}</b></div>
           </div>
           <div class="fee-grid">
-            <label class="fee-cell"><span class="fee-lbl">运费</span>
-              <el-input-number v-model="form.freightFee" size="small" :min="0" :precision="2" :controls="false" />
+            <label class="fee-cell"><span class="fee-lbl"><i class="star">*</i>运费</span>
+              <el-input-number
+                v-model="form.freightFee"
+                size="small"
+                :min="0"
+                :precision="2"
+                :controls="false"
+                :class="{ 'is-empty': form.freightFee == null }"
+              />
               <span class="std">标准 —</span>
             </label>
             <label class="fee-cell"><span class="fee-lbl">现返</span>
@@ -346,8 +347,15 @@
             <label class="fee-cell"><span class="fee-lbl">欠返</span>
               <el-input-number v-model="form.oweBack" size="small" :min="0" :precision="2" :controls="false" />
             </label>
-            <label class="fee-cell"><span class="fee-lbl">送货费</span>
-              <el-input-number v-model="form.deliveryFee" size="small" :min="0" :precision="2" :controls="false" />
+            <label class="fee-cell"><span class="fee-lbl"><i v-if="deliveryFeeRequired" class="star">*</i>送货费</span>
+              <el-input-number
+                v-model="form.deliveryFee"
+                size="small"
+                :min="0"
+                :precision="2"
+                :controls="false"
+                :class="{ 'is-empty': deliveryFeeRequired && form.deliveryFee == null }"
+              />
               <span class="std">标准 —</span>
             </label>
             <label class="fee-cell"><span class="fee-lbl">声明价值</span>
@@ -416,21 +424,21 @@
             </el-radio-group>
           </div>
           <div class="grid two pay-extra">
-            <label class="field"><span class="lbl">是否回单</span>
+            <div class="field"><span class="lbl">是否回单</span>
               <el-radio-group v-model="form.needReceipt" class="seg">
                 <el-radio-button :value="0">否</el-radio-button>
                 <el-radio-button :value="1">是</el-radio-button>
               </el-radio-group>
-            </label>
+            </div>
             <label class="field"><span class="lbl"><i v-if="form.needReceipt === 1" class="star">*</i>回单份数</span>
               <el-input-number v-model="form.receiptCount" size="small" :min="0" :precision="0" :controls="false" :disabled="form.needReceipt !== 1" />
             </label>
-            <label class="field"><span class="lbl">是否等通知</span>
+            <div class="field"><span class="lbl">是否等通知</span>
               <el-radio-group v-model="form.waitNotice" class="seg">
                 <el-radio-button :value="0">否</el-radio-button>
                 <el-radio-button :value="1">是</el-radio-button>
               </el-radio-group>
-            </label>
+            </div>
             <label class="field"><span class="lbl">备注</span><el-input v-model="form.remark" maxlength="100" /></label>
           </div>
         </section>
@@ -472,19 +480,13 @@ import { useUserStore } from '@/stores/user'
 import {
   createWaybill,
   getDestinations,
-  getOpenDepts,
   getPreOrders,
   getRouteCandidates,
   matchCustomer
 } from '@/api/operation'
 import { getRegionChildren } from '@/api/system/region'
 import type { RegionNode } from '@/types/region'
-import type {
-  DeptOption,
-  PreOrder,
-  RouteCandidate,
-  WaybillSavePayload
-} from '@/types/operation'
+import type { PreOrder, RouteCandidate, WaybillSavePayload } from '@/types/operation'
 
 interface GoodsRow {
   goodsName: string
@@ -550,7 +552,6 @@ const formAreaRef = ref<HTMLElement>()
 const destFieldRef = ref<HTMLElement>()
 const routeFieldRef = ref<HTMLElement>()
 
-const deptOptions = ref<DeptOption[]>([])
 const submitted = ref(false)
 const saving = ref(false)
 const errorList = ref<string[]>([])
@@ -562,12 +563,15 @@ function pad(value: number) {
   return String(value).padStart(2, '0')
 }
 
+/** 包装类型预设（顺序固定；存文本，可清空，非必填） */
+const PACKAGE_TYPES = ['袋装', '纸箱', '桶装', '托盘', '木箱', '编织袋', '卷装', '裸装', '其他']
+
 function createGoodsRow(): GoodsRow {
   return {
     goodsName: '',
     goodsType: '',
     packageType: '',
-    quantity: 1,
+    quantity: undefined,
     weight: undefined,
     volume: undefined,
     goodsRemark: ''
@@ -633,12 +637,16 @@ const routeOptions = ref<RouteCandidate[]>([])
 const selectedRoute = ref<RouteCandidate | null>(null)
 let destTimer: number | undefined
 
-const selectedDeptName = computed(() =>
-  deptOptions.value.find((item) => item.id === form.originDeptId)?.deptName
-)
+const selectedDeptName = computed(() => userStore.currentOrgName || '—')
+const originDeptName = selectedDeptName
 const originHubName = computed(() => selectedRoute.value?.nodes?.[0]?.fromDeptName)
 
-function onOriginChange() {
+/** 送货(1)/大车直送(3) 时送货费必填；自提(2) 与未选不要求 */
+const deliveryFeeRequired = computed(
+  () => form.deliveryMethod === 1 || form.deliveryMethod === 3
+)
+
+function resetRouteSelection() {
   selectedRoute.value = null
   routeOptions.value = []
   form.destDistrictCode = ''
@@ -646,6 +654,16 @@ function onOriginChange() {
   destOptions.value = []
   if (formAreaRef.value) formAreaRef.value.scrollTop = 0
 }
+
+// 开单网点固定取当前机构（顶部机构切换后自动跟随），不缓存旧值
+watch(
+  () => userStore.currentOrgId,
+  (id) => {
+    form.originDeptId = id ?? undefined
+    resetRouteSelection()
+  },
+  { immediate: true }
+)
 
 function onDestInput() {
   selectedRoute.value = null
@@ -934,7 +952,21 @@ function collectErrors(): string[] {
   if (!form.destDistrictCode) errors.push('请从候选列表中选择唯一目的地')
   if (!selectedRoute.value) errors.push('请选择线路')
   if (form.payMethod == null) errors.push('请选择支付方式')
-  if (form.deliveryMethod == null) errors.push('请选择送货方式')
+  if (form.freightFee == null) {
+    errors.push('运费不能为空')
+  } else if (form.freightFee < 0) {
+    errors.push('运费不能小于0')
+  }
+  if (form.deliveryMethod == null) {
+    // 未选送货方式只报这一条，不叠加送货费报错
+    errors.push('请选择送货方式')
+  } else if (deliveryFeeRequired.value) {
+    if (form.deliveryFee == null) {
+      errors.push('送货方式为送货或大车直送时，送货费不能为空')
+    } else if (form.deliveryFee < 0) {
+      errors.push('送货费不能小于0')
+    }
+  }
   form.goodsList.forEach((row, index) => {
     const prefix = `第${index + 1}行货物`
     if (!row.goodsName.trim()) errors.push(`${prefix}名称不能为空`)
@@ -986,8 +1018,8 @@ function buildPayload(): WaybillSavePayload {
       goodsRemark: row.goodsRemark.trim() || undefined
     })),
     payMethod: form.payMethod,
-    freightFee: Number(form.freightFee ?? 0),
-    deliveryFee: Number(form.deliveryFee ?? 0),
+    freightFee: form.freightFee == null ? undefined : Number(form.freightFee),
+    deliveryFee: form.deliveryFee == null ? undefined : Number(form.deliveryFee),
     pickupFee: Number(form.pickupFee ?? 0),
     otherFee: Number(form.otherFee ?? 0),
     receiptFee: Number(form.receiptFee ?? 0),
@@ -1066,15 +1098,6 @@ onMounted(async () => {
   if (route.query.tab === 'pre') {
     switchTab('pre')
   }
-  try {
-    deptOptions.value = await getOpenDepts()
-    const first = deptOptions.value[0]
-    if (first) {
-      form.originDeptId = first.id
-    }
-  } catch {
-    deptOptions.value = []
-  }
 })
 
 onBeforeUnmount(() => {
@@ -1087,6 +1110,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .op-page {
   height: calc(100vh - var(--header-height));
+  min-width: 1100px;
   box-sizing: border-box;
   padding: 6px 10px;
   display: flex;
@@ -1157,16 +1181,6 @@ onBeforeUnmount(() => {
 .ctx-item .muted {
   color: var(--color-text-placeholder);
   font-weight: 400;
-}
-
-.ctx-select {
-  width: 132px;
-}
-
-.ctx-select :deep(.el-select__wrapper) {
-  min-height: 24px;
-  padding: 0 8px;
-  font-size: 12px;
 }
 
 .op-form {
@@ -1545,28 +1559,51 @@ onBeforeUnmount(() => {
 
 .goods-table th {
   height: 24px;
+  padding: 0 2px;
   background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
   font-weight: 500;
   font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
   border: 1px solid var(--color-border-light);
 }
 
 .goods-table td {
   border: 1px solid var(--color-border-light);
-  padding: 2px 3px;
+  padding: 2px 4px;
 }
 
 .goods-table .col-idx {
-  width: 40px;
+  width: 3.5%;
+}
+
+.goods-table .col-name {
+  width: 22%;
+}
+
+.goods-table .col-type {
+  width: 10%;
+}
+
+.goods-table .col-pack {
+  width: 10%;
 }
 
 .goods-table .col-num {
-  width: 92px;
+  width: 10%;
+}
+
+.goods-table .col-qty {
+  width: 9%;
+}
+
+.goods-table .col-remark {
+  width: 21.5%;
 }
 
 .goods-table .col-op {
-  width: 56px;
+  width: 4%;
 }
 
 .goods-table .center {
@@ -1574,6 +1611,21 @@ onBeforeUnmount(() => {
 }
 
 .goods-table :deep(.el-input__wrapper) {
+  min-height: 24px;
+  padding: 0 6px;
+}
+
+/* 数值控件默认 150px 宽，会把相邻列压住；改为跟随列宽 */
+.goods-table :deep(.el-input-number) {
+  width: 100%;
+  min-width: 0;
+}
+
+.goods-table :deep(.el-select) {
+  width: 100%;
+}
+
+.goods-table :deep(.el-select__wrapper) {
   min-height: 24px;
   padding: 0 6px;
 }

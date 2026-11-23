@@ -247,10 +247,24 @@ public class WaybillService {
         if (request.getPayMethod() == null) {
             errors.add("请选择支付方式");
         }
+        // 运费必填，允许 0（免费/月结整单免运费），不允许负数
+        if (request.getFreightFee() == null) {
+            errors.add("运费不能为空");
+        } else if (request.getFreightFee().compareTo(BigDecimal.ZERO) < 0) {
+            errors.add("运费不能小于0");
+        }
         if (request.getDeliveryMethod() == null) {
+            // 未选送货方式只报这一条，不叠加送货费报错
             errors.add("请选择送货方式");
         } else if (request.getDeliveryMethod() < 1 || request.getDeliveryMethod() > 3) {
             errors.add("送货方式码值非法");
+        } else if (request.getDeliveryMethod() == 1 || request.getDeliveryMethod() == 3) {
+            // 送货(1)/大车直送(3) 送货费必填，允许 0；自提(2) 不要求
+            if (request.getDeliveryFee() == null) {
+                errors.add("送货方式为送货或大车直送时，送货费不能为空");
+            } else if (request.getDeliveryFee().compareTo(BigDecimal.ZERO) < 0) {
+                errors.add("送货费不能小于0");
+            }
         }
         if (request.getGoodsList() == null || request.getGoodsList().isEmpty()) {
             errors.add("请至少录入一行货物明细");
@@ -294,24 +308,18 @@ public class WaybillService {
         }
     }
 
+    /**
+     * 开单网点固定取账号当前机构（顶部机构切换后的那个机构）。
+     * 客户端传入的 originDeptId 一律忽略，避免越权开单或跨机构绕过。
+     */
     private Long resolveOriginDept(Long requestedDeptId, DataScopeContext context) {
-        Long deptId = requestedDeptId != null ? requestedDeptId : context.getDeptId();
+        Long deptId = context.getDeptId();
         if (deptId == null) {
             throw new BizException(403, "当前账号未分配开单网点");
         }
-        Set<Long> allowed = userOrgService.manageDeptIds();
-        if (!allowed.contains(deptId)) {
-            throw new BizException(403, "开单网点不在当前账号管理范围内，禁止跨机构开单");
-        }
         SysDept dept = deptMapper.selectById(deptId);
         if (dept == null || !Boolean.TRUE.equals(dept.getStatus())) {
-            throw new BizException("开单网点不存在或已停用");
-        }
-        if (!Integer.valueOf(4).equals(dept.getDeptType()) && !Integer.valueOf(5).equals(dept.getDeptType())) {
-            throw new BizException("开单网点必须为分拨中心或网点");
-        }
-        if (!Boolean.TRUE.equals(dept.getAllowShip())) {
-            throw new BizException("该网点不允许发货");
+            throw new BizException("当前机构不存在或已停用");
         }
         return deptId;
     }

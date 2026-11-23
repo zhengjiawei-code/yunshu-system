@@ -90,8 +90,8 @@ export interface WaybillSavePayload {
   receiverAddress: string
   goodsList: GoodsItemPayload[]
   payMethod?: number
-  freightFee: number
-  deliveryFee: number
+  freightFee?: number
+  deliveryFee?: number
   pickupFee: number
   otherFee: number
   receiptFee: number

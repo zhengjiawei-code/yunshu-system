@@ -387,8 +387,15 @@ public class RouteCandidateService {
         vo.setDestName(joinRegionName(province, city, district));
         SysDept hub = resolveDestHub(district.getCode(), context.depts());
         if (hub != null) {
+            // 末段目标区划有归属网点（type=5 且启用）：运达网点取该网点
             vo.setDestHubId(hub.getId());
             vo.setDestHubName(hub.getDeptName());
+        } else {
+            // 末段外转/直达只到区划、无归属网点：运达网点回落为始发网点（路由首节点出发网点），
+            // 不得取路由中间分拨中心或与始发无关的节点
+            RouteCandidateVO.Node originNode = nodes.get(0);
+            vo.setDestHubId(originNode.getFromDeptId());
+            vo.setDestHubName(originNode.getFromDeptName());
         }
         return vo;
     }
