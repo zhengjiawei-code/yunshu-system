@@ -183,6 +183,9 @@
         <section class="card">
           <div class="sec-head"><div class="sec-title">发货方</div></div>
           <div class="grid two">
+            <label class="field span2"><span class="lbl">发货单位</span>
+              <el-input v-model="form.senderCompany" placeholder="选填" />
+            </label>
             <label class="field"><span class="lbl"><i class="star">*</i>发货人</span>
               <el-input v-model="form.senderName" :class="{ 'is-empty': !form.senderName }" @input="onSenderInput" />
             </label>
@@ -203,15 +206,50 @@
         <section class="card">
           <div class="sec-head"><div class="sec-title">收货方</div></div>
           <div class="grid two">
+            <label class="field span2"><span class="lbl">收货单位</span>
+              <el-input v-model="form.receiverCompany" placeholder="选填" />
+            </label>
             <label class="field"><span class="lbl"><i class="star">*</i>收货人</span>
               <el-input v-model="form.receiverName" :class="{ 'is-empty': !form.receiverName }" />
             </label>
             <label class="field"><span class="lbl"><i class="star">*</i>收货电话</span>
               <el-input v-model="form.receiverPhone" :class="{ 'is-empty': !form.receiverPhone }" />
             </label>
-            <label class="field span2"><span class="lbl">所在地区</span>
-              <div class="readonly-box">{{ selectedRoute?.destName || '随目的地带出' }}</div>
+            <label class="field span2">
+              <span class="lbl">所在地区</span>
+              <div class="region-selects">
+                <el-select
+                  v-model="form.receiverProvinceCode"
+                  placeholder="省"
+                  size="small"
+                  clearable
+                  @change="onReceiverProvinceChange"
+                >
+                  <el-option v-for="item in provinceOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+                <el-select
+                  v-model="form.receiverCityCode"
+                  placeholder="市"
+                  size="small"
+                  clearable
+                  :disabled="!form.receiverProvinceCode"
+                  @change="onReceiverCityChange"
+                >
+                  <el-option v-for="item in cityOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+                <el-select
+                  v-model="form.receiverDistrictCode"
+                  placeholder="区县"
+                  size="small"
+                  clearable
+                  :disabled="!form.receiverCityCode"
+                  @change="onReceiverDistrictChange"
+                >
+                  <el-option v-for="item in districtOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+              </div>
             </label>
+            <div v-if="receiverRegionHint" class="region-hint span2">{{ receiverRegionHint }}</div>
             <label class="field span2"><span class="lbl"><i class="star">*</i>收货地址</span>
               <el-input v-model="form.receiverAddress" :class="{ 'is-empty': !form.receiverAddress }" />
             </label>
@@ -439,6 +477,8 @@ import {
   getRouteCandidates,
   matchCustomer
 } from '@/api/operation'
+import { getRegionChildren } from '@/api/system/region'
+import type { RegionNode } from '@/types/region'
 import type {
   DeptOption,
   PreOrder,
@@ -466,9 +506,14 @@ interface FormState {
   destDistrictCode: string
   senderName: string
   senderPhone: string
+  senderCompany: string
   senderAddress: string
   receiverName: string
   receiverPhone: string
+  receiverCompany: string
+  receiverProvinceCode: string
+  receiverCityCode: string
+  receiverDistrictCode: string
   receiverAddress: string
   goodsList: GoodsRow[]
   payMethod: number | undefined
@@ -540,9 +585,14 @@ function createForm(): FormState {
     destDistrictCode: '',
     senderName: '',
     senderPhone: '',
+    senderCompany: '',
     senderAddress: '',
     receiverName: '',
     receiverPhone: '',
+    receiverCompany: '',
+    receiverProvinceCode: '',
+    receiverCityCode: '',
+    receiverDistrictCode: '',
     receiverAddress: '',
     goodsList: [createGoodsRow()],
     payMethod: undefined,
@@ -671,6 +721,68 @@ function selectRoute(item: RouteCandidate) {
 function isSameRoute(item: RouteCandidate) {
   return (item.routeKeys || []).join(',') === (selectedRoute.value?.routeKeys || []).join(',')
 }
+
+/* ---------- 收货地区（省/市/区县，仅做地址文字提示，不强拦截） ---------- */
+const provinceOptions = ref<RegionNode[]>([])
+const cityOptions = ref<RegionNode[]>([])
+const districtOptions = ref<RegionNode[]>([])
+const receiverRegionHint = ref('')
+
+async function loadProvinces() {
+  try {
+    provinceOptions.value = await getRegionChildren('0')
+  } catch {
+    provinceOptions.value = []
+  }
+}
+
+async function onReceiverProvinceChange(code: string) {
+  form.receiverCityCode = ''
+  form.receiverDistrictCode = ''
+  cityOptions.value = []
+  districtOptions.value = []
+  receiverRegionHint.value = ''
+  if (code) {
+    try {
+      cityOptions.value = await getRegionChildren(code)
+    } catch {
+      cityOptions.value = []
+    }
+  }
+}
+
+async function onReceiverCityChange(code: string) {
+  form.receiverDistrictCode = ''
+  districtOptions.value = []
+  receiverRegionHint.value = ''
+  if (code) {
+    try {
+      districtOptions.value = await getRegionChildren(code)
+    } catch {
+      districtOptions.value = []
+    }
+  }
+}
+
+function onReceiverDistrictChange() {
+  updateRegionHint()
+}
+
+function updateRegionHint() {
+  const address = form.receiverAddress.trim()
+  if (!form.receiverDistrictCode || !address) {
+    receiverRegionHint.value = ''
+    return
+  }
+  const district = districtOptions.value.find((item) => item.code === form.receiverDistrictCode)?.name || ''
+  const city = cityOptions.value.find((item) => item.code === form.receiverCityCode)?.name || ''
+  const matched = (district && address.includes(district)) || (city && address.includes(city))
+  receiverRegionHint.value = matched
+    ? ''
+    : '收货地址未包含所选城市/区县名称，请确认（仅提示，不影响保存）'
+}
+
+watch(() => form.receiverAddress, updateRegionHint)
 
 /* ---------- 客户匹配 ---------- */
 const customerName = ref('')
@@ -816,6 +928,9 @@ function collectErrors(): string[] {
   if (!form.receiverName.trim()) errors.push('收货人不能为空')
   if (!form.receiverPhone.trim()) errors.push('收货电话不能为空')
   if (!form.receiverAddress.trim()) errors.push('收货地址不能为空')
+  const receiverRegionCount = [form.receiverProvinceCode, form.receiverCityCode, form.receiverDistrictCode]
+    .filter(Boolean).length
+  if (receiverRegionCount > 0 && receiverRegionCount < 3) errors.push('收货省、市、区县需同时选择')
   if (!form.destDistrictCode) errors.push('请从候选列表中选择唯一目的地')
   if (!selectedRoute.value) errors.push('请选择线路')
   if (form.payMethod == null) errors.push('请选择支付方式')
@@ -852,9 +967,14 @@ function buildPayload(): WaybillSavePayload {
     routeKeys: selectedRoute.value?.routeKeys || [],
     senderName: form.senderName.trim(),
     senderPhone: form.senderPhone.trim(),
+    senderCompany: form.senderCompany.trim() || undefined,
     senderAddress: form.senderAddress.trim(),
     receiverName: form.receiverName.trim(),
     receiverPhone: form.receiverPhone.trim(),
+    receiverCompany: form.receiverCompany.trim() || undefined,
+    receiverProvinceCode: form.receiverProvinceCode || undefined,
+    receiverCityCode: form.receiverCityCode || undefined,
+    receiverDistrictCode: form.receiverDistrictCode || undefined,
     receiverAddress: form.receiverAddress.trim(),
     goodsList: form.goodsList.map((row) => ({
       goodsName: row.goodsName.trim(),
@@ -922,6 +1042,9 @@ function resetForm() {
   selectedRoute.value = null
   routeOptions.value = []
   destOptions.value = []
+  cityOptions.value = []
+  districtOptions.value = []
+  receiverRegionHint.value = ''
   customerName.value = ''
   customerMatched.value = false
 }
@@ -939,6 +1062,7 @@ function onDocumentClick(event: MouseEvent) {
 
 onMounted(async () => {
   document.addEventListener('mousedown', onDocumentClick)
+  loadProvinces()
   if (route.query.tab === 'pre') {
     switchTab('pre')
   }
@@ -1168,6 +1292,27 @@ onBeforeUnmount(() => {
 
 .op-page :deep(.el-input.is-disabled .el-input__wrapper) {
   background: var(--color-bg-subtle);
+}
+
+.region-selects {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.region-selects :deep(.el-select__wrapper) {
+  min-height: 28px;
+  padding: 1px 8px;
+  background: #fbfcfd;
+}
+
+.region-hint {
+  padding-left: 68px;
+  color: var(--color-warning-text);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .readonly-box {

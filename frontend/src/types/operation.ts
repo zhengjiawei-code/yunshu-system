@@ -79,9 +79,14 @@ export interface WaybillSavePayload {
   routeKeys: string[]
   senderName: string
   senderPhone: string
+  senderCompany?: string
   senderAddress: string
   receiverName: string
   receiverPhone: string
+  receiverCompany?: string
+  receiverProvinceCode?: string
+  receiverCityCode?: string
+  receiverDistrictCode?: string
   receiverAddress: string
   goodsList: GoodsItemPayload[]
   payMethod?: number

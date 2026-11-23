@@ -36,16 +36,36 @@ public class WaybillSaveRequest {
 
     private String senderPhone;
 
+    /** 发货单位：可空 */
+    private String senderCompany;
+
     private String senderAddress;
 
     private String receiverName;
 
     private String receiverPhone;
 
+    /** 收货单位：可空 */
+    private String receiverCompany;
+
+    /** 收货地区：三码需同时提供，服务端校验层级并派生名称；与收货详细地址不做强校验 */
+    private String receiverProvinceCode;
+
+    private String receiverCityCode;
+
+    private String receiverDistrictCode;
+
     private String receiverAddress;
 
-    /** 货物明细行；服务端汇总件数/重量/体积，首行名称等落主表 */
+    /** 货物明细行；服务端按行落子表并汇总覆盖主表 */
     private List<GoodsItem> goodsList;
+
+    /** 以下三量仅用于篡改检测：若客户端传值，必须等于货物明细合计，否则拒绝 */
+    private Integer quantity;
+
+    private BigDecimal weight;
+
+    private BigDecimal volume;
 
     /** 1现付 2到付 3月结 4回付 5多笔付；无默认值，未选直接拒绝 */
     private Integer payMethod;

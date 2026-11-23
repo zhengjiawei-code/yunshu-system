@@ -6,8 +6,10 @@ import com.yunshu.common.exception.BizException;
 import com.yunshu.modules.operation.dto.WaybillSaveRequest;
 import com.yunshu.modules.operation.entity.BizCustomer;
 import com.yunshu.modules.operation.entity.BizWaybill;
+import com.yunshu.modules.operation.entity.BizWaybillGoods;
 import com.yunshu.modules.operation.entity.BizWaybillRouteNode;
 import com.yunshu.modules.operation.mapper.BizCustomerMapper;
+import com.yunshu.modules.operation.mapper.BizWaybillGoodsMapper;
 import com.yunshu.modules.operation.mapper.BizWaybillMapper;
 import com.yunshu.modules.operation.mapper.BizWaybillRouteNodeMapper;
 import com.yunshu.modules.operation.vo.CustomerMatchVO;
@@ -17,6 +19,8 @@ import com.yunshu.modules.operation.vo.WaybillSaveVO;
 import com.yunshu.modules.system.dept.entity.SysDept;
 import com.yunshu.modules.system.dept.mapper.SysDeptMapper;
 import com.yunshu.modules.system.dept.service.UserOrgService;
+import com.yunshu.modules.system.region.entity.SysRegion;
+import com.yunshu.modules.system.region.mapper.SysRegionMapper;
 import com.yunshu.modules.system.user.entity.SysUser;
 import com.yunshu.modules.system.user.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -44,9 +48,11 @@ public class WaybillService {
 
     private final BizWaybillMapper waybillMapper;
     private final BizWaybillRouteNodeMapper nodeMapper;
+    private final BizWaybillGoodsMapper goodsMapper;
     private final BizCustomerMapper customerMapper;
     private final SysDeptMapper deptMapper;
     private final SysUserMapper userMapper;
+    private final SysRegionMapper regionMapper;
     private final UserOrgService userOrgService;
     private final CustomerMatchService customerMatchService;
     private final RouteCandidateService routeCandidateService;
@@ -65,6 +71,8 @@ public class WaybillService {
         BizCustomer customer = resolveCustomer(request.getSenderName(), request.getSenderPhone());
 
         GoodsSummary goods = summarize(request.getGoodsList());
+        assertMainTotalsMatch(request, goods);
+        ReceiverRegion receiverRegion = resolveReceiverRegion(request);
         SysUser operator = context.getUserId() == null ? null : userMapper.selectById(context.getUserId());
         String operatorName = operator == null ? "系统" : operator.getRealName();
 
@@ -107,9 +115,17 @@ public class WaybillService {
 
         waybill.setSenderName(request.getSenderName().trim());
         waybill.setSenderPhone(request.getSenderPhone().trim());
+        waybill.setSenderCompany(trimToNull(request.getSenderCompany()));
         waybill.setSenderAddress(request.getSenderAddress().trim());
         waybill.setReceiverName(request.getReceiverName().trim());
         waybill.setReceiverPhone(request.getReceiverPhone().trim());
+        waybill.setReceiverCompany(trimToNull(request.getReceiverCompany()));
+        waybill.setReceiverProvinceCode(receiverRegion.provinceCode());
+        waybill.setReceiverProvinceName(receiverRegion.provinceName());
+        waybill.setReceiverCityCode(receiverRegion.cityCode());
+        waybill.setReceiverCityName(receiverRegion.cityName());
+        waybill.setReceiverDistrictCode(receiverRegion.districtCode());
+        waybill.setReceiverDistrictName(receiverRegion.districtName());
         waybill.setReceiverAddress(request.getReceiverAddress().trim());
 
         waybill.setGoodsName(goods.name());
@@ -154,6 +170,7 @@ public class WaybillService {
 
         waybillMapper.insert(waybill);
         insertNodes(waybill.getId(), route, originDeptId);
+        insertGoods(waybill.getId(), originDeptId, request.getGoodsList());
 
         return toSaveVO(waybill);
     }
@@ -167,9 +184,13 @@ public class WaybillService {
         List<BizWaybillRouteNode> nodes = nodeMapper.selectList(Wrappers.<BizWaybillRouteNode>lambdaQuery()
                 .eq(BizWaybillRouteNode::getWaybillId, id)
                 .orderByAsc(BizWaybillRouteNode::getSeq));
+        List<BizWaybillGoods> goods = goodsMapper.selectList(Wrappers.<BizWaybillGoods>lambdaQuery()
+                .eq(BizWaybillGoods::getWaybillId, id)
+                .orderByAsc(BizWaybillGoods::getSeq));
         WaybillDetailVO vo = new WaybillDetailVO();
         vo.setWaybill(waybill);
         vo.setNodes(nodes);
+        vo.setGoods(goods);
         return vo;
     }
 
@@ -348,6 +369,74 @@ public class WaybillService {
         return new GoodsSummary(truncate(String.join("、", names), 100), type, packageType, quantity,
                 weight.setScale(3, RoundingMode.HALF_UP), volume.setScale(3, RoundingMode.HALF_UP),
                 truncate(remarks.isEmpty() ? null : String.join("；", remarks), 500));
+    }
+
+    private void insertGoods(Long waybillId, Long deptId, List<WaybillSaveRequest.GoodsItem> items) {
+        int seq = 1;
+        for (WaybillSaveRequest.GoodsItem item : items) {
+            BizWaybillGoods goods = new BizWaybillGoods();
+            goods.setWaybillId(waybillId);
+            goods.setSeq(seq++);
+            goods.setGoodsName(item.getGoodsName().trim());
+            goods.setGoodsType(trimToNull(item.getGoodsType()));
+            goods.setPackageType(trimToNull(item.getPackageType()));
+            goods.setQuantity(item.getQuantity());
+            goods.setWeight(scale3(item.getWeight()));
+            goods.setVolume(scale3(item.getVolume()));
+            goods.setGoodsRemark(trimToNull(item.getGoodsRemark()));
+            goods.setDeptId(deptId);
+            goodsMapper.insert(goods);
+        }
+    }
+
+    /** 双向校验：客户端若携带主表三量，必须与明细合计一致；不传则由服务端汇总覆盖 */
+    private void assertMainTotalsMatch(WaybillSaveRequest request, GoodsSummary goods) {
+        if (request.getQuantity() != null && !Objects.equals(request.getQuantity(), goods.quantity())) {
+            throw new BizException("主表件数必须等于货物明细合计：请求 " + request.getQuantity()
+                    + "，明细合计 " + goods.quantity());
+        }
+        if (request.getWeight() != null
+                && request.getWeight().setScale(3, RoundingMode.HALF_UP).compareTo(goods.weight()) != 0) {
+            throw new BizException("主表重量必须等于货物明细合计：请求 "
+                    + request.getWeight().setScale(3, RoundingMode.HALF_UP).toPlainString()
+                    + "，明细合计 " + goods.weight().toPlainString());
+        }
+        if (request.getVolume() != null
+                && request.getVolume().setScale(3, RoundingMode.HALF_UP).compareTo(goods.volume()) != 0) {
+            throw new BizException("主表体积必须等于货物明细合计：请求 "
+                    + request.getVolume().setScale(3, RoundingMode.HALF_UP).toPlainString()
+                    + "，明细合计 " + goods.volume().toPlainString());
+        }
+    }
+
+    private record ReceiverRegion(String provinceCode, String provinceName, String cityCode,
+                                  String cityName, String districtCode, String districtName) {
+    }
+
+    /** 收货地区只做结构校验（三码齐全 + 层级匹配）并派生名称；与收货详细地址文字不做强校验 */
+    private ReceiverRegion resolveReceiverRegion(WaybillSaveRequest request) {
+        String provinceCode = trimToNull(request.getReceiverProvinceCode());
+        String cityCode = trimToNull(request.getReceiverCityCode());
+        String districtCode = trimToNull(request.getReceiverDistrictCode());
+        if (provinceCode == null && cityCode == null && districtCode == null) {
+            return new ReceiverRegion(null, null, null, null, null, null);
+        }
+        if (provinceCode == null || cityCode == null || districtCode == null) {
+            throw new BizException("收货省、市、区县需同时选择");
+        }
+        SysRegion district = regionMapper.selectById(districtCode);
+        SysRegion city = regionMapper.selectById(cityCode);
+        SysRegion province = regionMapper.selectById(provinceCode);
+        if (district == null || city == null || province == null
+                || !Integer.valueOf(3).equals(district.getLevel())
+                || !Integer.valueOf(2).equals(city.getLevel())
+                || !Integer.valueOf(1).equals(province.getLevel())
+                || !cityCode.equals(district.getParentCode())
+                || !provinceCode.equals(city.getParentCode())) {
+            throw new BizException("收货省市区县编码层级不匹配，请重新选择");
+        }
+        return new ReceiverRegion(province.getCode(), province.getName(), city.getCode(), city.getName(),
+                district.getCode(), district.getName());
     }
 
     private void insertNodes(Long waybillId, RouteCandidateVO route, Long deptId) {

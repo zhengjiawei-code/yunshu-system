@@ -91,11 +91,27 @@ public class BizWaybill {
 
     private String senderPhone;
 
+    private String senderCompany;
+
     private String senderAddress;
 
     private String receiverName;
 
     private String receiverPhone;
+
+    private String receiverCompany;
+
+    private String receiverProvinceCode;
+
+    private String receiverProvinceName;
+
+    private String receiverCityCode;
+
+    private String receiverCityName;
+
+    private String receiverDistrictCode;
+
+    private String receiverDistrictName;
 
     private String receiverAddress;
 

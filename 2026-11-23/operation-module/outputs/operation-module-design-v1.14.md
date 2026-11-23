@@ -2170,4 +2170,40 @@ operation:waybill:export    导出
 - 每阶段完成即按本文对应验收项自测，家伟确认后再进入下一阶段；阶段 5 的扫码/打印接口只定义契约，实际联调在装卸车模块排期。
 - **冻结声明**：v1.10 为冻结版本，v1.11 以增量修订承载网点字段；后续需求变更继续以新版本修订记录承载，不在冻结稿上直接改；**DDL 经家伟确认是动库的唯一前置条件**。
 
+---
+
+## 附录 A（V14 结构扩展，2026-11-23 家伟批准）
+
+> 本附录为已批准的结构扩展落地口径，不改变正文既有字段语义；实际迁移见 `backend/src/main/resources/db/migration/V14__operation_waybill_goods.sql`。
+
+### A.1 新增表 `biz_waybill_goods`
+
+- 字段：`id`、`waybill_id`、`seq`、`goods_name`、`goods_type`、`package_type`、`quantity`、`weight(12,3)`、`volume(12,3)`、`goods_remark`、`dept_id`、`create_by`、`create_time`、`update_by`、`update_time`、`deleted`。
+- `quantity/weight/volume` 不设默认值，必须显式传值；服务层校验 `quantity>=1、weight>0、volume>0`。
+- 唯一键 `uk_waybill_seq(waybill_id, seq)`；索引 `idx_waybill`、`idx_dept`。
+- `dept_id` 与运单一致，参与数据权限过滤。
+
+### A.2 `biz_waybill` 新增列
+
+- 发货单位 `sender_company`、收货单位 `receiver_company`（均 `VARCHAR(100)`，可空）。
+- 收货省/市/区县按项目既有区划风格拆为 `code + name` 成对，共 6 列：`receiver_province_code/name`、`receiver_city_code/name`、`receiver_district_code/name`；编码统一 `VARCHAR(12)`、名称 `VARCHAR(64)`，全部可空、无默认值。
+- 因此需求清单中的“发货单位/收货单位/收货省/收货市/收货区县”5 项，实际物理列为 8 列。
+
+### A.3 子表与主表汇总关系
+
+- 主表 `quantity/weight/volume` 不再由客户端直接决定：服务端按子表行汇总后写入主表，二者始终一致。
+- 若客户端显式携带主表三量，服务端会与明细合计逐项比较；不一致直接 400 拒绝（篡改检测），一致则按汇总值落库。
+- 子表与主表同事务写入；运单详情同时返回主表、路由节点与货物明细行。
+
+### A.4 收货省市区县与收货地址一致性口径（建议：仅提示，不强拦截）
+
+- **前端**：已选收货省/市/区县且填写收货地址后，若地址文本既不含所选市名也不含区县名，展示黄色提示“收货地址未包含所选城市/区县名称，请确认（仅提示，不影响保存）”。
+- **后端**：只校验三码齐全与层级关系（省 → 市 → 区县均存在且 `parent_code` 逐级匹配），并派生名称快照；**不解析收货地址文本、不做强拦截**。
+- **理由**：收货地址是自由文本，常见园区名、简称、门牌号写法，文本强匹配误拦概率高；区划编码已保证行政归属准确，地址文本用于派送补充。若后续需要强一致性，应引入结构化地址或地址库校验，而不是字符串包含判断。
+
+### A.5 迁移与回滚
+
+- 迁移文件：`V14__operation_waybill_goods.sql`；执行前 `flyway_schema_history` 最新为 V13（success=1）、`biz_waybill` 0 条，无需回填。
+- 回滚文件：`backend/src/main/resources/db/rollback/V14__operation_waybill_goods_rollback.sql`（不放入 migration 目录）；顺序为先 DROP 子表，再 DROP 主表 8 列。
+
 
