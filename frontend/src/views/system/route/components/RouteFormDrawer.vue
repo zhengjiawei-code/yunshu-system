@@ -51,17 +51,16 @@
       </el-form-item>
 
       <el-form-item label="库区" prop="warehouseArea">
-        <el-input v-model="form.warehouseArea" maxlength="100" placeholder="干线必填，打印标签直接取该值" />
+        <el-input v-model="form.warehouseArea" maxlength="100" placeholder="打印标签直接取该值" />
       </el-form-item>
 
       <el-form-item label="里程（km）" prop="mileage">
         <el-input-number
           v-model="form.mileage"
-          :min="0"
           :max="99999999"
           :precision="2"
           :controls="false"
-          placeholder="干线必填，短驳选填"
+          placeholder="选填"
           class="full-width"
         />
       </el-form-item>
@@ -69,29 +68,28 @@
       <el-form-item label="时效（小时）" prop="transitHours">
         <el-input-number
           v-model="form.transitHours"
-          :min="0"
           :max="99999999"
           :precision="2"
           :controls="false"
-          placeholder="干线必填，短驳选填"
+          placeholder="选填"
           class="full-width"
         />
       </el-form-item>
 
       <el-form-item label="线路联系人" prop="contactName">
-        <el-input v-model="form.contactName" maxlength="50" placeholder="干线必填" />
+        <el-input v-model="form.contactName" maxlength="50" placeholder="选填" />
       </el-form-item>
 
       <el-form-item label="联系电话" prop="contactPhone">
-        <el-input v-model="form.contactPhone" maxlength="20" placeholder="干线必填" />
+        <el-input v-model="form.contactPhone" maxlength="20" placeholder="选填" />
       </el-form-item>
 
       <el-form-item label="线路客服" prop="serviceName">
-        <el-input v-model="form.serviceName" maxlength="50" placeholder="干线必填" />
+        <el-input v-model="form.serviceName" maxlength="50" placeholder="选填" />
       </el-form-item>
 
       <el-form-item label="客服电话" prop="servicePhone">
-        <el-input v-model="form.servicePhone" maxlength="20" placeholder="干线必填" />
+        <el-input v-model="form.servicePhone" maxlength="20" placeholder="选填" />
       </el-form-item>
 
       <el-form-item label="状态" prop="status">
@@ -187,9 +185,10 @@ const form = reactive<{
   remark: ''
 })
 
-function trunkRequired(message: string) {
+/** 选填数值项：留空放行，填了仍校验不能为负 */
+function nonNegative(message: string) {
   return (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
-    if (form.routeCategory === 2 && (value === undefined || value === null || value === '')) {
+    if (value !== undefined && value !== null && Number(value) < 0) {
       callback(new Error(message))
       return
     }
@@ -201,13 +200,8 @@ const rules: FormRules = {
   routeCategory: [{ required: true, message: '请选择路由类型', trigger: 'change' }],
   originDeptId: [{ required: true, message: '请选择始发网点', trigger: 'change' }],
   destDeptId: [{ required: true, message: '请选择到达网点', trigger: 'change' }],
-  warehouseArea: [{ validator: trunkRequired('干线必须填写库区'), trigger: 'blur' }],
-  mileage: [{ validator: trunkRequired('干线必须填写里程'), trigger: 'change' }],
-  transitHours: [{ validator: trunkRequired('干线必须填写时效'), trigger: 'change' }],
-  contactName: [{ validator: trunkRequired('干线必须填写线路联系人'), trigger: 'blur' }],
-  contactPhone: [{ validator: trunkRequired('干线必须填写联系电话'), trigger: 'blur' }],
-  serviceName: [{ validator: trunkRequired('干线必须填写线路客服'), trigger: 'blur' }],
-  servicePhone: [{ validator: trunkRequired('干线必须填写客服电话'), trigger: 'blur' }],
+  mileage: [{ validator: nonNegative('里程不能为负'), trigger: 'change' }],
+  transitHours: [{ validator: nonNegative('时效不能为负'), trigger: 'change' }],
   remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
 }
 

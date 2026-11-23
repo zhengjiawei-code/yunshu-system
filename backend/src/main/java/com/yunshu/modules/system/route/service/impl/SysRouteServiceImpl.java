@@ -180,7 +180,7 @@ public class SysRouteServiceImpl implements SysRouteService {
         if (Objects.equals(origin.getId(), dest.getId())) {
             throw new BizException("始发网点与到达网点不能相同");
         }
-        validateTrunkFields(category, request);
+        validateOptionalFields(request);
 
         List<SysRoute> sameKey = routeMapper.selectList(Wrappers.<SysRoute>lambdaQuery()
                 .eq(SysRoute::getRouteCategory, category)
@@ -246,7 +246,7 @@ public class SysRouteServiceImpl implements SysRouteService {
         if (Objects.equals(origin.getId(), dest.getId())) {
             throw new BizException("始发网点与到达网点不能相同");
         }
-        validateTrunkFields(category, request);
+        validateOptionalFields(request);
         List<SysRoute> sameKey = routeMapper.selectList(Wrappers.<SysRoute>lambdaQuery()
                 .eq(SysRoute::getRouteCategory, category)
                 .eq(SysRoute::getOriginDeptId, origin.getId())
@@ -1402,30 +1402,13 @@ public class SysRouteServiceImpl implements SysRouteService {
         return dept;
     }
 
-    private void validateTrunkFields(int category, RouteSaveRequest request) {
-        if (category != CATEGORY_TRUNK) {
-            return;
+    /** 里程/时效等选填项：不填放行，填了仍校验格式（不能为负） */
+    private void validateOptionalFields(RouteSaveRequest request) {
+        if (request.getMileage() != null && request.getMileage().signum() < 0) {
+            throw new BizException("里程不能为负");
         }
-        if (!StringUtils.hasText(request.getWarehouseArea())) {
-            throw new BizException("干线必须填写库区");
-        }
-        if (request.getMileage() == null) {
-            throw new BizException("干线必须填写里程");
-        }
-        if (request.getTransitHours() == null) {
-            throw new BizException("干线必须填写时效");
-        }
-        if (!StringUtils.hasText(request.getContactName())) {
-            throw new BizException("干线必须填写线路联系人");
-        }
-        if (!StringUtils.hasText(request.getContactPhone())) {
-            throw new BizException("干线必须填写联系电话");
-        }
-        if (!StringUtils.hasText(request.getServiceName())) {
-            throw new BizException("干线必须填写线路客服");
-        }
-        if (!StringUtils.hasText(request.getServicePhone())) {
-            throw new BizException("干线必须填写客服电话");
+        if (request.getTransitHours() != null && request.getTransitHours().signum() < 0) {
+            throw new BizException("时效不能为负");
         }
     }
 

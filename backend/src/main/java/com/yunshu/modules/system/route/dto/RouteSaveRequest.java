@@ -5,7 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
-/** 短驳/干线路由新增与编辑；干线必填库区/里程/时效/联系人/电话/客服/客服电话 */
+/** 短驳/干线路由新增与编辑；仅路由类型/始发网点/到达网点必填，其余选填 */
 @Data
 public class RouteSaveRequest {
 
