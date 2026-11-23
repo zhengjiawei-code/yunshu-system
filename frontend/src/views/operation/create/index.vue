@@ -98,20 +98,24 @@
                   :class="{ disabled: item.noRoute }"
                   @mousedown.prevent="pickDestination(item)"
                 >
-                  <div class="cand-line1">
-                    <span class="cand-chain">{{ item.noRoute ? item.destName : item.chainText }}</span>
-                    <span v-if="item.recommended" class="cand-recommend">推荐</span>
+                  <div class="cand-line1" :class="{ 'is-none': item.noRoute }">
+                    <span class="cand-chain" :title="item.noRoute ? item.destName : item.chainText">{{ item.noRoute ? item.destName : item.chainText }}</span>
                     <span v-if="item.noRoute" class="cand-none">暂无可用路由</span>
+                    <template v-else>
+                      <span class="cand-col cand-recommend"><span v-if="item.recommended">推荐</span></span>
+                      <span class="cand-col cand-type">
+                        <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
+                          {{ item.endType === 1 ? '直达' : '外转' }}
+                        </span>
+                      </span>
+                      <span class="cand-col cand-node">{{ item.nodeCount }} 节点</span>
+                      <span class="cand-col cand-hours">{{ item.totalHours ?? '—' }}h</span>
+                      <span class="cand-col cand-mileage">{{ item.totalMileage ?? '—' }}km</span>
+                    </template>
                   </div>
                   <div v-if="!item.noRoute" class="cand-line2">
-                    <span class="cand-dest">{{ item.destName }}</span>
-                    <span>目的网点 {{ item.destHubName || '—' }}</span>
-                    <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
-                      {{ item.endType === 1 ? '直达' : '外转' }}
-                    </span>
-                    <span>{{ item.nodeCount }} 节点</span>
-                    <span>{{ item.totalHours ?? '—' }}h</span>
-                    <span>{{ item.totalMileage ?? '—' }}km</span>
+                    <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
+                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')">目的网点 {{ item.destHubName || '—' }}</span>
                   </div>
                 </button>
               </template>
@@ -149,17 +153,20 @@
                   @mousedown.prevent="selectRoute(item)"
                 >
                   <div class="cand-line1">
-                    <span class="cand-chain">{{ item.chainText }}</span>
-                    <span v-if="item.recommended" class="cand-recommend">推荐</span>
+                    <span class="cand-chain" :title="item.chainText">{{ item.chainText }}</span>
+                    <span class="cand-col cand-recommend"><span v-if="item.recommended">推荐</span></span>
+                    <span class="cand-col cand-type">
+                      <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
+                        {{ item.endType === 1 ? '直达' : '外转' }}
+                      </span>
+                    </span>
+                    <span class="cand-col cand-node">{{ item.nodeCount }} 节点</span>
+                    <span class="cand-col cand-hours">{{ item.totalHours ?? '—' }}h</span>
+                    <span class="cand-col cand-mileage">{{ item.totalMileage ?? '—' }}km</span>
                   </div>
                   <div class="cand-line2">
-                    <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
-                      {{ item.endType === 1 ? '直达' : '外转' }}
-                    </span>
-                    <span>目的网点 {{ item.destHubName || '—' }}</span>
-                    <span>{{ item.nodeCount }} 节点</span>
-                    <span>{{ item.totalHours ?? '—' }}h</span>
-                    <span>{{ item.totalMileage ?? '—' }}km</span>
+                    <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
+                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')">目的网点 {{ item.destHubName || '—' }}</span>
                   </div>
                 </button>
               </div>
@@ -1478,7 +1485,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   border-radius: 4px;
-  padding: 5px 8px;
+  padding: 6px 8px;
   cursor: pointer;
 }
 
@@ -1492,44 +1499,80 @@ onBeforeUnmount(() => {
   opacity: 0.7;
 }
 
+/* 固定列位：链路 | 推荐 | 类型 | 节点数 | 时效 | 里程 */
 .cand-line1 {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px 46px 62px 52px 68px;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: 13px;
   font-weight: 700;
+  line-height: 18px;
   color: var(--color-primary-dark-1);
 }
 
-.cand-chain {
+.cand-line1.is-none {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* 第二行固定列位：完整目的地 | 目的网点 */
+.cand-line2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cand-chain,
+.cand-dest,
+.cand-hub {
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
+.cand-col {
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .cand-recommend {
+  justify-self: start;
+}
+
+.cand-recommend > span {
   padding: 0 5px;
   border-radius: 3px;
   background: var(--color-primary-light-5);
   color: var(--color-primary);
   font-size: 10px;
   font-weight: 500;
+  line-height: 16px;
+}
+
+.cand-type {
+  justify-self: start;
+}
+
+.cand-node,
+.cand-hours,
+.cand-mileage {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
 }
 
 .cand-none {
   color: var(--color-danger);
   font-size: 11px;
   font-weight: 400;
-}
-
-.cand-line2 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 2px;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .cand-dest {
