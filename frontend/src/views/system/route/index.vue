@@ -1110,7 +1110,7 @@ const routeSchema = reactive<ColumnDef[]>([
       { label: '停用', value: false }
     ]
   },
-  { key: 'sortOrder', label: '排序号', prop: 'sortOrder', filterType: 'none', align: 'right' },
+  { key: 'sortOrder', label: '排序号', prop: 'sortOrder', filterType: 'none', filterHidden: true, align: 'right' },
   { key: 'updateTime', label: '更新时间', prop: 'updateTime', filterType: 'daterange', align: 'center' },
   {
     key: 'operation',
@@ -1193,7 +1193,7 @@ const transferSchema = reactive<ColumnDef[]>([
       { label: '停用', value: false }
     ]
   },
-  { key: 'sortOrder', label: '排序', prop: 'sortOrder', filterType: 'none', align: 'right' },
+  { key: 'sortOrder', label: '排序', prop: 'sortOrder', filterType: 'none', filterHidden: true, align: 'right' },
   { key: 'updateByName', label: '修改人', prop: 'updateByName', filterType: 'text' },
   { key: 'updateTime', label: '修改时间', prop: 'updateTime', filterType: 'daterange', align: 'center' },
   {

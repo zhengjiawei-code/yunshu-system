@@ -339,7 +339,7 @@ const schema = reactive<ColumnDef[]>([
     ]
   },
   // 排序号/修改时间后端未提供区间筛选参数，保持无筛选，避免前端无效控件
-  { key: 'sortOrder', label: '排序号', prop: 'sortOrder', filterType: 'none', align: 'right' },
+  { key: 'sortOrder', label: '排序号', prop: 'sortOrder', filterType: 'none', filterHidden: true, align: 'right' },
   { key: 'updateByName', label: '修改人', prop: 'updateByName', filterType: 'text' },
   { key: 'updateTime', label: '修改时间', prop: 'updateTime', filterType: 'daterange', align: 'center' },
   { key: 'remark', label: '备注', prop: 'remark', filterType: 'text' },

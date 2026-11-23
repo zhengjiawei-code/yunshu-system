@@ -418,7 +418,7 @@ const schema = reactive<ColumnDef[]>([
   { key: 'component', label: '组件路径', prop: 'component', filterType: 'text' },
   { key: 'perms', label: '权限标识', prop: 'perms', filterType: 'text' },
   { key: 'terminalType', label: '终端', prop: 'terminalType', filterType: 'text' },
-  { key: 'sortOrder', label: '排序', prop: 'sortOrder', filterType: 'numberrange', align: 'right' },
+  { key: 'sortOrder', label: '排序', prop: 'sortOrder', filterType: 'numberrange', filterHidden: true, align: 'right' },
   {
     key: 'visible',
     label: '显示',

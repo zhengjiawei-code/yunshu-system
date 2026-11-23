@@ -55,6 +55,8 @@ export interface ColumnDef {
   locked?: boolean
   /** 默认隐藏（列定义保留，列设置可勾回） */
   defaultHidden?: boolean
+  /** 不展示“启用筛选”开关（多值标签、系统排序等本就不提供筛选的列） */
+  filterHidden?: boolean
   /** 不参与列设置（如序号列） */
   ignored?: boolean
 }

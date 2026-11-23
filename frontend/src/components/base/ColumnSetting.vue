@@ -44,6 +44,7 @@
         </el-tooltip>
 
         <el-tooltip
+          v-if="!defOf(item.key)?.filterHidden"
           :content="canFilter(item.key) ? '是否启用该列筛选' : '该列不提供筛选'"
           placement="top"
         >

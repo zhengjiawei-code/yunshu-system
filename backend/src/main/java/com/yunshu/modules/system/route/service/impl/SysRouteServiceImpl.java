@@ -794,14 +794,16 @@ public class SysRouteServiceImpl implements SysRouteService {
         if (route == null) {
             throw new BizException("路由不存在或已删除");
         }
-        if (!org.hq() && !Objects.equals(route.getOwnerCompanyId(), org.companyId())) {
-            // 非创建公司：有授权说明该路由正被本公司使用，按“使用中”拦截；无授权则直接无权
-            if (existsGrant(SCOPE_TRANSFER, id, org.companyId())) {
-                throw new BizException(BLOCK_DELETE);
-            }
-            throw new BizException(403, "只有创建公司可以操作该路由");
-        }
         List<SysRouteCompany> grants = grantsOf(SCOPE_TRANSFER, id);
+        if (!org.hq()) {
+            boolean owner = Objects.equals(route.getOwnerCompanyId(), org.companyId());
+            boolean ownGrant = grants.stream()
+                    .anyMatch(item -> Objects.equals(item.getCompanyDeptId(), org.companyId()));
+            // 只要本公司正在使用（创建公司或被授权公司）即可发起移除，不再要求“创建公司”
+            if (!owner && !ownGrant) {
+                throw new BizException(403, "无权操作该路由");
+            }
+        }
         // 总部可在确认清单后移除使用中的路由；分公司仅能在“只有自己在用”时移除
         // 0 号行为总部自身的“全部分公司”授权，不算他公司在用
         boolean otherUsing = !org.hq()
@@ -849,7 +851,8 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .filter(item -> hq || !Objects.equals(item.getCompanyDeptId(), org.companyId()))
                 .toList();
         boolean ownGrant = all.stream().anyMatch(item -> Objects.equals(item.getCompanyDeptId(), org.companyId()));
-        boolean canRemove = hq || (owner && others.isEmpty());
+        // 判定只看“是否有他公司在用”：只要仅本公司一家在用，允许直接移除（不再要求创建公司）
+        boolean canRemove = hq || (others.isEmpty() && (owner || ownGrant));
 
         RouteUsageVO result = new RouteUsageVO();
         result.setId(route.getId());
@@ -869,8 +872,8 @@ public class SysRouteServiceImpl implements SysRouteService {
                 result.setBlockReason("该路由已授权全部分公司，不能移除");
             } else if (!others.isEmpty()) {
                 result.setBlockReason("该路由被 " + others.size() + " 家公司在使用，不能移除");
-            } else if (!owner) {
-                result.setBlockReason("只有创建公司可以移除该路由，可改为取消本公司授权");
+            } else if (!owner && !ownGrant) {
+                result.setBlockReason("无权操作该路由");
             } else {
                 result.setBlockReason("该路由正在使用中，不能移除");
             }
@@ -1588,10 +1591,9 @@ public class SysRouteServiceImpl implements SysRouteService {
             boolean owner = Objects.equals(item.getOwnerCompanyId(), org.companyId());
             boolean ownGrant = grants != null && grants.stream()
                     .anyMatch(row -> Objects.equals(row.getCompanyDeptId(), org.companyId()));
-            boolean onlySelf = grants == null || grants.stream()
-                    .allMatch(row -> Objects.equals(row.getCompanyDeptId(), org.companyId()));
-            // 创建公司且仅自己在用可移除；被授权的分公司也保留入口，由弹窗引导“取消授权”
-            vo.setDeletable(owner ? onlySelf : ownGrant);
+            // 不再要求“创建公司”：本公司是该路由的创建公司或正在使用（有本公司授权行）均保留移除入口，
+            // 能否真正移除由弹窗/后端按“是否存在他公司在用”判定，他公司在用时引导为“取消本公司授权”
+            vo.setDeletable(owner || ownGrant);
         }
         vo.setEditable(hq || Objects.equals(item.getOwnerCompanyId(), org.companyId()));
         return vo;

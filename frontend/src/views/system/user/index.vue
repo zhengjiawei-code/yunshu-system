@@ -420,6 +420,7 @@ const schema = reactive<ColumnDef[]>([
     label: '可登录机构',
     elKey: 'label:可登录机构',
     filterType: 'none',
+    filterHidden: true,
     sortable: false
   },
   {
