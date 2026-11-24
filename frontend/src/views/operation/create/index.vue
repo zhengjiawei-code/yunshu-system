@@ -1312,7 +1312,7 @@ onBeforeUnmount(() => {
 .op-page :deep(.el-input__wrapper) {
   min-height: 28px;
   padding: 1px 8px;
-  background: #fbfcfd;
+  background: #fff;
 }
 
 .op-page :deep(.el-input-number .el-input__inner) {
@@ -1325,8 +1325,38 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 1px #f0d9d4 inset;
 }
 
-.op-page :deep(.el-input.is-disabled .el-input__wrapper) {
-  background: var(--color-bg-subtle);
+/* 锁定态统一灰底：跟着 disabled 走，不逐个控件写 */
+.op-page :deep(.el-input.is-disabled .el-input__wrapper),
+.op-page :deep(.el-select.is-disabled .el-select__wrapper),
+.op-page :deep(.el-select__wrapper.is-disabled),
+.op-page :deep(.el-textarea.is-disabled .el-textarea__inner) {
+  background: #f5f7fa;
+  box-shadow: 0 0 0 1px #e4e7ed inset;
+  cursor: not-allowed;
+}
+
+.op-page :deep(.el-input.is-disabled .el-input__inner),
+.op-page :deep(.el-select.is-disabled .el-select__selected-item),
+.op-page :deep(.el-select.is-disabled .el-select__placeholder),
+.op-page :deep(.el-select__wrapper.is-disabled .el-select__selected-item),
+.op-page :deep(.el-select__wrapper.is-disabled .el-select__selected-item span),
+.op-page :deep(.el-select__wrapper.is-disabled .el-select__placeholder),
+.op-page :deep(.el-select__wrapper.is-disabled .el-select__placeholder span) {
+  color: var(--color-text-disabled) !important;
+  -webkit-text-fill-color: var(--color-text-disabled) !important;
+  cursor: not-allowed;
+}
+
+.op-page :deep(.el-textarea.is-disabled .el-textarea__inner) {
+  color: var(--color-text-disabled);
+  -webkit-text-fill-color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.op-page :deep(.el-radio-button.is-disabled .el-radio-button__inner) {
+  background: #f5f7fa;
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
 }
 
 .region-selects {
@@ -1340,7 +1370,7 @@ onBeforeUnmount(() => {
 .region-selects :deep(.el-select__wrapper) {
   min-height: 28px;
   padding: 1px 8px;
-  background: #fbfcfd;
+  background: #fff;
 }
 
 .region-hint {
@@ -1359,16 +1389,17 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 0 8px;
   border-radius: 4px;
-  background: var(--color-bg-subtle);
+  background: #f5f7fa;
   border: 1px dashed var(--color-border-base);
-  color: var(--color-text-regular);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .readonly-box .matched {
-  color: var(--color-text-primary);
+  color: var(--color-text-disabled);
   font-weight: 600;
 }
 
@@ -1732,9 +1763,12 @@ onBeforeUnmount(() => {
 .std {
   flex: 0 0 34px;
   font-size: 10px;
-  color: var(--color-text-placeholder);
+  color: var(--color-text-disabled);
+  background: #f5f7fa;
+  border-radius: 2px;
   border-bottom: 1px dashed var(--color-border-base);
   white-space: nowrap;
+  cursor: not-allowed;
 }
 
 .fee-foot {
