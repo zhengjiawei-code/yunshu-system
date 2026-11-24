@@ -100,7 +100,7 @@ public class WaybillSaveRequest {
 
     private BigDecimal returnFee;
 
-    /** 1=送货，2=自提；3=大车直送已停用（历史兼容） */
+    /** 1=送货，2=自提，3=大车直送（不受线路服务能力限制） */
     private Integer deliveryMethod;
 
     private BigDecimal codAmount;

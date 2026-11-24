@@ -121,7 +121,7 @@
                   <span class="cand-desc">
                     <template v-if="!item.noRoute">
                       <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
-                      <span class="cand-service" title="提供服务：自提/送货">提供服务：自提/送货</span>
+                      <span class="cand-service" title="提供服务：自提/送货"><i class="svc-tag">提供服务</i><span class="svc-value">自提/送货</span></span>
                     </template>
                     <span v-else>—</span>
                   </span>
@@ -177,7 +177,7 @@
                   </span>
                   <span class="cand-desc">
                     <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
-                    <span class="cand-service" title="提供服务：自提/送货">提供服务：自提/送货</span>
+                    <span class="cand-service" title="提供服务：自提/送货"><i class="svc-tag">提供服务</i><span class="svc-value">自提/送货</span></span>
                   </span>
                 </button>
               </div>
@@ -438,6 +438,7 @@
             <el-radio-group v-model="form.deliveryMethod" class="seg">
               <el-radio-button :value="2" :disabled="!routePickupEnabled" :title="routePickupEnabled ? '' : '该线路不提供自提服务'">自提</el-radio-button>
               <el-radio-button :value="1" :disabled="!routeDeliveryEnabled" :title="routeDeliveryEnabled ? '' : '该线路不提供送货服务'">送货</el-radio-button>
+              <el-radio-button :value="3">大车直送</el-radio-button>
             </el-radio-group>
             <span v-if="routeServiceHint" class="service-hint">{{ routeServiceHint }}</span>
           </div>
@@ -659,8 +660,8 @@ const selectedDeptName = computed(() => userStore.currentOrgName || '—')
 const originDeptName = selectedDeptName
 const originHubName = computed(() => selectedRoute.value?.nodes?.[0]?.fromDeptName)
 
-/** 送货(1) 时送货费必填；自提(2) 与未选不要求；3 为历史码值，界面不提供 */
-const deliveryFeeRequired = computed(() => form.deliveryMethod === 1)
+/** 送货(1)/大车直送(3) 时送货费必填；自提(2) 与未选不要求 */
+const deliveryFeeRequired = computed(() => form.deliveryMethod === 1 || form.deliveryMethod === 3)
 
 /** 选中线路的服务能力；未选或字段缺省（兜底直达）视为都可选 */
 const routePickupEnabled = computed(() => selectedRoute.value?.pickupEnabled !== false)
@@ -1018,7 +1019,7 @@ function collectErrors(): string[] {
     errors.push('请选择送货方式')
   } else if (deliveryFeeRequired.value) {
     if (form.deliveryFee == null) {
-      errors.push('送货方式为送货时，送货费不能为空')
+      errors.push('送货方式为送货或大车直送时，送货费不能为空')
     } else if (form.deliveryFee < 0) {
       errors.push('送货费不能小于0')
     }
@@ -1664,6 +1665,24 @@ onBeforeUnmount(() => {
   flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.svc-tag {
+  display: inline-block;
+  box-sizing: border-box;
+  margin-right: 4px;
+  padding: 0 4px;
+  border: 1px solid #eef0f4;
+  border-radius: 3px;
+  background: #f7f8fa;
+  color: #667085;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 18px;
+}
+
+.svc-value {
+  color: inherit;
 }
 
 .cand-none {

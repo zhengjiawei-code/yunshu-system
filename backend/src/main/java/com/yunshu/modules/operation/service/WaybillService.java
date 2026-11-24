@@ -219,7 +219,7 @@ public class WaybillService {
 
     /* ==================== 内部：校验与派生 ==================== */
 
-    /** 送货方式必须符合所选线路的真实服务能力；3=大车直送为历史码值，不拦截新提交 */
+    /** 送货方式必须符合所选线路的真实服务能力；3=大车直送不受服务能力限制 */
     private void validateRouteService(RouteCandidateVO route, Integer deliveryMethod) {
         if (deliveryMethod == null) {
             return;
@@ -272,10 +272,10 @@ public class WaybillService {
             errors.add("请选择送货方式");
         } else if (request.getDeliveryMethod() < 1 || request.getDeliveryMethod() > 3) {
             errors.add("送货方式码值非法");
-        } else if (request.getDeliveryMethod() == 1) {
-            // 送货(1) 送货费必填，允许 0；自提(2) 不要求；3 为历史码值，仅兼容
+        } else if (request.getDeliveryMethod() == 1 || request.getDeliveryMethod() == 3) {
+            // 送货(1)/大车直送(3) 送货费必填，允许 0；自提(2) 不要求
             if (request.getDeliveryFee() == null) {
-                errors.add("送货方式为送货时，送货费不能为空");
+                errors.add("送货方式为送货或大车直送时，送货费不能为空");
             } else if (request.getDeliveryFee().compareTo(BigDecimal.ZERO) < 0) {
                 errors.add("送货费不能小于0");
             }
