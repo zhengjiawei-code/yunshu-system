@@ -439,8 +439,13 @@ public class RouteCandidateService {
             names.add(deptName(context.depts(), route.getDestDeptId()));
         }
 
-        // 服务能力读该网点在该区划的真实外转配置；未配置才用“自提+送货”兜底
+        // 服务能力与时效/里程均读该网点在该区划的真实外转配置；未配置才用“自提+送货”兜底
         SysRouteTransfer serviceConfig = findHubTransfer(hub.getId(), district.getCode());
+        // 直达候选同样按“跨过外转”计：匹配到的外转配置时效/里程计入合计，NULL 按 0
+        if (serviceConfig != null) {
+            hours = hours.add(nullToZero(serviceConfig.getTransitHours()));
+            mileage = mileage.add(nullToZero(serviceConfig.getMileage()));
+        }
         boolean pickup = true;
         boolean delivery = true;
         String provideServices = DEFAULT_SERVICES;
@@ -651,12 +656,18 @@ public class RouteCandidateService {
         last.setCarrierId(transfer.getCarrierId());
         last.setCarrierName(transfer.getCarrierId() == null ? null
                 : context.carrierNames().get(transfer.getCarrierId()));
+        last.setMileage(transfer.getMileage());
+        last.setTransitHours(transfer.getTransitHours());
         nodes.add(last);
         keys.add(SCOPE_TRANSFER + ":" + transfer.getId());
         if (names.isEmpty()) {
             names.add(deptName(context.depts(), transfer.getApplyDeptId()));
         }
         names.add(regionShortName(transfer, district, city, province));
+
+        // 合计 = 短驳段 + 干线段 + 外转段；外转时效/里程未配置(NULL)时按 0 计入
+        hours = hours.add(nullToZero(transfer.getTransitHours()));
+        mileage = mileage.add(nullToZero(transfer.getMileage()));
 
         vo.setNodes(nodes);
         vo.setRouteKeys(keys);
@@ -703,6 +714,11 @@ public class RouteCandidateService {
             vo.setDestHubName(originNode.getFromDeptName());
         }
         return vo;
+    }
+
+    /** 外转时效/里程未配置时按 0 计入合计，不影响展示与校验 */
+    private static BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     /** 提供服务唯一来源为 pickup/delivery；均为否属脏数据，记录日志并标记未配置 */
