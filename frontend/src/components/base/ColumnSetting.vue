@@ -386,8 +386,10 @@ function onDrop(target: number) {
 }
 
 .column-setting__label {
-  flex: 1;
-  min-width: 40px;
+  /* 字段名优先：至少 120px，超出才省略（title 悬停看全称） */
+  flex: 1 1 160px;
+  min-width: 120px;
+  max-width: 240px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -400,20 +402,26 @@ function onDrop(target: number) {
   flex: none;
 }
 
+/* 「排」「筛」保持 small 开关（30px，单字可读），横向空间由面板加宽与右侧控件压缩提供 */
+.column-setting__sortable :deep(.el-switch__core),
+.column-setting__enable :deep(.el-switch__core) {
+  min-width: 30px;
+}
+
 .column-setting__shape {
   flex: none;
-  width: 68px;
+  width: 62px;
   justify-content: center;
 }
 
 .column-setting__mode {
   flex: none;
-  width: 84px;
+  width: 78px;
 }
 
 .column-setting__fixed {
   flex: none;
-  width: 84px;
+  width: 78px;
   text-align: center;
   font-size: var(--font-size-extra-small);
   color: var(--color-text-placeholder);
@@ -421,7 +429,7 @@ function onDrop(target: number) {
 
 .column-setting__default {
   flex: none;
-  width: 188px;
+  width: 176px;
 }
 
 .column-setting__default-multi {

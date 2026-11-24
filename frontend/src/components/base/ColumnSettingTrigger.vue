@@ -1,5 +1,5 @@
 <template>
-  <el-popover placement="bottom-end" :width="560" trigger="click">
+  <el-popover placement="bottom-end" :width="panelWidth" trigger="click">
     <template #reference>
       <el-button
         ref="triggerRef"
@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Setting } from '@element-plus/icons-vue'
 import type { ColumnDef, ColumnItemState } from '@/composables/useColumnConfig'
 import ColumnSetting from './ColumnSetting.vue'
@@ -54,6 +54,15 @@ const emit = defineEmits<{
 /** tooltip 与 popover 共用同一个按钮，但互不嵌套，避免遮挡点击 */
 const triggerRef = ref<{ $el?: HTMLElement }>()
 const triggerEl = computed(() => triggerRef.value?.$el)
+
+/** 面板宽度：默认 720px 保障字段名可读，小屏按视口自适应，避免右侧出界 */
+const viewportWidth = ref(window.innerWidth)
+function onResize() {
+  viewportWidth.value = window.innerWidth
+}
+onMounted(() => window.addEventListener('resize', onResize))
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
+const panelWidth = computed(() => Math.min(720, viewportWidth.value - 32))
 </script>
 
 <style scoped>
