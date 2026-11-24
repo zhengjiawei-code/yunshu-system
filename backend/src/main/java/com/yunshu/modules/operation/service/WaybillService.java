@@ -262,6 +262,7 @@ public class WaybillService {
         }
         WaybillAmendLogVO vo = new WaybillAmendLogVO();
         vo.setId(log.getId());
+        vo.setWaybillNo(log.getWaybillNo());
         vo.setOperatorName(log.getOperatorName());
         vo.setCreateTime(log.getCreateTime());
         vo.setReason(log.getReason());

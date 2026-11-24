@@ -11,6 +11,8 @@ public class WaybillAmendLogVO {
 
     private Long id;
 
+    private String waybillNo;
+
     private String operatorName;
 
     private LocalDateTime createTime;

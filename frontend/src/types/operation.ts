@@ -359,6 +359,7 @@ export interface WaybillFieldChange {
 /** 详情页「改单信息」tab 的改单记录：日志元信息 + 字段级明细 */
 export interface WaybillAmendLogRecord {
   id: number
+  waybillNo?: string
   operatorName?: string
   createTime?: string
   reason?: string
