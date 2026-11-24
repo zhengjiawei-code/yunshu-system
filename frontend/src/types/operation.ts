@@ -42,6 +42,8 @@ export interface RouteCandidate {
   districtCode?: string
   districtName?: string
   destName?: string
+  /** 目的地别名（默认为区划全称），候选列表与输入框展示用 */
+  destAlias?: string
   destHubId?: number
   destHubName?: string
   /** 提供服务展示文案：自提 / 送货 / 自提+送货 */

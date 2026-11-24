@@ -104,7 +104,7 @@
                   :class="{ disabled: item.noRoute }"
                   @mousedown.prevent="pickDestination(item)"
                 >
-                  <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
+                  <span class="cand-dest" :title="item.destAlias || item.destName">{{ item.destAlias || item.destName }}</span>
                   <span class="cand-hub" :title="item.destHubName || '—'">{{ item.destHubName || '—' }}</span>
                   <span class="cand-route">
                     <template v-if="item.noRoute">
@@ -744,7 +744,8 @@ function pickDestination(item: RouteCandidate) {
     return
   }
   form.destDistrictCode = item.districtCode
-  form.destText = `${item.cityName || ''}${item.districtName || ''}`
+  // 输入框展示别名，落库仍用 destDistrictCode；程序赋值不触发 onDestInput，避免清空线路
+  form.destText = item.destAlias || item.destName || `${item.cityName || ''}${item.districtName || ''}`
   destOpen.value = false
   // 用户点选的就是最终线路，先落选中态，再补全“切换”列表，不能被推荐项覆盖
   selectedRoute.value = item
