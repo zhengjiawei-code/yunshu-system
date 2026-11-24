@@ -363,26 +363,22 @@ public class RouteCandidateService {
     }
 
     /**
-     * 直达候选（以网点收尾）的服务能力配置来源：按目的地区划匹配外转配置。
-     * 查询条件 region_code=目标区划 + status 启用 + deleted=0（@TableLogic 自动追加）；
-     * 同一区划挂在不同网点下有多条时：优先 apply_dept_id=运达网点，其次 id 最小；
-     * 一条都查不到返回 null，由调用方按“自提+送货”兜底。
+     * 直达候选（以网点收尾）的服务能力配置来源：按「运达网点 + 目的地」匹配外转配置。
+     * 查询条件 apply_dept_id=运达网点 + region_code=目标区划 + status 启用 + deleted=0
+     * （deleted 由 @TableLogic 自动追加）；同一网点同区划有多条时取 id 最小的一条；
+     * 两个条件都命不中返回 null，由调用方按“自提+送货”兜底。
      */
     private SysRouteTransfer findHubTransfer(Long destHubId, String regionCode) {
-        if (!StringUtils.hasText(regionCode)) {
+        if (destHubId == null || !StringUtils.hasText(regionCode)) {
             return null;
         }
         List<SysRouteTransfer> matched = transferMapper.selectList(Wrappers.<SysRouteTransfer>lambdaQuery()
+                .eq(SysRouteTransfer::getApplyDeptId, destHubId)
                 .eq(SysRouteTransfer::getRegionCode, regionCode)
                 .eq(SysRouteTransfer::getStatus, true)
-                .orderByAsc(SysRouteTransfer::getId));
-        if (matched.isEmpty()) {
-            return null;
-        }
-        return matched.stream()
-                .filter(item -> Objects.equals(item.getApplyDeptId(), destHubId))
-                .findFirst()
-                .orElse(matched.get(0));
+                .orderByAsc(SysRouteTransfer::getId)
+                .last("LIMIT 1"));
+        return matched.isEmpty() ? null : matched.get(0);
     }
 
     private RouteCandidateVO addHubCandidate(Long originDeptId, SysDept hub, RouteContext context,
