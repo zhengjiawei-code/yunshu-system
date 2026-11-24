@@ -216,7 +216,7 @@
                 <span v-else class="muted">—</span>
               </div>
             </label>
-            <label class="field span2"><span class="lbl"><i class="star">*</i>发货地址</span>
+            <label class="field span2"><span class="lbl">发货地址</span>
               <el-input v-model="form.senderAddress" :class="{ 'is-empty': !form.senderAddress }" />
             </label>
           </div>
@@ -268,7 +268,7 @@
               </div>
             </div>
             <div v-if="receiverRegionHint" class="region-hint span2">{{ receiverRegionHint }}</div>
-            <label class="field span2"><span class="lbl"><i class="star">*</i>收货地址</span>
+            <label class="field span2"><span class="lbl"><i v-if="receiverAddressRequired" class="star">*</i>收货地址</span>
               <el-input v-model="form.receiverAddress" :class="{ 'is-empty': !form.receiverAddress }" />
             </label>
           </div>
@@ -681,6 +681,9 @@ const originHubName = computed(() => selectedRoute.value?.nodes?.[0]?.fromDeptNa
 /** 送货(1)/大车直送(3) 时送货费必填；自提(2) 与未选不要求 */
 const deliveryFeeRequired = computed(() => form.deliveryMethod === 1 || form.deliveryMethod === 3)
 
+/** 收货地址仅送货(1)/大车直送(3) 必填；自提(2) 不要求（发货地址非必填） */
+const receiverAddressRequired = computed(() => form.deliveryMethod === 1 || form.deliveryMethod === 3)
+
 /** 选中线路的服务能力；未选或字段缺省（兜底直达）视为都可选 */
 const routePickupEnabled = computed(() => selectedRoute.value?.pickupEnabled !== false)
 const routeDeliveryEnabled = computed(() => selectedRoute.value?.deliveryEnabled !== false)
@@ -1018,13 +1021,13 @@ function collectErrors(): string[] {
   const errors: string[] = []
   if (!form.senderName.trim()) errors.push('发货人不能为空')
   if (!form.senderPhone.trim()) errors.push('发货电话不能为空')
-  if (!form.senderAddress.trim()) errors.push('发货地址不能为空')
   if (!form.receiverName.trim()) errors.push('收货人不能为空')
   if (!form.receiverPhone.trim()) errors.push('收货电话不能为空')
-  if (!form.receiverAddress.trim()) errors.push('收货地址不能为空')
+  if (receiverAddressRequired.value && !form.receiverAddress.trim()) errors.push('收货地址不能为空')
   const receiverRegionCount = [form.receiverProvinceCode, form.receiverCityCode, form.receiverDistrictCode]
     .filter(Boolean).length
-  if (receiverRegionCount > 0 && receiverRegionCount < 3) errors.push('收货省、市、区县需同时选择')
+  // 收货省市区县：送货/大车直送时必填到区县；自提不校验
+  if (receiverAddressRequired.value && receiverRegionCount < 3) errors.push('收货省、市、区县需同时选择')
   if (!form.destDistrictCode) errors.push('请从候选列表中选择唯一目的地')
   if (!selectedRoute.value) errors.push('请选择线路')
   if (form.payMethod == null) errors.push('请选择支付方式')

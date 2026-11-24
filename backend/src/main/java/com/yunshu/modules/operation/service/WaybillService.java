@@ -108,7 +108,7 @@ public class WaybillService {
 
         GoodsSummary goods = summarize(request.getGoodsList());
         assertMainTotalsMatch(request, goods);
-        ReceiverRegion receiverRegion = resolveReceiverRegion(request);
+        ReceiverRegion receiverRegion = resolveReceiverRegion(request, receiverAddressRequired(request.getDeliveryMethod()));
         SysUser operator = context.getUserId() == null ? null : userMapper.selectById(context.getUserId());
         String operatorName = operator == null ? "系统" : operator.getRealName();
 
@@ -152,7 +152,7 @@ public class WaybillService {
         waybill.setSenderName(request.getSenderName().trim());
         waybill.setSenderPhone(request.getSenderPhone().trim());
         waybill.setSenderCompany(trimToNull(request.getSenderCompany()));
-        waybill.setSenderAddress(request.getSenderAddress().trim());
+        waybill.setSenderAddress(trimToNull(request.getSenderAddress()));
         waybill.setReceiverName(request.getReceiverName().trim());
         waybill.setReceiverPhone(request.getReceiverPhone().trim());
         waybill.setReceiverCompany(trimToNull(request.getReceiverCompany()));
@@ -162,7 +162,7 @@ public class WaybillService {
         waybill.setReceiverCityName(receiverRegion.cityName());
         waybill.setReceiverDistrictCode(receiverRegion.districtCode());
         waybill.setReceiverDistrictName(receiverRegion.districtName());
-        waybill.setReceiverAddress(request.getReceiverAddress().trim());
+        waybill.setReceiverAddress(trimToNull(request.getReceiverAddress()));
 
         waybill.setGoodsName(goods.name());
         waybill.setGoodsType(goods.type());
@@ -1200,17 +1200,22 @@ public class WaybillService {
         if (!StringUtils.hasText(request.getSenderPhone())) {
             errors.add("发货电话不能为空");
         }
-        if (!StringUtils.hasText(request.getSenderAddress())) {
-            errors.add("发货地址不能为空");
-        }
         if (!StringUtils.hasText(request.getReceiverName())) {
             errors.add("收货人不能为空");
         }
         if (!StringUtils.hasText(request.getReceiverPhone())) {
             errors.add("收货电话不能为空");
         }
-        if (!StringUtils.hasText(request.getReceiverAddress())) {
-            errors.add("收货地址不能为空");
+        // 收货地址与收货省市区县：仅送货(1)/大车直送(3) 必填；自提(2) 不要求（发货地址非必填）
+        if (receiverAddressRequired(request.getDeliveryMethod())) {
+            if (!StringUtils.hasText(request.getReceiverProvinceCode())
+                    || !StringUtils.hasText(request.getReceiverCityCode())
+                    || !StringUtils.hasText(request.getReceiverDistrictCode())) {
+                errors.add("收货省、市、区县需同时选择");
+            }
+            if (!StringUtils.hasText(request.getReceiverAddress())) {
+                errors.add("收货地址不能为空");
+            }
         }
         if (!StringUtils.hasText(request.getDestDistrictCode())) {
             errors.add("请从候选列表中选择唯一目的地");
@@ -1430,8 +1435,20 @@ public class WaybillService {
                                   String cityName, String districtCode, String districtName) {
     }
 
+    /** 收货地址/收货省市区县是否必填：送货(1) 或 大车直送(3) */
+    private boolean receiverAddressRequired(Integer deliveryMethod) {
+        return deliveryMethod != null && (deliveryMethod == 1 || deliveryMethod == 3);
+    }
+
     /** 收货地区只做结构校验（三码齐全 + 层级匹配）并派生名称；与收货详细地址文字不做强校验 */
     private ReceiverRegion resolveReceiverRegion(WaybillSaveRequest request) {
+        return resolveReceiverRegion(request, true);
+    }
+
+    /**
+     * @param required 送货/大车直送时地区必填；自提时允许整组留空（有值仍须三码齐全）
+     */
+    private ReceiverRegion resolveReceiverRegion(WaybillSaveRequest request, boolean required) {
         String provinceCode = trimToNull(request.getReceiverProvinceCode());
         String cityCode = trimToNull(request.getReceiverCityCode());
         String districtCode = trimToNull(request.getReceiverDistrictCode());
@@ -1439,6 +1456,9 @@ public class WaybillService {
             return new ReceiverRegion(null, null, null, null, null, null);
         }
         if (provinceCode == null || cityCode == null || districtCode == null) {
+            if (!required) {
+                return new ReceiverRegion(null, null, null, null, null, null);
+            }
             throw new BizException("收货省、市、区县需同时选择");
         }
         SysRegion district = regionMapper.selectById(districtCode);
