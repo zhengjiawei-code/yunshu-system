@@ -2,10 +2,10 @@
 
 - 版本：v1.17（**新建文件，不覆盖 v1.16**）
 - 日期：2026-11-24
-- 状态：**D1–D13 已由家伟裁决；本轮仍不写业务代码，待批准迁移后进入实现**
+- 状态：**D1–D13 已裁决；V22–V24 已于 2026-11-24 批准并执行（库版本 24），进入实现阶段**
 - 基线：`operation-module-design-v1.16.md`（改单、详情页、状态枚举沿用；字段口径以 v1.14 的 58 项为准）
 - 设计稿：`prototype/waybill-list-v1.15.html`（沿用；本期无视觉变更，仅导出改为异步交互说明）
-- 本轮变更：**裁决落库**（D2 保持原列序、D5 作废改为一期无状态限制、D8 导出改异步）；**新增第 9 节异步导出设计**；**新增第 13 节迁移清单（V22/V23/V24，均待批未执行）**
+- 本轮变更：**裁决落库**（D2 保持原列序、D5 作废改为一期无状态限制、D8 导出改异步）；**新增第 9 节异步导出设计**；**第 13 节迁移清单（V22/V23/V24 已执行）**
 
 ---
 
@@ -575,20 +575,21 @@
 
 ---
 
-## 13. 数据库迁移清单（V22 / V23 / V24，均待家伟批准，未执行）
+## 13. 数据库迁移清单（V22 / V23 / V24，已批准并执行）
 
-> 当前库版本 **21**；三项迁移均只出稿，位于 `outputs/ddl/*_pending*.sql`，**未移入 Flyway、未执行**。
-> 建表字符集统一 `utf8mb4` + `utf8mb4_0900_ai_ci`（已核：库默认与全部 26 张表均为此组合，无 `general_ci` 表）。
+> **2026-11-24 已执行**：库版本 21 → **24**，三条记录 `success=1`；执行前 8090 已停，执行后已重启（`/api/v1/auth/info` = 401 正常）。
+> 迁移文件在 `backend/src/main/resources/db/migration/`；回滚脚本备份在 `backend/src/main/resources/db/rollback/` 与 `outputs/ddl/`。
+> 建表字符集统一 `utf8mb4` + `utf8mb4_0900_ai_ci`（全库 26 张表一致，无 `general_ci`）。
 
 | 版本 | 文件 | 内容 | 依赖 | 回滚 |
 |---|---|---|---|---|
-| V22 | `V22__waybill_status_comment_pending.sql` | `biz_waybill.status` 注释改为 14 码值（30–80 给定命名、110/120 到站待送/待转） | 无 | `V22__..._rollback.sql`（恢复旧注释） |
-| V23 | `V23__waybill_log_amend_audit_pending.sql` | `biz_waybill_log`：`action_type` 注释补 6=改单；新增 `audit_status`、`auditor_id`、`audit_time`（一期写 0/NULL/NULL） | 无 | `V23__..._rollback.sql`（删三列、还原注释） |
-| V24 | `V24__export_task_pending.sql` | 新建 `biz_export_task`（异步导出任务表，含索引与审计字段） | 无 | `V24__..._rollback.sql`（DROP TABLE） |
+| V22 ✅ | `V22__waybill_status_comment.sql` | `biz_waybill.status` 注释改为 14 码值（30–80 给定命名、110/120 到站待送/待转） | 无 | `V22__waybill_status_comment_rollback.sql` |
+| V23 ✅ | `V23__waybill_log_amend_audit.sql` | `biz_waybill_log`：`action_type` 注释补 6=改单；新增 `audit_status`、`auditor_id`、`audit_time`（一期写 0/NULL/NULL） | 无 | `V23__waybill_log_amend_audit_rollback.sql` |
+| V24 ✅ | `V24__export_task.sql` | 新建 `biz_export_task`（19 字段、4 个二级索引、`utf8mb4_0900_ai_ci`） | 无 | `V24__export_task_rollback.sql` |
 
-**批准后的执行步骤（统一）**
+**执行记录（2026-11-24，已按下列步骤完成）**
 
-1. 去掉文件名中的 `_pending`，复制到 `backend/src/main/resources/db/migration/`；
+1. 迁移文件已移入 `backend/src/main/resources/db/migration/`；
 2. 先做结构备份（`biz_waybill`、`biz_waybill_log`；V24 为新表可跳过）；
 3. 启动应用由 Flyway 执行，确认 `flyway_schema_history.success=1` 且 version 到 24；
 4. 回读校验：
