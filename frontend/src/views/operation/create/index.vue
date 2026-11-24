@@ -94,7 +94,8 @@
                   <span>目的地</span>
                   <span>运达网点</span>
                   <span>路由</span>
-                  <span>路由说明</span>
+                  <span>类型·时效·里程</span>
+                  <span>提供服务</span>
                 </div>
                 <button
                   v-for="(item, index) in destOptions"
@@ -104,25 +105,28 @@
                   :class="{ disabled: item.noRoute }"
                   @mousedown.prevent="pickDestination(item)"
                 >
-                  <span class="cand-dest" :title="item.destAlias || item.destName">{{ item.destAlias || item.destName }}</span>
+                  <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
                   <span class="cand-hub" :title="item.destHubName || '—'">{{ item.destHubName || '—' }}</span>
                   <span class="cand-route">
-                    <template v-if="item.noRoute">
-                      <span class="cand-none">暂无可用路由</span>
-                    </template>
+                    <span v-if="item.noRoute" class="cand-none">暂无可用路由</span>
+                    <span v-else class="cand-chain">{{ item.chainText }}</span>
+                  </span>
+                  <span class="cand-type">
+                    <template v-if="item.noRoute">—</template>
                     <template v-else>
-                      <span class="cand-chain" :title="item.chainText">{{ item.chainText }}</span>
-                      <span v-if="item.recommended" class="cand-recommend">推荐</span>
                       <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
                         {{ item.endType === 1 ? '直达' : '外转' }}
                       </span>
+                      <span v-if="item.recommended" class="cand-recommend">推荐</span>
+                      <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
                     </template>
                   </span>
                   <span class="cand-desc">
-                    <template v-if="!item.noRoute">
-                      <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
-                      <span class="cand-service" :title="'提供服务：' + (item.provideServices || '—')"><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
-                    </template>
+                    <span
+                      v-if="!item.noRoute"
+                      class="cand-service"
+                      :title="'提供服务：' + (item.provideServices || '—')"
+                    ><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
                     <span v-else>—</span>
                   </span>
                 </button>
@@ -156,7 +160,8 @@
                   <span>目的地</span>
                   <span>运达网点</span>
                   <span>路由</span>
-                  <span>路由说明</span>
+                  <span>类型·时效·里程</span>
+                  <span>提供服务</span>
                 </div>
                 <button
                   v-for="item in routeOptions"
@@ -169,15 +174,20 @@
                   <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
                   <span class="cand-hub" :title="item.destHubName || '—'">{{ item.destHubName || '—' }}</span>
                   <span class="cand-route">
-                    <span class="cand-chain" :title="item.chainText">{{ item.chainText }}</span>
-                    <span v-if="item.recommended" class="cand-recommend">推荐</span>
+                    <span class="cand-chain">{{ item.chainText }}</span>
+                  </span>
+                  <span class="cand-type">
                     <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
                       {{ item.endType === 1 ? '直达' : '外转' }}
                     </span>
+                    <span v-if="item.recommended" class="cand-recommend">推荐</span>
+                    <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
                   </span>
                   <span class="cand-desc">
-                    <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
-                    <span class="cand-service" :title="'提供服务：' + (item.provideServices || '—')"><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
+                    <span
+                      class="cand-service"
+                      :title="'提供服务：' + (item.provideServices || '—')"
+                    ><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
                   </span>
                 </button>
               </div>
@@ -1547,7 +1557,8 @@ onBeforeUnmount(() => {
 }
 
 .dest-panel {
-  width: 760px;
+  width: 940px;
+  max-width: calc(100vw - 170px);
   max-height: 392px;
   overflow-y: auto;
 }
@@ -1555,16 +1566,17 @@ onBeforeUnmount(() => {
 .route-panel {
   right: 0;
   left: auto;
-  width: 760px;
+  width: 940px;
+  max-width: calc(100vw - 170px);
   max-height: 300px;
   overflow-y: auto;
 }
 
-/* 候选表格：目的地 | 运达网点 | 路由 | 路由说明 */
+/* 候选表格：目的地 | 运达网点 | 路由 | 类型·时效·里程 | 提供服务 */
 .cand-head,
 .cand-row {
   display: grid;
-  grid-template-columns: 190px 96px minmax(0, 1fr) 200px;
+  grid-template-columns: 190px 84px minmax(0, 1fr) 150px 158px;
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -1583,8 +1595,8 @@ onBeforeUnmount(() => {
 }
 
 .cand-row {
-  height: 34px;
-  padding: 0 8px;
+  min-height: 34px;
+  padding: 4px 8px;
   border: 0;
   border-bottom: 1px solid var(--color-border-light);
   background: #fff;
@@ -1609,8 +1621,7 @@ onBeforeUnmount(() => {
 }
 
 .cand-dest,
-.cand-hub,
-.cand-chain {
+.cand-hub {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -1622,13 +1633,16 @@ onBeforeUnmount(() => {
 }
 
 .cand-route {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   min-width: 0;
 }
 
+/* 链路是开单判断依据：完整展示，超长时换行，不省略 */
 .cand-chain {
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  word-break: break-word;
+  line-height: 18px;
   font-weight: 600;
   color: var(--color-primary-dark-1);
 }
@@ -1647,11 +1661,20 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 
+/* 类型·时效·里程独立成列，不参与链路宽度竞争 */
+.cand-type {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
 .cand-desc {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   min-width: 0;
   font-size: 11px;
   color: var(--color-text-secondary);
