@@ -90,33 +90,41 @@
             <div v-if="destOpen" class="pop-panel dest-panel">
               <div v-if="destLoading" class="pop-empty">匹配中…</div>
               <template v-else-if="destOptions.length">
+                <div class="cand-head">
+                  <span>目的地</span>
+                  <span>运达网点</span>
+                  <span>路由</span>
+                  <span>路由说明</span>
+                </div>
                 <button
                   v-for="(item, index) in destOptions"
                   :key="item.routeKeys.join('-') + index"
                   type="button"
-                  class="cand-item"
+                  class="cand-row"
                   :class="{ disabled: item.noRoute }"
                   @mousedown.prevent="pickDestination(item)"
                 >
-                  <div class="cand-line1" :class="{ 'is-none': item.noRoute }">
-                    <span class="cand-chain" :title="item.noRoute ? item.destName : item.chainText">{{ item.noRoute ? item.destName : item.chainText }}</span>
-                    <span v-if="item.noRoute" class="cand-none">暂无可用路由</span>
-                    <template v-else>
-                      <span class="cand-col cand-recommend"><span v-if="item.recommended">推荐</span></span>
-                      <span class="cand-col cand-type">
-                        <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
-                          {{ item.endType === 1 ? '直达' : '外转' }}
-                        </span>
-                      </span>
-                      <span class="cand-col cand-node">{{ item.nodeCount }} 节点</span>
-                      <span class="cand-col cand-hours">{{ item.totalHours ?? '—' }}h</span>
-                      <span class="cand-col cand-mileage">{{ item.totalMileage ?? '—' }}km</span>
+                  <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
+                  <span class="cand-hub" :title="item.destHubName || '—'">{{ item.destHubName || '—' }}</span>
+                  <span class="cand-route">
+                    <template v-if="item.noRoute">
+                      <span class="cand-none">暂无可用路由</span>
                     </template>
-                  </div>
-                  <div v-if="!item.noRoute" class="cand-line2">
-                    <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
-                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')"><span class="cand-hub-label">目的网点</span> {{ item.destHubName || '—' }}</span>
-                  </div>
+                    <template v-else>
+                      <span class="cand-chain" :title="item.chainText">{{ item.chainText }}</span>
+                      <span v-if="item.recommended" class="cand-recommend">推荐</span>
+                      <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
+                        {{ item.endType === 1 ? '直达' : '外转' }}
+                      </span>
+                    </template>
+                  </span>
+                  <span class="cand-desc">
+                    <template v-if="!item.noRoute">
+                      <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
+                      <span class="cand-service" title="提供服务：自提/送货">提供服务：自提/送货</span>
+                    </template>
+                    <span v-else>—</span>
+                  </span>
                 </button>
               </template>
               <div v-else class="pop-empty">未找到匹配的目的地</div>
@@ -144,30 +152,33 @@
               </template>
               <span v-else class="route-placeholder">选择目的地后自动带出线路</span>
               <div v-if="routeOpen && routeOptions.length" class="pop-panel route-panel">
+                <div class="cand-head">
+                  <span>目的地</span>
+                  <span>运达网点</span>
+                  <span>路由</span>
+                  <span>路由说明</span>
+                </div>
                 <button
                   v-for="item in routeOptions"
                   :key="item.routeKeys.join('-')"
                   type="button"
-                  class="cand-item"
+                  class="cand-row"
                   :class="{ active: isSameRoute(item) }"
                   @mousedown.prevent="selectRoute(item)"
                 >
-                  <div class="cand-line1">
+                  <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
+                  <span class="cand-hub" :title="item.destHubName || '—'">{{ item.destHubName || '—' }}</span>
+                  <span class="cand-route">
                     <span class="cand-chain" :title="item.chainText">{{ item.chainText }}</span>
-                    <span class="cand-col cand-recommend"><span v-if="item.recommended">推荐</span></span>
-                    <span class="cand-col cand-type">
-                      <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
-                        {{ item.endType === 1 ? '直达' : '外转' }}
-                      </span>
+                    <span v-if="item.recommended" class="cand-recommend">推荐</span>
+                    <span class="badge" :class="item.endType === 1 ? 'badge-direct' : 'badge-out'">
+                      {{ item.endType === 1 ? '直达' : '外转' }}
                     </span>
-                    <span class="cand-col cand-node">{{ item.nodeCount }} 节点</span>
-                    <span class="cand-col cand-hours">{{ item.totalHours ?? '—' }}h</span>
-                    <span class="cand-col cand-mileage">{{ item.totalMileage ?? '—' }}km</span>
-                  </div>
-                  <div class="cand-line2">
-                    <span class="cand-dest" :title="item.destName">{{ item.destName }}</span>
-                    <span class="cand-hub" :title="'目的网点 ' + (item.destHubName || '—')"><span class="cand-hub-label">目的网点</span> {{ item.destHubName || '—' }}</span>
-                  </div>
+                  </span>
+                  <span class="cand-desc">
+                    <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
+                    <span class="cand-service" title="提供服务：自提/送货">提供服务：自提/送货</span>
+                  </span>
                 </button>
               </div>
             </div>
@@ -1518,115 +1529,124 @@ onBeforeUnmount(() => {
 .route-panel {
   right: 0;
   left: auto;
-  width: 620px;
+  width: 760px;
   max-height: 300px;
   overflow-y: auto;
 }
 
-.cand-item {
-  display: block;
+/* 候选表格：目的地 | 运达网点 | 路由 | 路由说明 */
+.cand-head,
+.cand-row {
+  display: grid;
+  grid-template-columns: 190px 96px minmax(0, 1fr) 200px;
+  align-items: center;
+  column-gap: 8px;
   width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
+  box-sizing: border-box;
 }
 
-.cand-item:hover,
-.cand-item.active {
+.cand-head {
+  height: 26px;
+  padding: 0 8px;
+  background: #f5f7fa;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cand-row {
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border-light);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-regular);
+}
+
+.cand-row:last-child {
+  border-bottom: 0;
+}
+
+.cand-row:hover,
+.cand-row.active {
   background: var(--color-bg-active);
 }
 
-.cand-item.disabled {
+.cand-row.disabled {
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-/* 固定列位：链路 | 推荐 | 类型 | 节点数 | 时效 | 里程 */
-.cand-line1 {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px 46px 62px 52px 68px;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 18px;
-  color: var(--color-primary-dark-1);
-}
-
-.cand-line1.is-none {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-/* 第二行固定列位：完整目的地 | 目的网点 */
-.cand-line2 {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 200px;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  min-width: 0;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.cand-chain,
 .cand-dest,
-.cand-hub {
+.cand-hub,
+.cand-chain {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.cand-col {
+.cand-hub {
+  color: var(--color-text-secondary);
+}
+
+.cand-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  white-space: nowrap;
+}
+
+.cand-chain {
+  font-weight: 600;
+  color: var(--color-primary-dark-1);
 }
 
 .cand-recommend {
-  justify-self: start;
-}
-
-.cand-recommend > span {
+  flex: 0 0 auto;
   padding: 0 5px;
   border-radius: 3px;
   background: var(--color-primary-light-5);
   color: var(--color-primary);
   font-size: 10px;
-  font-weight: 500;
   line-height: 16px;
 }
 
-.cand-type {
-  justify-self: start;
+.cand-row .badge {
+  flex: 0 0 auto;
 }
 
-.cand-node,
-.cand-hours,
-.cand-mileage {
-  font-size: 12px;
-  font-weight: 400;
+.cand-desc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
   color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.cand-meta {
+  flex: 0 0 auto;
+}
+
+.cand-service {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cand-none {
   color: var(--color-danger);
   font-size: 11px;
   font-weight: 400;
-}
-
-.cand-hub-label {
-  color: #303133;
-}
-
-.cand-dest {
-  color: #b26a1f;
-  font-weight: 600;
+  flex: 0 0 auto;
 }
 
 .pop-empty {

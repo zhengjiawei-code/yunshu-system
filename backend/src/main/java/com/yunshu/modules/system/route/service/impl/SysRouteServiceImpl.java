@@ -335,6 +335,7 @@ public class SysRouteServiceImpl implements SysRouteService {
                         || query.getCarrierId().contains(item.getCarrierId()))
                 .filter(item -> CollectionUtils.isEmpty(query.getStatus())
                         || query.getStatus().contains(item.getStatus()))
+                .filter(item -> serviceTypeMatch(query.getServiceType(), item))
                 .filter(item -> ownerCompanyIds.isEmpty() || ownerCompanyIds.contains(item.getOwnerCompanyId()))
                 .filter(item -> inTimeRange(item.getUpdateTime(), updateStart, updateEnd))
                 .filter(item -> regionPrefixMatch(item.getRegionCode(), destProvince))
@@ -561,6 +562,11 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .filter(StringUtils::hasText).map(String::trim).distinct().toList();
         Map<String, SysRegion> regionMap = regionMapper.selectBatchIds(codes).stream()
                 .collect(Collectors.toMap(SysRegion::getCode, item -> item));
+        boolean pickupEnabled = request.getPickupEnabled() == null || request.getPickupEnabled();
+        boolean deliveryEnabled = request.getDeliveryEnabled() == null || request.getDeliveryEnabled();
+        if (!pickupEnabled && !deliveryEnabled) {
+            throw new BizException("自提和送货至少提供一项");
+        }
 
         TransferBatchResultVO result = new TransferBatchResultVO();
         result.setTotal(codes.size());
@@ -590,6 +596,8 @@ public class SysRouteServiceImpl implements SysRouteService {
                             .set(SysRouteTransfer::getRouteName, regionFullName(region))
                             .set(SysRouteTransfer::getRegionLevel, region.getLevel())
                             .set(SysRouteTransfer::getRegionFullName, regionFullName(region))
+                            .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
+                            .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled)
                             .set(SysRouteTransfer::getUpdateBy, org.userId()));
                     ensureGrant(SCOPE_TRANSFER, existing.getId(), org);
                     result.setOverwritten(result.getOverwritten() + 1);
@@ -615,6 +623,10 @@ public class SysRouteServiceImpl implements SysRouteService {
             if (deleted != null) {
                 transferMapper.restoreById(deleted.getId(), routeCode, regionFullName(region), region.getLevel(),
                         regionFullName(region), null, org.companyId(), 0, org.deptId(), org.userId());
+                transferMapper.update(null, Wrappers.<SysRouteTransfer>lambdaUpdate()
+                        .eq(SysRouteTransfer::getId, deleted.getId())
+                        .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
+                        .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled));
                 ensureGrant(SCOPE_TRANSFER, deleted.getId(), org);
                 result.setRestored(result.getRestored() + 1);
                 result.addDetail(code + "：恢复已删除路由");
@@ -625,6 +637,8 @@ public class SysRouteServiceImpl implements SysRouteService {
             route.setRouteCode(routeCode);
             route.setRouteName(regionFullName(region));
             route.setTransferType(TRANSFER_OUT);
+            route.setPickupEnabled(pickupEnabled);
+            route.setDeliveryEnabled(deliveryEnabled);
             // apply_dept_id 存业务适用网点；dept_id 仅权限锚点，两者禁止混用
             route.setApplyDeptId(applyDept.getId());
             route.setRegionCode(region.getCode());
@@ -660,6 +674,15 @@ public class SysRouteServiceImpl implements SysRouteService {
         String routeName = StringUtils.hasText(request.getRouteName())
                 ? request.getRouteName().trim()
                 : (StringUtils.hasText(existing.getRegionFullName()) ? existing.getRegionFullName() : existing.getRouteName());
+        boolean pickupEnabled = request.getPickupEnabled() == null
+                ? existing.getPickupEnabled() == null || existing.getPickupEnabled()
+                : request.getPickupEnabled();
+        boolean deliveryEnabled = request.getDeliveryEnabled() == null
+                ? existing.getDeliveryEnabled() == null || existing.getDeliveryEnabled()
+                : request.getDeliveryEnabled();
+        if (!pickupEnabled && !deliveryEnabled) {
+            throw new BizException("自提和送货至少提供一项");
+        }
 
         transferMapper.update(null, Wrappers.<SysRouteTransfer>lambdaUpdate()
                 .eq(SysRouteTransfer::getId, id)
@@ -667,6 +690,8 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .set(SysRouteTransfer::getCarrierId, carrierId)
                 .set(SysRouteTransfer::getStatus,
                         request.getStatus() == null ? existing.getStatus() : request.getStatus())
+                .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
+                .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled)
                 .set(SysRouteTransfer::getSortOrder,
                         request.getSortOrder() == null ? existing.getSortOrder() : request.getSortOrder())
                 .set(SysRouteTransfer::getRemark, trim(request.getRemark()))
@@ -1335,6 +1360,17 @@ public class SysRouteServiceImpl implements SysRouteService {
         return grantScopes.contains(all ? "ALL" : "PARTIAL");
     }
 
+    /** 提供服务筛选：PICKUP 仅自提 / DELIVERY 仅送货 / BOTH 自提+送货 */
+    private boolean serviceTypeMatch(List<String> serviceTypes, SysRouteTransfer item) {
+        if (CollectionUtils.isEmpty(serviceTypes)) {
+            return true;
+        }
+        boolean pickup = item.getPickupEnabled() == null || item.getPickupEnabled();
+        boolean delivery = item.getDeliveryEnabled() == null || item.getDeliveryEnabled();
+        String key = pickup && delivery ? "BOTH" : pickup ? "PICKUP" : delivery ? "DELIVERY" : "NONE";
+        return serviceTypes.contains(key);
+    }
+
     private int requireScope(Integer routeScope) {
         if (routeScope == null || (routeScope != SCOPE_ROUTE && routeScope != SCOPE_TRANSFER)) {
             throw new BizException("路由域参数不正确");
@@ -1534,6 +1570,8 @@ public class SysRouteServiceImpl implements SysRouteService {
         vo.setRouteCode(item.getRouteCode());
         vo.setRouteName(item.getRouteName());
         vo.setTransferType(item.getTransferType());
+        vo.setPickupEnabled(item.getPickupEnabled() == null || item.getPickupEnabled());
+        vo.setDeliveryEnabled(item.getDeliveryEnabled() == null || item.getDeliveryEnabled());
         vo.setApplyDeptId(item.getApplyDeptId());
         vo.setApplyDeptName(deptName(depts, item.getApplyDeptId()));
         vo.setRegionCode(item.getRegionCode());

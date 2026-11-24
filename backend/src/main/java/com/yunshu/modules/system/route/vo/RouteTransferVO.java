@@ -15,6 +15,12 @@ public class RouteTransferVO {
 
     private Integer transferType;
 
+    /** 是否提供自提 */
+    private Boolean pickupEnabled;
+
+    /** 是否提供送货 */
+    private Boolean deliveryEnabled;
+
     private Long applyDeptId;
 
     private String applyDeptName;

@@ -17,4 +17,10 @@ public class TransferBatchJoinRequest {
     @NotEmpty(message = "请选择要加入的区划")
     @Size(max = 200, message = "单次最多加入 200 条区划")
     private List<String> regionCodes;
+
+    /** 是否提供自提，未传默认 1 */
+    private Boolean pickupEnabled;
+
+    /** 是否提供送货，未传默认 1 */
+    private Boolean deliveryEnabled;
 }

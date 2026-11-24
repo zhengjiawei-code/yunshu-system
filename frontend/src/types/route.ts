@@ -86,6 +86,10 @@ export interface TransferRecord {
   routeCode: string
   routeName: string
   transferType: 1 | 2
+  /** 是否提供自提 */
+  pickupEnabled?: boolean
+  /** 是否提供送货 */
+  deliveryEnabled?: boolean
   applyDeptId: number
   applyDeptName?: string
   regionCode: string
@@ -128,6 +132,7 @@ export interface TransferQuery {
   carrierId?: number | number[]
   status?: boolean | boolean[]
   grantScope?: 'ALL' | 'PARTIAL' | Array<'ALL' | 'PARTIAL'>
+  serviceType?: 'PICKUP' | 'DELIVERY' | 'BOTH' | Array<'PICKUP' | 'DELIVERY' | 'BOTH'>
   updateByName?: string
   updateTimeStart?: string
   updateTimeEnd?: string
@@ -211,12 +216,16 @@ export interface RegionLibraryPage {
 export interface TransferBatchJoinPayload {
   applyDeptId: number
   regionCodes: string[]
+  pickupEnabled?: boolean
+  deliveryEnabled?: boolean
 }
 
 export interface TransferEditPayload {
   routeName?: string
   carrierId?: number | null
   status?: boolean
+  pickupEnabled?: boolean
+  deliveryEnabled?: boolean
   sortOrder?: number
   remark?: string
 }

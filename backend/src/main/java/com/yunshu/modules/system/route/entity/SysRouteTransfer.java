@@ -23,6 +23,12 @@ public class SysRouteTransfer {
     /** 1=直达 2=外转 */
     private Integer transferType;
 
+    /** 是否提供自提：1=是 0=否 */
+    private Boolean pickupEnabled;
+
+    /** 是否提供送货：1=是 0=否 */
+    private Boolean deliveryEnabled;
+
     /** 业务适用网点 */
     private Long applyDeptId;
 

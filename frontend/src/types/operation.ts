@@ -44,6 +44,8 @@ export interface RouteCandidate {
   destName?: string
   destHubId?: number
   destHubName?: string
+  /** 提供服务展示文案：自提 / 送货 / 自提+送货 */
+  provideServices?: string
   nodes: RouteNode[]
 }
 

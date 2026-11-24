@@ -17,6 +17,15 @@ public class RouteCandidateVO {
     /** 1=直达 2=外转 */
     private Integer endType;
 
+    /** 末段路由是否提供自提 */
+    private Boolean pickupEnabled;
+
+    /** 末段路由是否提供送货 */
+    private Boolean deliveryEnabled;
+
+    /** 提供服务展示文案：自提 / 送货 / 自提+送货 */
+    private String provideServices;
+
     /** 区域匹配深度：3=区县 2=市 1=省 */
     private Integer matchLevel;
 

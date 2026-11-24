@@ -44,6 +44,12 @@
         </el-select>
       </el-form-item>
 
+      <el-form-item label="提供服务" prop="pickupEnabled">
+        <el-checkbox v-model="form.pickupEnabled">自提</el-checkbox>
+        <el-checkbox v-model="form.deliveryEnabled">送货</el-checkbox>
+        <p class="form-hint">自提和送货至少提供一项</p>
+      </el-form-item>
+
       <el-form-item label="状态" prop="status">
         <el-radio-group v-model="form.status">
           <el-radio :value="true">启用</el-radio>
@@ -111,12 +117,26 @@ const form = reactive<TransferEditPayload>({
   routeName: '',
   carrierId: null,
   status: true,
+  pickupEnabled: true,
+  deliveryEnabled: true,
   sortOrder: 0,
   remark: ''
 })
 
 const rules: FormRules = {
   routeName: [{ max: 128, message: '路由名称不能超过 128 个字符', trigger: 'blur' }],
+  pickupEnabled: [
+    {
+      validator: (_rule, _value, callback) => {
+        if (!form.pickupEnabled && !form.deliveryEnabled) {
+          callback(new Error('自提和送货至少提供一项'))
+          return
+        }
+        callback()
+      },
+      trigger: 'change'
+    }
+  ],
   sortOrder: [{ type: 'number', min: 0, max: 9999, message: '排序号范围 0-9999', trigger: 'blur' }]
 }
 
@@ -127,6 +147,8 @@ watch(
     form.routeName = record.routeName ?? ''
     form.carrierId = record.carrierId ?? null
     form.status = record.status
+    form.pickupEnabled = record.pickupEnabled ?? true
+    form.deliveryEnabled = record.deliveryEnabled ?? true
     form.sortOrder = record.sortOrder ?? 0
     form.remark = record.remark ?? ''
   },
@@ -161,6 +183,8 @@ async function handleSubmit() {
       routeName: form.routeName?.trim() || undefined,
       carrierId: props.record.transferType === 2 ? form.carrierId ?? null : null,
       status: form.status,
+      pickupEnabled: form.pickupEnabled,
+      deliveryEnabled: form.deliveryEnabled,
       sortOrder: form.sortOrder,
       remark: form.remark?.trim() || undefined
     }

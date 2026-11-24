@@ -16,6 +16,7 @@ import com.yunshu.modules.system.route.mapper.SysRouteCompanyMapper;
 import com.yunshu.modules.system.route.mapper.SysRouteMapper;
 import com.yunshu.modules.system.route.mapper.SysRouteTransferMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -41,6 +42,7 @@ import java.util.stream.Collectors;
  * 排序：节点数升序 → 末段直达优先 → 区域匹配深度（区县>市>省）→ 总时效 → 总里程 → 末段排序号 → 末段 id。
  * 路由两表豁免数据权限，公司授权在服务层显式过滤。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RouteCandidateService {
@@ -51,6 +53,8 @@ public class RouteCandidateService {
     private static final int SCOPE_ROUTE = 1;
     private static final int SCOPE_TRANSFER = 2;
     private static final int TYPE_DIRECT = 1;
+    /** 无外转路由时的默认提供服务：自提+送货（仅兜底展示，非真实配置） */
+    private static final String DEFAULT_SERVICES = "自提+送货";
 
     private final SysRouteMapper routeMapper;
     private final SysRouteTransferMapper transferMapper;
@@ -111,8 +115,15 @@ public class RouteCandidateService {
 
         List<String> limited = districtCodes.stream().limit(MAX_DEST_DISTRICTS).toList();
         RouteContext context = loadContext(limited);
+        // 目的地等于某网点登记区划（直达区域）时，链路以该网点收尾，不再生成该区划的外转链路
+        Map<String, RouteCandidateVO> directByDistrict = directHubCandidates(originDeptId, context);
         List<RouteCandidateVO> result = new ArrayList<>();
         for (String code : limited) {
+            RouteCandidateVO direct = directByDistrict.get(code);
+            if (direct != null) {
+                result.add(direct);
+                continue;
+            }
             List<RouteCandidateVO> found = candidatesFor(code, originDeptId, context);
             if (found.isEmpty()) {
                 result.add(noRouteItem(code, context));
@@ -136,9 +147,16 @@ public class RouteCandidateService {
             throw new BizException("请从候选列表中选择唯一目的地");
         }
         RouteContext context = loadContext(List.of(districtCode.trim()));
-        List<RouteCandidateVO> result = candidatesFor(districtCode.trim(), originDeptId, context);
-        // 保存/切换线路时同样保留“以网点收尾”的直达候选，保证与下拉选项一致
-        appendHubCandidatesByDistrict(districtCode.trim(), originDeptId, context, result);
+        // 直达区域只保留以网点收尾的直达链路，与外转链路互斥
+        RouteCandidateVO direct = directHubCandidates(originDeptId, context).get(districtCode.trim());
+        List<RouteCandidateVO> result;
+        if (direct != null) {
+            result = new ArrayList<>(List.of(direct));
+        } else {
+            result = candidatesFor(districtCode.trim(), originDeptId, context);
+            // 保存/切换线路时同样保留“以网点收尾”的直达候选，保证与下拉选项一致
+            appendHubCandidatesByDistrict(districtCode.trim(), originDeptId, context, result);
+        }
         result.sort(candidateComparator());
         List<RouteCandidateVO> limited = result.stream().limit(MAX_CANDIDATES).toList();
         limited.stream().filter(item -> !Boolean.TRUE.equals(item.getNoRoute())).findFirst()
@@ -319,15 +337,15 @@ public class RouteCandidateService {
         }
     }
 
-    private void addHubCandidate(Long originDeptId, SysDept hub, RouteContext context,
-                                 List<RouteCandidateVO> out) {
+    private RouteCandidateVO addHubCandidate(Long originDeptId, SysDept hub, RouteContext context,
+                                             List<RouteCandidateVO> out) {
         List<SysRoute> chain = shortestRouteChain(originDeptId, hub.getId(), context.routes());
         if (chain == null || chain.isEmpty() || hub.getDistrictCode() == null) {
-            return;
+            return null;
         }
         SysRegion district = regionMapper.selectById(hub.getDistrictCode());
         if (district == null || district.getLevel() == null || district.getLevel() != 3) {
-            return;
+            return null;
         }
         SysRegion city = StringUtils.hasText(district.getParentCode())
                 ? regionMapper.selectById(district.getParentCode()) : null;
@@ -379,6 +397,9 @@ public class RouteCandidateService {
         vo.setRouteKeys(keys);
         vo.setNodeCount(chain.size() + 1);
         vo.setEndType(TYPE_DIRECT);
+        vo.setPickupEnabled(true);
+        vo.setDeliveryEnabled(true);
+        vo.setProvideServices("自提+送货");
         vo.setMatchLevel(3);
         vo.setTotalHours(hoursMissing ? null : hours.setScale(2, java.math.RoundingMode.HALF_UP));
         vo.setTotalMileage(mileageMissing ? null : mileage.setScale(2, java.math.RoundingMode.HALF_UP));
@@ -392,9 +413,53 @@ public class RouteCandidateService {
         vo.setDestName(joinRegionName(province, city, district));
         vo.setDestHubId(hub.getId());
         vo.setDestHubName(hub.getDeptName());
+        // 无外转配置的直达候选：无服务配置可读，按默认“自提+送货”兜底展示，不代表真实配置
+        vo.setProvideServices(DEFAULT_SERVICES);
         vo.setNoRoute(false);
         vo.setRecommended(false);
-        out.add(vo);
+        String key = String.join(",", keys);
+        if (out.stream().noneMatch(item -> String.join(",", item.getRouteKeys()).equals(key))) {
+            out.add(vo);
+        }
+        return vo;
+    }
+
+    /**
+     * 每个区县只取一条“以网点收尾”的最优直达链路：
+     * 网点登记区划 = 目的区县，且从开单网点可达；同区县多个网点时取链路最短、id 最小。
+     */
+    private Map<String, RouteCandidateVO> directHubCandidates(Long originDeptId, RouteContext context) {
+        if (originDeptId == null || !context.depts().containsKey(originDeptId)) {
+            return Map.of();
+        }
+        Map<String, SysDept> bestHub = new HashMap<>();
+        Map<String, Integer> bestLength = new HashMap<>();
+        for (SysDept hub : context.depts().values()) {
+            if (!isHubDept(hub) || hub.getDistrictCode() == null
+                    || Objects.equals(hub.getId(), originDeptId)) {
+                continue;
+            }
+            List<SysRoute> chain = shortestRouteChain(originDeptId, hub.getId(), context.routes());
+            if (chain == null || chain.isEmpty()) {
+                continue;
+            }
+            String districtCode = hub.getDistrictCode();
+            SysDept current = bestHub.get(districtCode);
+            int length = chain.size();
+            if (current == null || length < bestLength.get(districtCode)
+                    || (length == bestLength.get(districtCode) && hub.getId() < current.getId())) {
+                bestHub.put(districtCode, hub);
+                bestLength.put(districtCode, length);
+            }
+        }
+        Map<String, RouteCandidateVO> result = new HashMap<>();
+        for (Map.Entry<String, SysDept> entry : bestHub.entrySet()) {
+            RouteCandidateVO vo = addHubCandidate(originDeptId, entry.getValue(), context, new ArrayList<>());
+            if (vo != null) {
+                result.put(entry.getKey(), vo);
+            }
+        }
+        return result;
     }
 
     /** 广度优先找最短 E1 链路；不可达返回 null */
@@ -540,6 +605,11 @@ public class RouteCandidateService {
         vo.setRouteKeys(keys);
         vo.setNodeCount(chain.size() + 2);
         vo.setEndType(transfer.getTransferType());
+        boolean pickup = transfer.getPickupEnabled() == null || transfer.getPickupEnabled();
+        boolean delivery = transfer.getDeliveryEnabled() == null || transfer.getDeliveryEnabled();
+        vo.setPickupEnabled(pickup);
+        vo.setDeliveryEnabled(delivery);
+        vo.setProvideServices(resolveProvideServices(pickup, delivery, transfer.getId()));
         vo.setMatchLevel(transfer.getRegionCode().equals(district.getCode()) ? 3
                 : city != null && transfer.getRegionCode().equals(city.getCode()) ? 2 : 1);
         vo.setTotalHours(hoursMissing ? null : hours.setScale(2, java.math.RoundingMode.HALF_UP));
@@ -574,6 +644,21 @@ public class RouteCandidateService {
             vo.setDestHubName(originNode.getFromDeptName());
         }
         return vo;
+    }
+
+    /** 提供服务唯一来源为 pickup/delivery；均为否属脏数据，记录日志并标记未配置 */
+    private String resolveProvideServices(boolean pickup, boolean delivery, Long transferId) {
+        if (pickup && delivery) {
+            return "自提+送货";
+        }
+        if (pickup) {
+            return "自提";
+        }
+        if (delivery) {
+            return "送货";
+        }
+        log.warn("外转路由提供服务脏数据：pickup_enabled=0 且 delivery_enabled=0，transferId={}", transferId);
+        return "未配置";
     }
 
     private RouteCandidateVO noRouteItem(String districtCode, RouteContext context) {

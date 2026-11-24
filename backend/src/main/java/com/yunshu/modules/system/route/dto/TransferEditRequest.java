@@ -20,6 +20,12 @@ public class TransferEditRequest {
 
     private Boolean status;
 
+    /** 是否提供自提；为空表示保持原值 */
+    private Boolean pickupEnabled;
+
+    /** 是否提供送货；为空表示保持原值 */
+    private Boolean deliveryEnabled;
+
     @Min(value = 0, message = "排序号不能小于 0")
     @Max(value = 9999, message = "排序号不能大于 9999")
     private Integer sortOrder;

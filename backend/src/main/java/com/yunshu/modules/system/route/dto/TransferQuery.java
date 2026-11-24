@@ -34,6 +34,9 @@ public class TransferQuery extends BaseListQuery {
     /** 授权范围：ALL / PARTIAL；支持多选 */
     private List<String> grantScope;
 
+    /** 提供服务：PICKUP 仅自提 / DELIVERY 仅送货 / BOTH 自提+送货；支持多选 */
+    private List<String> serviceType;
+
     /** 修改人姓名，支持多模式匹配 */
     private String updateByName;
 

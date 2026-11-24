@@ -851,6 +851,23 @@
                       </template>
                     </el-table-column>
 
+                    <el-table-column v-if="transferColumnState.serviceFlags" prop="serviceFlags" label="提供服务" min-width="130">
+                      <template #header>
+                        <div class="col-head">
+                          <span class="col-head__label">提供服务</span>
+                          <column-filter
+                            v-if="col('serviceFlags').filterType !== 'none'"
+                            v-model="transferFilters.serviceType"
+                            :type="col('serviceFlags').filterType"
+                            :select-multiple="col('serviceFlags').selectMultiple === true"
+                            :options="col('serviceFlags').filterOptions"
+                            @change="onTransferFilterChange"
+                          />
+                        </div>
+                      </template>
+                      <template #default="{ row }">{{ serviceText(row) }}</template>
+                    </el-table-column>
+
                     <el-table-column v-if="transferColumnState.status" prop="status" label="状态" width="104" align="center" sortable="custom">
                       <template #header>
                         <div class="col-head">
@@ -1031,6 +1048,19 @@
       :routes="batchDialog.routes"
       @changed="refreshCurrentTab"
     />
+    <el-dialog v-model="joinDialog.visible" title="加入路由" width="420px">
+      <p class="dialog-hint">已选择 {{ selectedRegionCodes.length }} 条区划</p>
+      <div class="join-service">
+        <span>提供服务：</span>
+        <el-checkbox v-model="joinDialog.pickupEnabled">自提</el-checkbox>
+        <el-checkbox v-model="joinDialog.deliveryEnabled">送货</el-checkbox>
+      </div>
+      <p v-if="joinDialog.error" class="dialog-error">{{ joinDialog.error }}</p>
+      <template #footer>
+        <el-button @click="joinDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="joinDialog.loading" @click="submitJoinRegions">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -1204,6 +1234,18 @@ const transferSchema = reactive<ColumnDef[]>([
     ]
   },
   { key: 'carrierName', label: '承运商', prop: 'carrierName', filterType: 'select', filterOptions: [] },
+  {
+    key: 'serviceFlags',
+    label: '提供服务',
+    prop: 'serviceFlags',
+    filterType: 'select',
+    selectMultiple: true,
+    filterOptions: [
+      { label: '自提', value: 'PICKUP' },
+      { label: '送货', value: 'DELIVERY' },
+      { label: '自提+送货', value: 'BOTH' }
+    ]
+  },
   { key: 'sortOrder', label: '排序', prop: 'sortOrder', filterType: 'none', filterHidden: true, align: 'right' },
   { key: 'updateByName', label: '修改人', prop: 'updateByName', filterType: 'text' },
   { key: 'updateTime', label: '修改时间', prop: 'updateTime', filterType: 'daterange', align: 'center' },
@@ -1420,6 +1462,7 @@ const transferFilters = reactive<{
   carrierId: number | number[] | undefined
   status: boolean | boolean[] | undefined
   grantScope: 'ALL' | 'PARTIAL' | Array<'ALL' | 'PARTIAL'> | undefined
+  serviceType: Array<'PICKUP' | 'DELIVERY' | 'BOTH'> | undefined
   updateByName: string
   ownerCompanyIds: number[]
   updateRange: string[] | undefined
@@ -1436,6 +1479,7 @@ const transferFilters = reactive<{
   carrierId: undefined,
   status: undefined,
   grantScope: undefined,
+  serviceType: undefined,
   updateByName: '',
   ownerCompanyIds: [],
   updateRange: undefined
@@ -1534,6 +1578,15 @@ const transferDrawer = reactive<{
 }>({
   visible: false,
   record: null
+})
+
+/** 从区划库加入路由：新增入口的“提供服务”选择 */
+const joinDialog = reactive({
+  visible: false,
+  pickupEnabled: true,
+  deliveryEnabled: true,
+  error: '',
+  loading: false
 })
 
 const grantDialog = reactive<{
@@ -1905,6 +1958,7 @@ function buildTransferQuery(pageNum = transferPage.value, size = transferPageSiz
     carrierId: transferColumnState.value.carrierName ? transferFilters.carrierId : undefined,
     status: transferColumnState.value.status ? transferFilters.status : undefined,
     grantScope: transferColumnState.value.grantScope ? transferFilters.grantScope : undefined,
+    serviceType: transferColumnState.value.serviceFlags ? transferFilters.serviceType : undefined,
     updateByName: transferColumnState.value.updateByName
       ? transferFilters.updateByName.trim() || undefined
       : undefined,
@@ -1947,6 +2001,16 @@ function levelText(level?: number | null) {
   if (level === 3) return '区县'
   if (level === 4) return '乡级'
   return '—'
+}
+
+/** 提供服务展示：自提 / 送货 / 自提+送货 */
+function serviceText(row: TransferRecord) {
+  const pickup = row.pickupEnabled !== false
+  const delivery = row.deliveryEnabled !== false
+  if (pickup && delivery) return '自提+送货'
+  if (pickup) return '自提'
+  if (delivery) return '送货'
+  return '未配置'
 }
 
 function findDeptName(nodes: ManageScopeNode[], id: number): string {
@@ -2244,19 +2308,36 @@ async function handleDestDistrictChange() {
   reloadTransferFromFirstPage()
 }
 
-async function handleJoinRegions() {
+function handleJoinRegions() {
   if (!transferApplyDeptId.value || selectedRegionCodes.value.length === 0) return
+  joinDialog.pickupEnabled = true
+  joinDialog.deliveryEnabled = true
+  joinDialog.error = ''
+  joinDialog.visible = true
+}
+
+async function submitJoinRegions() {
+  if (!joinDialog.pickupEnabled && !joinDialog.deliveryEnabled) {
+    joinDialog.error = '自提和送货至少提供一项'
+    return
+  }
+  joinDialog.loading = true
   try {
     const result = await batchJoinTransfer({
-      applyDeptId: transferApplyDeptId.value,
-      regionCodes: selectedRegionCodes.value
+      applyDeptId: transferApplyDeptId.value as number,
+      regionCodes: selectedRegionCodes.value,
+      pickupEnabled: joinDialog.pickupEnabled,
+      deliveryEnabled: joinDialog.deliveryEnabled
     })
     ElMessage.success(result.message || '加入完成')
+    joinDialog.visible = false
     selectedRegionCodes.value = []
     await Promise.all([loadTransfers(), loadRegionLibrary()])
   } catch (error) {
     const message = (error as { message?: string })?.message
     if (message) ElMessage.error(message)
+  } finally {
+    joinDialog.loading = false
   }
 }
 
@@ -3142,5 +3223,17 @@ onMounted(async () => {
   margin: 0 0 12px;
   font-size: var(--font-size-extra-small);
   color: var(--color-text-secondary);
+}
+
+.join-service {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialog-error {
+  margin: 8px 0 0;
+  font-size: var(--font-size-extra-small);
+  color: var(--el-color-danger);
 }
 </style>
