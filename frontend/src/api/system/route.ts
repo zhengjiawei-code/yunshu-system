@@ -61,6 +61,17 @@ export function updateTransfer(id: number, payload: TransferEditPayload): Promis
   return request({ url: `/v1/system/routes/transfers/${id}`, method: 'put', data: payload })
 }
 
+export function updateTransferServices(
+  id: number,
+  payload: { pickupEnabled: boolean; deliveryEnabled: boolean }
+): Promise<void> {
+  return request({ url: `/v1/system/routes/transfers/${id}/services`, method: 'put', data: payload })
+}
+
+export function updateTransferAlias(id: number, alias: string): Promise<void> {
+  return request({ url: `/v1/system/routes/transfers/${id}/alias`, method: 'put', data: { alias } })
+}
+
 export function switchTransferType(payload: {
   ids: number[]
   transferType: 1 | 2

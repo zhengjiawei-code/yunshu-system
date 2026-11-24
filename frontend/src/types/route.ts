@@ -85,6 +85,8 @@ export interface TransferRecord {
   id: number
   routeCode: string
   routeName: string
+  /** 别名：开单目的地展示用，默认等于目的地全称 */
+  alias?: string
   transferType: 1 | 2
   /** 是否提供自提 */
   pickupEnabled?: boolean
@@ -124,6 +126,7 @@ export interface TransferQuery {
   transferType?: 1 | 2 | Array<1 | 2>
   applyDeptId?: number
   regionCode?: string
+  alias?: string
   regionLevel?: 2 | 3 | 4 | Array<2 | 3 | 4>
   destProvinceCode?: string
   destCityCode?: string
@@ -226,6 +229,7 @@ export interface TransferEditPayload {
   status?: boolean
   pickupEnabled?: boolean
   deliveryEnabled?: boolean
+  alias?: string
   sortOrder?: number
   remark?: string
 }

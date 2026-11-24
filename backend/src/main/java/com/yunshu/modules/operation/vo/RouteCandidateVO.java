@@ -55,6 +55,9 @@ public class RouteCandidateVO {
 
     private String destName;
 
+    /** 目的地别名：末段外转记录别名；无外转记录的直达候选取网点区划全称 */
+    private String destAlias;
+
     private Long destHubId;
 
     private String destHubName;

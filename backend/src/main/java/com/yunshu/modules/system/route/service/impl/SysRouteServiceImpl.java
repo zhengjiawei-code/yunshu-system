@@ -23,6 +23,8 @@ import com.yunshu.modules.system.route.dto.TransferBatchJoinRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchStatusRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchTypeRequest;
 import com.yunshu.modules.system.route.dto.TransferEditRequest;
+import com.yunshu.modules.system.route.dto.TransferAliasRequest;
+import com.yunshu.modules.system.route.dto.TransferServicesRequest;
 import com.yunshu.modules.system.route.dto.TransferQuery;
 import com.yunshu.modules.system.route.entity.SysRoute;
 import com.yunshu.modules.system.route.entity.SysRouteCompany;
@@ -342,11 +344,12 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .filter(item -> regionPrefixMatch(item.getRegionCode(), destCity))
                 .filter(item -> regionPrefixMatch(item.getRegionCode(), destDistrict))
                 .filter(item -> regionPrefixMatch(item.getRegionCode(), destTown))
-                .filter(item -> region == null
-                        || TextFilterMode.match(item.getRegionCode(), region,
+                .filter(item -> TextFilterMode.match(item.getRegionCode(), query.getRegionCode(),
                         TextFilterMode.modeOf(modes, "regionFullName"))
-                        || TextFilterMode.match(destLeafName(item, regionNames), region,
+                        || TextFilterMode.match(destLeafName(item, regionNames), query.getRegionCode(),
                         TextFilterMode.modeOf(modes, "regionFullName")))
+                .filter(item -> TextFilterMode.match(item.getAlias(), query.getAlias(),
+                        TextFilterMode.modeOf(modes, "alias")))
                 .filter(item -> modifyName == null
                         || TextFilterMode.match(updateNames.get(item.getUpdateBy()), modifyName,
                         TextFilterMode.modeOf(modes, "updateByName")))
@@ -583,6 +586,7 @@ public class SysRouteServiceImpl implements SysRouteService {
                 continue;
             }
             // 唯一口径：适用网点 + 目的地（对齐 luohuo，类型为路由属性而非键的一部分）
+            String requestAlias = StringUtils.hasText(request.getAlias()) ? request.getAlias().trim() : null;
             List<SysRouteTransfer> sameKey = transferMapper.selectList(Wrappers.<SysRouteTransfer>lambdaQuery()
                     .eq(SysRouteTransfer::getApplyDeptId, applyDept.getId())
                     .eq(SysRouteTransfer::getRegionCode, region.getCode())
@@ -596,6 +600,9 @@ public class SysRouteServiceImpl implements SysRouteService {
                             .set(SysRouteTransfer::getRouteName, regionFullName(region))
                             .set(SysRouteTransfer::getRegionLevel, region.getLevel())
                             .set(SysRouteTransfer::getRegionFullName, regionFullName(region))
+                            .set(SysRouteTransfer::getAlias, requestAlias != null ? requestAlias
+                                    : StringUtils.hasText(existing.getAlias()) ? existing.getAlias()
+                                    : regionFullName(region))
                             .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
                             .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled)
                             .set(SysRouteTransfer::getUpdateBy, org.userId()));
@@ -625,6 +632,8 @@ public class SysRouteServiceImpl implements SysRouteService {
                         regionFullName(region), null, org.companyId(), 0, org.deptId(), org.userId());
                 transferMapper.update(null, Wrappers.<SysRouteTransfer>lambdaUpdate()
                         .eq(SysRouteTransfer::getId, deleted.getId())
+                        .set(SysRouteTransfer::getAlias,
+                                requestAlias != null ? requestAlias : regionFullName(region))
                         .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
                         .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled));
                 ensureGrant(SCOPE_TRANSFER, deleted.getId(), org);
@@ -644,6 +653,7 @@ public class SysRouteServiceImpl implements SysRouteService {
             route.setRegionCode(region.getCode());
             route.setRegionLevel(region.getLevel());
             route.setRegionFullName(regionFullName(region));
+            route.setAlias(requestAlias != null ? requestAlias : regionFullName(region));
             route.setCarrierId(null);
             route.setOwnerCompanyId(org.companyId());
             route.setStatus(true);
@@ -683,6 +693,10 @@ public class SysRouteServiceImpl implements SysRouteService {
         if (!pickupEnabled && !deliveryEnabled) {
             throw new BizException("自提和送货至少提供一项");
         }
+        String alias = request.getAlias() == null ? existing.getAlias() : request.getAlias().trim();
+        if (request.getAlias() != null && !StringUtils.hasText(alias)) {
+            throw new BizException("别名不能为空");
+        }
 
         transferMapper.update(null, Wrappers.<SysRouteTransfer>lambdaUpdate()
                 .eq(SysRouteTransfer::getId, id)
@@ -692,9 +706,43 @@ public class SysRouteServiceImpl implements SysRouteService {
                         request.getStatus() == null ? existing.getStatus() : request.getStatus())
                 .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
                 .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled)
+                .set(SysRouteTransfer::getAlias, alias)
                 .set(SysRouteTransfer::getSortOrder,
                         request.getSortOrder() == null ? existing.getSortOrder() : request.getSortOrder())
                 .set(SysRouteTransfer::getRemark, trim(request.getRemark()))
+                .set(SysRouteTransfer::getUpdateBy, org.userId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @DS("master")
+    public void updateTransferServices(Long id, TransferServicesRequest request) {
+        UserOrgService.UserOrg org = userOrgService.current();
+        requireOwnerTransfer(id, org);
+        if (!Boolean.TRUE.equals(request.getPickupEnabled())
+                && !Boolean.TRUE.equals(request.getDeliveryEnabled())) {
+            throw new BizException("自提和送货至少提供一项");
+        }
+        transferMapper.update(null, Wrappers.<SysRouteTransfer>lambdaUpdate()
+                .eq(SysRouteTransfer::getId, id)
+                .set(SysRouteTransfer::getPickupEnabled, request.getPickupEnabled())
+                .set(SysRouteTransfer::getDeliveryEnabled, request.getDeliveryEnabled())
+                .set(SysRouteTransfer::getUpdateBy, org.userId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @DS("master")
+    public void updateTransferAlias(Long id, TransferAliasRequest request) {
+        UserOrgService.UserOrg org = userOrgService.current();
+        requireOwnerTransfer(id, org);
+        String alias = request.getAlias() == null ? null : request.getAlias().trim();
+        if (!StringUtils.hasText(alias)) {
+            throw new BizException("别名不能为空");
+        }
+        transferMapper.update(null, Wrappers.<SysRouteTransfer>lambdaUpdate()
+                .eq(SysRouteTransfer::getId, id)
+                .set(SysRouteTransfer::getAlias, alias)
                 .set(SysRouteTransfer::getUpdateBy, org.userId()));
     }
 
@@ -1577,6 +1625,7 @@ public class SysRouteServiceImpl implements SysRouteService {
         vo.setRegionCode(item.getRegionCode());
         vo.setRegionLevel(item.getRegionLevel());
         vo.setRegionFullName(item.getRegionFullName());
+        vo.setAlias(item.getAlias());
         String regionCode = item.getRegionCode();
         if (regionCode != null && regionCode.length() >= 2) {
             vo.setDestProvinceName(destLevelName(item, regionNames, 1));
@@ -1720,6 +1769,8 @@ public class SysRouteServiceImpl implements SysRouteService {
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "regionFullName" -> Comparator.<SysRouteTransfer, String>comparing(
                     item -> destLeafName(item, regionNames),
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            case "alias" -> Comparator.comparing(SysRouteTransfer::getAlias,
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "destProvinceName" -> Comparator.<SysRouteTransfer, String>comparing(
                     item -> destLevelName(item, regionNames, 1),

@@ -10,6 +10,8 @@ import com.yunshu.modules.system.route.dto.TransferBatchJoinRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchStatusRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchTypeRequest;
 import com.yunshu.modules.system.route.dto.TransferEditRequest;
+import com.yunshu.modules.system.route.dto.TransferAliasRequest;
+import com.yunshu.modules.system.route.dto.TransferServicesRequest;
 import com.yunshu.modules.system.route.dto.TransferQuery;
 import com.yunshu.modules.system.route.service.SysRouteService;
 import com.yunshu.modules.system.route.vo.BatchGrantResultVO;
@@ -135,6 +137,22 @@ public class SysRouteController {
     @PutMapping("/transfers/{id}")
     public ApiResult<Void> updateTransfer(@PathVariable Long id, @RequestBody @Valid TransferEditRequest request) {
         routeService.updateTransfer(id, request);
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "更新外转/直达路由提供服务（仅自提/送货）")
+    @PutMapping("/transfers/{id}/services")
+    public ApiResult<Void> updateTransferServices(@PathVariable Long id,
+                                                  @RequestBody @Valid TransferServicesRequest request) {
+        routeService.updateTransferServices(id, request);
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "更新外转/直达路由别名")
+    @PutMapping("/transfers/{id}/alias")
+    public ApiResult<Void> updateTransferAlias(@PathVariable Long id,
+                                               @RequestBody @Valid TransferAliasRequest request) {
+        routeService.updateTransferAlias(id, request);
         return ApiResult.ok();
     }
 

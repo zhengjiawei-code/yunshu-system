@@ -8,6 +8,8 @@ import com.yunshu.modules.system.route.dto.TransferBatchJoinRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchStatusRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchTypeRequest;
 import com.yunshu.modules.system.route.dto.TransferEditRequest;
+import com.yunshu.modules.system.route.dto.TransferAliasRequest;
+import com.yunshu.modules.system.route.dto.TransferServicesRequest;
 import com.yunshu.modules.system.route.dto.TransferQuery;
 import com.yunshu.modules.system.route.vo.BatchGrantResultVO;
 import com.yunshu.modules.system.route.vo.RegionLibraryPageVO;
@@ -53,6 +55,12 @@ public interface SysRouteService {
     TransferBatchResultVO batchJoin(TransferBatchJoinRequest request);
 
     void updateTransfer(Long id, TransferEditRequest request);
+
+    /** 仅更新提供服务（自提/送货），权限与编辑接口一致 */
+    void updateTransferServices(Long id, TransferServicesRequest request);
+
+    /** 仅更新别名，权限与编辑接口一致 */
+    void updateTransferAlias(Long id, TransferAliasRequest request);
 
     void deleteTransfer(Long id);
 

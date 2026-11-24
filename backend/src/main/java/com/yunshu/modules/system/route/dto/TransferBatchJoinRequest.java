@@ -23,4 +23,8 @@ public class TransferBatchJoinRequest {
 
     /** 是否提供送货，未传默认 1 */
     private Boolean deliveryEnabled;
+
+    /** 别名，未传或为空时后端取目的地全称 */
+    @Size(max = 64, message = "别名不能超过 64 个字符")
+    private String alias;
 }

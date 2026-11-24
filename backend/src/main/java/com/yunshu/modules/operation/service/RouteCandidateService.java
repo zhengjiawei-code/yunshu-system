@@ -113,6 +113,31 @@ public class RouteCandidateService {
             }
         }
 
+        // 别名也参与目的地关键字匹配：先取有别名的小结果集在内存过滤，不对表做全表 LIKE
+        List<SysRouteTransfer> aliasRoutes = transferMapper.selectList(Wrappers.<SysRouteTransfer>lambdaQuery()
+                .select(SysRouteTransfer::getId, SysRouteTransfer::getRegionCode, SysRouteTransfer::getAlias));
+        for (SysRouteTransfer route : aliasRoutes) {
+            if (!StringUtils.hasText(route.getAlias()) || !route.getAlias().contains(kw)) {
+                continue;
+            }
+            String code = route.getRegionCode();
+            if (!StringUtils.hasText(code)) {
+                continue;
+            }
+            SysRegion region = regionMapper.selectById(code);
+            if (region == null || !Objects.equals(region.getStatus(), 1)) {
+                continue;
+            }
+            if (Objects.equals(region.getLevel(), 3)) {
+                districtCodes.add(code);
+            } else if (Objects.equals(region.getLevel(), 2)) {
+                districtCodes.addAll(childDistricts(code));
+            }
+            if (districtCodes.size() >= MAX_DEST_DISTRICTS) {
+                break;
+            }
+        }
+
         List<String> limited = districtCodes.stream().limit(MAX_DEST_DISTRICTS).toList();
         RouteContext context = loadContext(limited);
         // 目的地等于某网点登记区划（直达区域）时，链路以该网点收尾，不再生成该区划的外转链路
@@ -411,6 +436,8 @@ public class RouteCandidateService {
         vo.setProvinceCode(province == null ? null : province.getCode());
         vo.setProvinceName(province == null ? null : province.getName());
         vo.setDestName(joinRegionName(province, city, district));
+        // 无外转记录的直达候选：别名取网点区划全称，保证不为空
+        vo.setDestAlias(vo.getDestName());
         vo.setDestHubId(hub.getId());
         vo.setDestHubName(hub.getDeptName());
         // 无外转配置的直达候选：无服务配置可读，按默认“自提+送货”兜底展示，不代表真实配置
@@ -622,7 +649,9 @@ public class RouteCandidateService {
         vo.setCityName(city == null ? null : city.getName());
         vo.setProvinceCode(province == null ? null : province.getCode());
         vo.setProvinceName(province == null ? null : province.getName());
-        vo.setDestName(joinRegionName(province, city, district));
+        String destName = joinRegionName(province, city, district);
+        vo.setDestName(destName);
+        vo.setDestAlias(StringUtils.hasText(transfer.getAlias()) ? transfer.getAlias() : destName);
         SysDept hub = resolveDestHub(district.getCode(), context.depts());
         if (hub == null) {
             // 末段区划本身无归属网点时，再取末段起点/适用机构（若其本身是网点，
@@ -681,6 +710,7 @@ public class RouteCandidateService {
             vo.setProvinceCode(province == null ? null : province.getCode());
             vo.setProvinceName(province == null ? null : province.getName());
             vo.setDestName(joinRegionName(province, city, district));
+            vo.setDestAlias(vo.getDestName());
             vo.setChainText(joinRegionName(province, city, district));
         }
         return vo;

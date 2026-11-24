@@ -783,6 +783,31 @@
                       <template #default="{ row }">{{ row.destTownName || '—' }}</template>
                     </el-table-column>
 
+                    <el-table-column v-if="transferColumnState.alias" prop="alias" label="别名" min-width="150" sortable="custom">
+                      <template #header>
+                        <div class="col-head">
+                          <span class="col-head__label">别名</span>
+                          <column-filter
+                            v-if="col('alias').filterType !== 'none'"
+                            v-model="transferFilters.alias"
+                            :type="col('alias').filterType"
+                            :filter-mode="col('alias').filterMode"
+                            :text-mode="transferTextModes.alias"
+                            placeholder="别名"
+                            @update:mode="(mode) => (transferTextModes.alias = mode)"
+                            @change="onTransferTextFilter"
+                          />
+                        </div>
+                      </template>
+                      <template #default="{ row }">
+                        <alias-cell-editor
+                          :row="row"
+                          :editable="row.editable"
+                          @updated="(value) => (row.alias = value)"
+                        />
+                      </template>
+                    </el-table-column>
+
                     <el-table-column v-if="transferColumnState.regionLevel" prop="regionLevel" label="级别" width="96" align="center" sortable="custom">
                       <template #header>
                         <div class="col-head">
@@ -865,7 +890,13 @@
                           />
                         </div>
                       </template>
-                      <template #default="{ row }">{{ serviceText(row) }}</template>
+                      <template #default="{ row }">
+                        <transfer-service-editor
+                          :row="row"
+                          :editable="row.editable"
+                          @updated="(value) => onServiceUpdated(row, value)"
+                        />
+                      </template>
                     </el-table-column>
 
                     <el-table-column v-if="transferColumnState.status" prop="status" label="状态" width="104" align="center" sortable="custom">
@@ -968,7 +999,6 @@
                     <el-table-column label="操作" :width="isHq ? 166 : 108" fixed="right" align="right">
                       <template #default="{ row }">
                         <div class="row-actions">
-                          <el-button v-if="row.editable" link type="primary" size="small" @click="openTransferEdit(row)">编辑</el-button>
                           <el-button v-if="isHq" link type="primary" size="small" @click="openGrant('transfer', row)">授权</el-button>
                           <el-button v-if="row.deletable" link type="danger" size="small" @click="handleTransferDelete(row)">移除</el-button>
                         </div>
@@ -1004,12 +1034,6 @@
       :record="routeDrawer.record"
       :scope-tree="scopeTree"
       @saved="loadRoutes"
-    />
-
-    <transfer-form-drawer
-      v-model="transferDrawer.visible"
-      :record="transferDrawer.record"
-      @saved="afterTransferSaved"
     />
 
     <el-dialog v-model="carrierBatch.visible" title="挂载承运商" width="420px">
@@ -1102,7 +1126,8 @@ import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import RouteFormDrawer from './components/RouteFormDrawer.vue'
-import TransferFormDrawer from './components/TransferFormDrawer.vue'
+import TransferServiceEditor from './components/TransferServiceEditor.vue'
+import AliasCellEditor from './components/AliasCellEditor.vue'
 import RouteGrantDialog from './components/RouteGrantDialog.vue'
 import RouteBatchGrantDialog from './components/RouteBatchGrantDialog.vue'
 
@@ -1211,6 +1236,12 @@ const transferSchema = reactive<ColumnDef[]>([
     prop: 'destTownName',
     filterType: 'select',
     filterOptions: []
+  },
+  {
+    key: 'alias',
+    label: '别名',
+    prop: 'alias',
+    filterType: 'text'
   },
   {
     key: 'regionLevel',
@@ -1453,6 +1484,7 @@ const transferFilters = reactive<{
   routeCode: string
   routeName: string
   regionCode: string
+  alias: string
   regionLevel: 2 | 3 | 4 | Array<2 | 3 | 4> | undefined
   destProvinceCode: string | undefined
   destCityCode: string | undefined
@@ -1470,6 +1502,7 @@ const transferFilters = reactive<{
   routeCode: '',
   routeName: '',
   regionCode: '',
+  alias: '',
   regionLevel: undefined,
   destProvinceCode: undefined,
   destCityCode: undefined,
@@ -1491,6 +1524,7 @@ const TRANSFER_TEXT_FIELDS: Record<string, string> = {
   routeCode: 'routeCode',
   routeName: 'routeName',
   regionFullName: 'regionFullName',
+  alias: 'alias',
   updateByName: 'updateByName'
 }
 
@@ -1499,6 +1533,7 @@ const transferTextModes = reactive<Record<string, TextMatchMode>>({
   routeCode: 'like',
   routeName: 'like',
   regionFullName: 'like',
+  alias: 'like',
   updateByName: 'like'
 })
 
@@ -1569,14 +1604,6 @@ const carrierBatch = reactive<{ visible: boolean; carrierId?: number; loading: b
 const routeDrawer = reactive<{ visible: boolean; mode: 'create' | 'edit'; record: RouteRecord | null }>({
   visible: false,
   mode: 'create',
-  record: null
-})
-
-const transferDrawer = reactive<{
-  visible: boolean
-  record: TransferRecord | null
-}>({
-  visible: false,
   record: null
 })
 
@@ -1955,6 +1982,7 @@ function buildTransferQuery(pageNum = transferPage.value, size = transferPageSiz
     regionCode: transferColumnState.value.regionFullName
       ? transferFilters.regionCode.trim() || undefined
       : undefined,
+    alias: transferColumnState.value.alias ? transferFilters.alias.trim() || undefined : undefined,
     carrierId: transferColumnState.value.carrierName ? transferFilters.carrierId : undefined,
     status: transferColumnState.value.status ? transferFilters.status : undefined,
     grantScope: transferColumnState.value.grantScope ? transferFilters.grantScope : undefined,
@@ -2001,16 +2029,6 @@ function levelText(level?: number | null) {
   if (level === 3) return '区县'
   if (level === 4) return '乡级'
   return '—'
-}
-
-/** 提供服务展示：自提 / 送货 / 自提+送货 */
-function serviceText(row: TransferRecord) {
-  const pickup = row.pickupEnabled !== false
-  const delivery = row.deliveryEnabled !== false
-  if (pickup && delivery) return '自提+送货'
-  if (pickup) return '自提'
-  if (delivery) return '送货'
-  return '未配置'
 }
 
 function findDeptName(nodes: ManageScopeNode[], id: number): string {
@@ -2147,6 +2165,7 @@ async function handleApplyDeptChange() {
   transferFilters.transferType = undefined
   transferFilters.regionLevel = undefined
   transferFilters.regionCode = ''
+  transferFilters.alias = ''
   transferFilters.status = undefined
   transferFilters.grantScope = undefined
   transferFilters.updateByName = ''
@@ -2476,6 +2495,7 @@ function resetTransferFilters() {
   transferFilters.transferType = undefined
   transferFilters.regionLevel = undefined
   transferFilters.regionCode = ''
+  transferFilters.alias = ''
   transferFilters.status = undefined
   transferFilters.grantScope = undefined
   transferFilters.updateByName = ''
@@ -2680,13 +2700,10 @@ async function handleTransferExport() {
   }
 }
 
-function openTransferEdit(row: TransferRecord) {
-  transferDrawer.record = row
-  transferDrawer.visible = true
-}
-
-async function afterTransferSaved() {
-  await Promise.all([loadTransfers(), loadRegionLibrary()])
+/** 提供服务保存成功后只更新当前行，不刷新整表 */
+function onServiceUpdated(row: TransferRecord, value: { pickupEnabled: boolean; deliveryEnabled: boolean }) {
+  row.pickupEnabled = value.pickupEnabled
+  row.deliveryEnabled = value.deliveryEnabled
 }
 
 async function handleTransferDelete(row: TransferRecord) {

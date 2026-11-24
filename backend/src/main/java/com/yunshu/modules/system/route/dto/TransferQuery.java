@@ -22,6 +22,9 @@ public class TransferQuery extends BaseListQuery {
     /** 目的地编码/名称关键字，支持多模式匹配 */
     private String regionCode;
 
+    /** 别名关键字，支持多模式匹配 */
+    private String alias;
+
     /** 目的地级别：2=市 3=区县 4=乡级；支持多选 */
     private List<Integer> regionLevel;
 

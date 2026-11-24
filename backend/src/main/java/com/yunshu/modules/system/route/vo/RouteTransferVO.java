@@ -31,6 +31,9 @@ public class RouteTransferVO {
 
     private String regionFullName;
 
+    /** 别名：开单目的地展示用，默认等于目的地全称 */
+    private String alias;
+
     /** 目的地四级区划名称，按 regionCode 前缀实时取自区划表，不落快照 */
     private String destProvinceName;
 

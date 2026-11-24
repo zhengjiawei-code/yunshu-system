@@ -38,6 +38,9 @@ public class SysRouteTransfer {
 
     private String regionFullName;
 
+    /** 别名：开单目的地展示用，默认等于目的地全称 */
+    private String alias;
+
     /** 仅外转可填 */
     private Long carrierId;
 

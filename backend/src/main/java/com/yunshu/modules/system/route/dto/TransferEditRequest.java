@@ -26,6 +26,10 @@ public class TransferEditRequest {
     /** 是否提供送货；为空表示保持原值 */
     private Boolean deliveryEnabled;
 
+    /** 别名；为空串拒绝，不传表示保持原值 */
+    @Size(max = 64, message = "别名不能超过 64 个字符")
+    private String alias;
+
     @Min(value = 0, message = "排序号不能小于 0")
     @Max(value = 9999, message = "排序号不能大于 9999")
     private Integer sortOrder;
