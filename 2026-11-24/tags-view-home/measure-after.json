@@ -1,0 +1,66 @@
+{
+  "1100": [
+    {
+      "title": "首页",
+      "top": 15.5,
+      "height": 24,
+      "left": 295.6,
+      "width": 42.1,
+      "borderRadius": "4px",
+      "padding": "0px 8px",
+      "border": "1px solid rgb(228, 232, 239)",
+      "background": "rgb(255, 255, 255)",
+      "display": "flex",
+      "alignItems": "center",
+      "fontWeight": "400",
+      "affix": true
+    },
+    {
+      "title": "开单揽收",
+      "top": 15.5,
+      "height": 24,
+      "left": 339.8,
+      "width": 80.3,
+      "borderRadius": "4px",
+      "padding": "0px 8px",
+      "border": "1px solid rgb(197, 210, 226)",
+      "background": "rgb(232, 238, 245)",
+      "display": "flex",
+      "alignItems": "center",
+      "fontWeight": "500",
+      "affix": false
+    }
+  ],
+  "1280": [
+    {
+      "title": "首页",
+      "top": 15.5,
+      "height": 24,
+      "left": 447.6,
+      "width": 42.1,
+      "borderRadius": "4px",
+      "padding": "0px 8px",
+      "border": "1px solid rgb(228, 232, 239)",
+      "background": "rgb(255, 255, 255)",
+      "display": "flex",
+      "alignItems": "center",
+      "fontWeight": "400",
+      "affix": true
+    },
+    {
+      "title": "开单揽收",
+      "top": 15.5,
+      "height": 24,
+      "left": 491.8,
+      "width": 80.3,
+      "borderRadius": "4px",
+      "padding": "0px 8px",
+      "border": "1px solid rgb(197, 210, 226)",
+      "background": "rgb(232, 238, 245)",
+      "display": "flex",
+      "alignItems": "center",
+      "fontWeight": "500",
+      "affix": false
+    }
+  ]
+}

@@ -108,13 +108,15 @@ function handleCommand(command: string) {
   gap: 3px;
   height: 22px;
   padding: 0 8px;
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border-base);
   border-radius: var(--radius-xs);
+  background-color: var(--color-bg-card);
   font-size: var(--font-size-extra-small);
   color: var(--color-text-secondary);
   cursor: pointer;
   user-select: none;
   transition: background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
 }
 
