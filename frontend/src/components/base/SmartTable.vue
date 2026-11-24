@@ -147,7 +147,63 @@ const columnSignature = computed(
 const MIN_COLUMN_WIDTH = 80
 
 const attrs = useAttrs()
-// el-table 是泛型函数式组件，拿不到稳定的实例构造类型，这里按内部 store 的结构使用
+// 行高亮：同一时刻只保留一个当前行；勾选行可多行高亮
+type RowKey = string | number
+/** 跨表格实例共享：任一表选中当前行时，清空其他表的当前行 */
+const rowHighlightInstances: Set<() => void> =
+  (window as unknown as { __yunshuRowHighlight?: Set<() => void> }).__yunshuRowHighlight ?? new Set<() => void>()
+;(window as unknown as { __yunshuRowHighlight?: Set<() => void> }).__yunshuRowHighlight = rowHighlightInstances
+const currentKey = ref<RowKey | null>(null)
+const selectedKeySet = ref<Set<RowKey>>(new Set())
+
+function rowKeyOf(row: Record<string, unknown>): RowKey {
+  // attrs 保留模板中的原始写法，row-key / rowKey 两种都要兼容
+  const rk = attrs.rowKey ?? attrs['row-key']
+  if (typeof rk === 'function') return (rk as (row: Record<string, unknown>) => RowKey)(row)
+  if (typeof rk === 'string') return row?.[rk] as RowKey
+  return row?.id as RowKey
+}
+
+/** 行内交互控件：点击时不切换当前行，也不清除已有高亮 */
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return !!target.closest(
+    'button, a, input, textarea, select, .el-checkbox, .el-radio, .el-switch, .el-select, .el-dropdown, .el-link, .el-button, .row-actions, .column-filter, .service-editor__value, .alias-editor__value, .el-popover'
+  )
+}
+
+function highlightRowClass(row: Record<string, unknown>, current: RowKey | null, selected: Set<RowKey>): string {
+  const key = rowKeyOf(row)
+  const classes: string[] = []
+  if (current !== null && key === current) classes.push('is-current-row')
+  if (selected.has(key)) classes.push('is-selected-row')
+  return classes.join(' ')
+}
+
+function handleRowClick(row: Record<string, unknown>, event: Event): void {
+  if (isInteractiveTarget(event?.target || null)) return
+  rowHighlightInstances.forEach((clear) => clear())
+  currentKey.value = rowKeyOf(row)
+}
+
+function clearOwnHighlight(): void {
+  currentKey.value = null
+}
+
+function clearHighlightIfBlank(event: MouseEvent): void {
+  const target = event.target as HTMLElement | null
+  if (!target) return
+  // 表头、筛选行、浮层内的点击不影响当前行
+  if (target.closest('.el-table__header-wrapper, .el-table__footer-wrapper, .el-popover, .column-setting')) return
+  if (isInteractiveTarget(target)) return
+  if (target.closest('.el-table__body-wrapper tr')) {
+    // 本表行点击已在 row-click 中处理；其他表格行点击时清空本表当前行
+    if (tableRef.value?.$el?.contains(target)) return
+  }
+  currentKey.value = null
+}
+
+// el-table 是泛型函数式组件，拿不到稳定的实例类型，这里按内部 store 的结构使用
 const tableRef = ref<any>()
 
 const passAttrs = computed(() => {
@@ -160,13 +216,46 @@ const passAttrs = computed(() => {
     'auto-width-exclude': _awe2,
     persistKey: _pk,
     'persist-key': _pk2,
+    // 页面自带的行样式/行点击/勾选回调先取出，统一包一层后再传给 el-table，避免同名属性互相覆盖
+    rowClassName: pageRowClassName,
+    'row-class-name': pageRowClassNameKebab,
+    onRowClick: pageRowClick,
+    'on-row-click': pageRowClickKebab,
+    onSelectionChange: pageSelectionChange,
+    'on-selection-change': pageSelectionChangeKebab,
     ...rest
   } = attrs
+  const pageRowClass = pageRowClassName ?? pageRowClassNameKebab
+  const pageRowClickHandler = pageRowClick ?? pageRowClickKebab
+  const pageSelectionHandler = pageSelectionChange ?? pageSelectionChangeKebab
+  // 读取当前行/勾选行，使这个 computed 在高亮状态变化时重建回调，从而驱动 el-table 重新渲染行
+  const current = currentKey.value
+  const selectedKeys = selectedKeySet.value
   return {
     // 不开 border 时 Element Plus 不会启动列宽拖拽
     border: rest.border ?? true,
     allowDragLastColumn: rest.allowDragLastColumn ?? rest['allow-drag-last-column'] ?? true,
-    ...rest
+    ...rest,
+    // Element Plus 2.x 的 rowClassName 回调入参是 { row, rowIndex }，旧式 (row, index) 一并兼容
+    rowClassName: (ctx: Record<string, unknown> & { row?: Record<string, unknown> }, index?: number) => {
+      const isContext = ctx && typeof ctx === 'object' && 'rowIndex' in ctx && index === undefined
+      const row = (isContext ? ctx.row : ctx) as Record<string, unknown>
+      const pageClass =
+        typeof pageRowClass === 'function'
+          ? (pageRowClass as (...args: unknown[]) => string)(ctx, index)
+          : pageRowClass || ''
+      return [pageClass, highlightRowClass(row, current, selectedKeys)].filter(Boolean).join(' ')
+    },
+    onRowClick: (row: Record<string, unknown>, column: unknown, event: Event) => {
+      handleRowClick(row, event)
+      if (typeof pageRowClickHandler === 'function') {
+        (pageRowClickHandler as (row: unknown, column: unknown, event: Event) => void)(row, column, event)
+      }
+    },
+    onSelectionChange: (rows: Record<string, unknown>[]) => {
+      selectedKeySet.value = new Set((rows || []).map((row) => rowKeyOf(row)))
+      if (typeof pageSelectionHandler === 'function') (pageSelectionHandler as (rows: unknown[]) => void)(rows)
+    }
   }
 })
 
@@ -385,6 +474,8 @@ onMounted(() => {
     observer.observe(root)
   }
   window.addEventListener('resize', onWindowResize)
+  document.addEventListener('click', clearHighlightIfBlank)
+  rowHighlightInstances.add(clearOwnHighlight)
   // 字体加载完成后中英文宽度会变化，需重新测量
   document.fonts?.ready?.then(() => schedule())
 })
@@ -396,6 +487,8 @@ onBeforeUnmount(() => {
   observer?.disconnect()
   observer = null
   window.removeEventListener('resize', onWindowResize)
+  document.removeEventListener('click', clearHighlightIfBlank)
+  rowHighlightInstances.delete(clearOwnHighlight)
 })
 
 watch(
@@ -413,3 +506,11 @@ defineExpose({
   resetColumnWidths
 })
 </script>
+
+<style scoped>
+/* 全局行高亮：当前行与勾选行共用同一底色 */
+:deep(.el-table__body tr.is-current-row > td.el-table__cell),
+:deep(.el-table__body tr.is-selected-row > td.el-table__cell) {
+  background-color: var(--el-color-primary-light-9) !important;
+}
+</style>
