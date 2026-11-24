@@ -2,6 +2,7 @@ package com.yunshu.modules.system.route.vo;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -33,6 +34,12 @@ public class RouteTransferVO {
 
     /** 别名：开单目的地展示用，默认等于目的地全称 */
     private String alias;
+
+    /** 外转时效（小时），NULL=未配置 */
+    private BigDecimal transitHours;
+
+    /** 外转里程（公里），NULL=未配置 */
+    private BigDecimal mileage;
 
     /** 目的地四级区划名称，按 regionCode 前缀实时取自区划表，不落快照 */
     private String destProvinceName;

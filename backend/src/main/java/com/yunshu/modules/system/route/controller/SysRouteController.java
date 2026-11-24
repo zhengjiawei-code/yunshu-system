@@ -163,6 +163,13 @@ public class SysRouteController {
         return ApiResult.ok();
     }
 
+    @Operation(summary = "外转路由单字段增量更新（时效/里程），返回落库规范值")
+    @PutMapping("/transfers/{id}/field")
+    public ApiResult<String> updateTransferField(@PathVariable Long id,
+                                                 @RequestBody @Valid RouteFieldRequest request) {
+        return ApiResult.ok(routeService.updateTransferField(id, request));
+    }
+
     @Operation(summary = "批量切换直达/外转（切直达清空承运商并重写编码后缀）")
     @PutMapping("/transfers/batch/type")
     public ApiResult<TransferBatchResultVO> switchTransferType(@RequestBody @Valid TransferBatchTypeRequest request) {

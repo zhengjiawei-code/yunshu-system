@@ -98,6 +98,8 @@ public class SysRouteServiceImpl implements SysRouteService {
             "servicePhone", 20);
     private static final Set<String> ROUTE_NUMBER_FIELDS = Set.of("mileage", "transitHours");
     private static final BigDecimal ROUTE_NUMBER_MAX = new BigDecimal("99999999.99");
+    private static final BigDecimal TRANSFER_HOURS_MAX = new BigDecimal("999999.99");
+    private static final BigDecimal TRANSFER_MILEAGE_MAX = new BigDecimal("99999999.99");
 
     private final SysRouteMapper routeMapper;
     private final SysRouteTransferMapper transferMapper;
@@ -763,6 +765,10 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
                 .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled)
                 .set(SysRouteTransfer::getAlias, alias)
+                .set(SysRouteTransfer::getTransitHours,
+                        request.getTransitHours() == null ? existing.getTransitHours() : scale2(request.getTransitHours()))
+                .set(SysRouteTransfer::getMileage,
+                        request.getMileage() == null ? existing.getMileage() : scale2(request.getMileage()))
                 .set(SysRouteTransfer::getSortOrder,
                         request.getSortOrder() == null ? existing.getSortOrder() : request.getSortOrder())
                 .set(SysRouteTransfer::getRemark, trim(request.getRemark()))
@@ -800,6 +806,31 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .eq(SysRouteTransfer::getId, id)
                 .set(SysRouteTransfer::getAlias, alias)
                 .set(SysRouteTransfer::getUpdateBy, org.userId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @DS("master")
+    public String updateTransferField(Long id, RouteFieldRequest request) {
+        UserOrgService.UserOrg org = userOrgService.current();
+        requireOwnerTransfer(id, org);
+        String field = trim(request.getField());
+        BigDecimal value;
+        LambdaUpdateWrapper<SysRouteTransfer> update = Wrappers.<SysRouteTransfer>lambdaUpdate()
+                .eq(SysRouteTransfer::getId, id)
+                .set(SysRouteTransfer::getUpdateBy, org.userId());
+        if ("transitHours".equals(field)) {
+            value = parseDecimalField("时效", request.getValue(), TRANSFER_HOURS_MAX);
+            update.set(SysRouteTransfer::getTransitHours, value);
+        } else if ("mileage".equals(field)) {
+            value = parseDecimalField("里程", request.getValue(), TRANSFER_MILEAGE_MAX);
+            update.set(SysRouteTransfer::getMileage, value);
+        } else {
+            throw new BizException("不支持修改该字段");
+        }
+        // 只更新当前字段，避免整行覆盖
+        transferMapper.update(null, update);
+        return value == null ? null : value.toPlainString();
     }
 
     @Override
@@ -1554,6 +1585,10 @@ public class SysRouteServiceImpl implements SysRouteService {
 
     /** 内联数字录入：空=清空；负数拒绝；四舍五入保留两位小数 */
     private BigDecimal parseRouteNumber(String field, String raw) {
+        return parseDecimalField(fieldLabel(field), raw, ROUTE_NUMBER_MAX);
+    }
+
+    private BigDecimal parseDecimalField(String label, String raw, BigDecimal max) {
         String text = trim(raw);
         if (text == null) {
             return null;
@@ -1562,16 +1597,20 @@ public class SysRouteServiceImpl implements SysRouteService {
         try {
             value = new BigDecimal(text);
         } catch (NumberFormatException e) {
-            throw new BizException(fieldLabel(field) + "请输入数字");
+            throw new BizException(label + "请输入数字");
         }
         if (value.signum() < 0) {
-            throw new BizException(fieldLabel(field) + "不能为负");
+            throw new BizException(label + "不能为负");
         }
         BigDecimal scaled = value.setScale(2, RoundingMode.HALF_UP);
-        if (scaled.compareTo(ROUTE_NUMBER_MAX) > 0) {
-            throw new BizException(fieldLabel(field) + "超出允许范围");
+        if (scaled.compareTo(max) > 0) {
+            throw new BizException(label + "超出允许范围");
         }
         return scaled;
+    }
+
+    private BigDecimal scale2(BigDecimal value) {
+        return value == null ? null : value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private String fieldLabel(String field) {
@@ -1717,6 +1756,8 @@ public class SysRouteServiceImpl implements SysRouteService {
         vo.setRegionLevel(item.getRegionLevel());
         vo.setRegionFullName(item.getRegionFullName());
         vo.setAlias(item.getAlias());
+        vo.setTransitHours(item.getTransitHours());
+        vo.setMileage(item.getMileage());
         String regionCode = item.getRegionCode();
         if (regionCode != null && regionCode.length() >= 2) {
             vo.setDestProvinceName(destLevelName(item, regionNames, 1));

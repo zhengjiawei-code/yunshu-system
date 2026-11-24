@@ -25,24 +25,32 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { updateRouteField } from '@/api/system/route'
-import type { RouteEditableField, RouteRecord } from '@/types/route'
+import { updateRouteField, updateTransferField } from '@/api/system/route'
+import type {
+  RouteEditableField,
+  RouteRecord,
+  TransferEditableField,
+  TransferRecord
+} from '@/types/route'
 
 /**
- * 短驳/干线列表内联编辑：单击录入，回车/失焦保存，Esc 取消。
+ * 路由列表内联编辑：单击录入，回车/失焦保存，Esc 取消。
  * 只提交当前字段（后端单字段增量更新），失败不改界面值。
  */
 const props = withDefaults(
   defineProps<{
-    row: RouteRecord
-    field: RouteEditableField
+    row: RouteRecord | TransferRecord
+    field: RouteEditableField | TransferEditableField
     editable: boolean
+    /** target=transfer 时走外转单字段接口 */
+    target?: 'route' | 'transfer'
     /** number：负数拒绝、四舍五入保留两位小数；text：按 maxlength 限制 */
     type?: 'text' | 'number'
     maxlength?: number
     align?: 'left' | 'right'
   }>(),
   {
+    target: 'route',
     type: 'text',
     maxlength: undefined,
     align: 'left'
@@ -70,7 +78,7 @@ const displayText = computed(() => {
 })
 
 const fieldLabel = computed(() => {
-  const labels: Record<RouteEditableField, string> = {
+  const labels: Record<RouteEditableField | TransferEditableField, string> = {
     warehouseArea: '库区',
     mileage: '里程',
     transitHours: '时效',
@@ -115,7 +123,7 @@ async function commit() {
       return
     }
     const rounded = Number(num.toFixed(2))
-    if (rounded.toFixed(2) !== raw) {
+    if (rounded !== num) {
       ElMessage.info(`${fieldLabel.value}已保留两位小数`)
     }
     nextText = rounded.toFixed(2)
@@ -136,7 +144,10 @@ async function commit() {
 
   saving.value = true
   try {
-    const saved = await updateRouteField(props.row.id, props.field, nextText)
+    const saved =
+      props.target === 'transfer'
+        ? await updateTransferField(props.row.id, props.field as TransferEditableField, nextText)
+        : await updateRouteField(props.row.id, props.field as RouteEditableField, nextText)
     if (props.type === 'number') {
       emit('updated', saved === null ? null : Number(saved))
     } else {

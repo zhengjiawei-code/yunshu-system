@@ -66,6 +66,9 @@ public interface SysRouteService {
     /** 仅更新别名，权限与编辑接口一致 */
     void updateTransferAlias(Long id, TransferAliasRequest request);
 
+    /** 外转路由单据字段增量更新（时效/里程），返回落库规范值（清空返回 null） */
+    String updateTransferField(Long id, RouteFieldRequest request);
+
     void deleteTransfer(Long id);
 
     /** 直达/外转路由使用情况：使用公司清单与移除/取消授权判定 */

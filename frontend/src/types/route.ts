@@ -9,6 +9,9 @@ export type RouteEditableField =
   | 'serviceName'
   | 'servicePhone'
 
+/** 外转列表支持列表内联编辑的字段 */
+export type TransferEditableField = 'transitHours' | 'mileage'
+
 export interface RouteRecord {
   id: number
   routeCode: string
@@ -97,6 +100,10 @@ export interface TransferRecord {
   routeName: string
   /** 别名：开单目的地展示用，默认等于目的地全称 */
   alias?: string
+  /** 外转时效（小时），null=未配置 */
+  transitHours?: number | null
+  /** 外转里程（公里），null=未配置 */
+  mileage?: number | null
   transferType: 1 | 2
   /** 是否提供自提 */
   pickupEnabled?: boolean

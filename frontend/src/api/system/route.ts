@@ -13,6 +13,7 @@ import type {
   RouteSaveResult,
   TransferBatchJoinPayload,
   TransferBatchResult,
+  TransferEditableField,
   TransferEditPayload,
   TransferPage,
   TransferQuery,
@@ -80,6 +81,15 @@ export function updateTransferServices(
 
 export function updateTransferAlias(id: number, alias: string): Promise<void> {
   return request({ url: `/v1/system/routes/transfers/${id}/alias`, method: 'put', data: { alias } })
+}
+
+/** 外转单字段增量更新（时效/里程）：value 传空字符串表示清空，返回落库规范值 */
+export function updateTransferField(
+  id: number,
+  field: TransferEditableField,
+  value: string
+): Promise<string | null> {
+  return request({ url: `/v1/system/routes/transfers/${id}/field`, method: 'put', data: { field, value } })
 }
 
 export function switchTransferType(payload: {

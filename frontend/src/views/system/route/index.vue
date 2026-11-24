@@ -782,6 +782,44 @@
                       </template>
                     </el-table-column>
 
+                    <el-table-column v-if="transferColumnState.transitHours" prop="transitHours" label="时效" min-width="100" align="right" :sortable="false">
+                      <template #header>
+                        <div class="col-head">
+                          <span class="col-head__label">时效</span>
+                        </div>
+                      </template>
+                      <template #default="{ row }">
+                        <route-field-editor
+                          :row="row"
+                          field="transitHours"
+                          target="transfer"
+                          type="number"
+                          align="right"
+                          :editable="row.editable"
+                          @updated="(value) => (row.transitHours = value === null ? null : Number(value))"
+                        />
+                      </template>
+                    </el-table-column>
+
+                    <el-table-column v-if="transferColumnState.mileage" prop="mileage" label="里程" min-width="110" align="right" :sortable="false">
+                      <template #header>
+                        <div class="col-head">
+                          <span class="col-head__label">里程</span>
+                        </div>
+                      </template>
+                      <template #default="{ row }">
+                        <route-field-editor
+                          :row="row"
+                          field="mileage"
+                          target="transfer"
+                          type="number"
+                          align="right"
+                          :editable="row.editable"
+                          @updated="(value) => (row.mileage = value === null ? null : Number(value))"
+                        />
+                      </template>
+                    </el-table-column>
+
                     <el-table-column
                       v-if="transferColumnState.destProvinceName"
                       prop="destProvinceName"
@@ -1279,6 +1317,9 @@ const transferSchema = reactive<ColumnDef[]>([
     prop: 'alias',
     filterType: 'text'
   },
+  // 外转时效/里程：默认显示、默认不启用筛选（筛选开关禁用）
+  { key: 'transitHours', label: '时效', prop: 'transitHours', filterType: 'none', align: 'right' },
+  { key: 'mileage', label: '里程', prop: 'mileage', filterType: 'none', align: 'right' },
   {
     key: 'destProvinceName',
     label: '目的地省',
@@ -1423,7 +1464,7 @@ const {
   filterModesParam: transferFilterModesParam
 } = useColumnConfig('system:route-transfer', transferSchema, {
   leadingKeys: ['status', 'grantScope'],
-  moveAfter: { alias: 'regionFullName' }
+  moveAfter: { alias: 'regionFullName', transitHours: 'alias', mileage: 'transitHours' }
 })
 
 const transferColumnState = computed(

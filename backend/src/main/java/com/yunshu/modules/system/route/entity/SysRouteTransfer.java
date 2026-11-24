@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** 外转/直达路由，对应 sys_route_transfer；apply_dept_id 为业务字段，dept_id 仅审计锚点 */
@@ -40,6 +41,12 @@ public class SysRouteTransfer {
 
     /** 别名：开单目的地展示用，默认等于目的地全称 */
     private String alias;
+
+    /** 外转时效（小时），NULL=未配置 */
+    private BigDecimal transitHours;
+
+    /** 外转里程（公里），NULL=未配置 */
+    private BigDecimal mileage;
 
     /** 仅外转可填 */
     private Long carrierId;

@@ -1,9 +1,12 @@
 package com.yunshu.modules.system.route.dto;
 
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import java.math.BigDecimal;
 
 /**
  * 外转/直达路由编辑：仅允许修改名称、承运商、状态、排序、备注。
@@ -29,6 +32,14 @@ public class TransferEditRequest {
     /** 别名；为空串拒绝，不传表示保持原值 */
     @Size(max = 64, message = "别名不能超过 64 个字符")
     private String alias;
+
+    /** 外转时效（小时）；不传表示保持原值，清空走单字段接口 */
+    @DecimalMin(value = "0", message = "时效不能为负")
+    private BigDecimal transitHours;
+
+    /** 外转里程（公里）；不传表示保持原值，清空走单字段接口 */
+    @DecimalMin(value = "0", message = "里程不能为负")
+    private BigDecimal mileage;
 
     @Min(value = 0, message = "排序号不能小于 0")
     @Max(value = 9999, message = "排序号不能大于 9999")
