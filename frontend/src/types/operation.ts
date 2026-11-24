@@ -173,3 +173,237 @@ export interface PreOrderPage {
   pageSize: number
   summary: Record<string, number>
 }
+
+/* ------------------------------ 运单管理 ------------------------------ */
+
+/** 运单列表/详情主表：字段与后端 biz_waybill 对齐，列表按需取用 */
+export interface WaybillRecord {
+  id: number
+  waybillNo: string
+  relatedNo?: string
+  status: number
+  isChild: number
+  parentId?: number
+  parentNo?: string
+  childSeq?: number
+  childCount?: number
+  hasChildren?: boolean
+  bizType?: number
+  deptId?: number
+  deptName?: string
+  salesId?: number
+  salesName?: string
+  originHubId?: number
+  originHubName?: string
+  destHubId?: number
+  destHubName?: string
+  destProvinceCode?: string
+  destProvinceName?: string
+  destCityCode?: string
+  destCityName?: string
+  destDistrictCode?: string
+  destDistrictName?: string
+  destName?: string
+  routeName?: string
+  routeNodeCount?: number
+  routeEndType?: number
+  customerId?: number
+  customerName?: string
+  customerPhone?: string
+  senderName?: string
+  senderPhone?: string
+  senderCompany?: string
+  senderAddress?: string
+  receiverName?: string
+  receiverPhone?: string
+  receiverCompany?: string
+  receiverProvinceCode?: string
+  receiverProvinceName?: string
+  receiverCityCode?: string
+  receiverCityName?: string
+  receiverDistrictCode?: string
+  receiverDistrictName?: string
+  receiverAddress?: string
+  goodsName?: string
+  goodsType?: string
+  packageType?: string
+  quantity?: number
+  weight?: number
+  volume?: number
+  goodsRemark?: string
+  payMethod?: number
+  freightFee?: number
+  deliveryFee?: number
+  pickupFee?: number
+  otherFee?: number
+  receiptFee?: number
+  makeBillFee?: number
+  insuranceFee?: number
+  declaredValue?: number
+  totalFee?: number
+  prepaidFee?: number
+  collectFee?: number
+  monthlyFee?: number
+  returnFee?: number
+  cashBack?: number
+  oweBack?: number
+  rebateTotal?: number
+  validFreight?: number
+  deliveryMethod?: number
+  codAmount?: number
+  payeeName?: string
+  bankName?: string
+  bankCardNo?: string
+  needReceipt?: number
+  receiptCount?: number
+  waitNotice?: number
+  remark?: string
+  preOrderNo?: string
+  createByName?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export interface WaybillRouteNodeRecord {
+  id: number
+  waybillId: number
+  seq: number
+  routeScope?: number
+  routeId?: number
+  routeCode?: string
+  routeCategory?: number
+  transferType?: number
+  fromDeptId?: number
+  fromDeptName?: string
+  toDeptId?: number
+  toDeptName?: string
+  destRegionCode?: string
+  destRegionName?: string
+  carrierId?: number
+  carrierName?: string
+  warehouseArea?: string
+  mileage?: number
+  transitHours?: number
+}
+
+export interface WaybillGoodsRecord {
+  id: number
+  waybillId: number
+  seq: number
+  goodsName: string
+  goodsType?: string
+  packageType?: string
+  quantity: number
+  weight: number
+  volume: number
+  goodsRemark?: string
+}
+
+export interface WaybillLogRecord {
+  id: number
+  waybillId: number
+  waybillNo?: string
+  actionType: number
+  beforeSnapshot?: string
+  afterSnapshot?: string
+  reason?: string
+  auditStatus?: number
+  auditorId?: number
+  auditTime?: string
+  operatorId?: number
+  operatorName?: string
+  deptId?: number
+  createTime?: string
+}
+
+export interface WaybillDetail {
+  waybill: WaybillRecord
+  nodes: WaybillRouteNodeRecord[]
+  goods: WaybillGoodsRecord[]
+  logs: WaybillLogRecord[]
+  amendLogs: WaybillLogRecord[]
+  childCount: number
+}
+
+export interface WaybillPage {
+  data: WaybillRecord[]
+  total: number
+  page: number
+  pageSize: number
+  summary: Record<string, number>
+}
+
+export interface WaybillAmountTotals {
+  quantity: number
+  weight: number
+  volume: number
+}
+
+export interface WaybillChildren {
+  parentId: number
+  parentNo: string
+  parentTotals: WaybillAmountTotals
+  childTotals: WaybillAmountTotals
+  children: WaybillRecord[]
+}
+
+export interface WaybillFieldChange {
+  field: string
+  label: string
+  before: string
+  after: string
+}
+
+export interface WaybillAmendResult {
+  waybill: WaybillRecord
+  changes: WaybillFieldChange[]
+}
+
+export interface WaybillAmendPayload {
+  reason: string
+  version: string
+  senderName: string
+  senderPhone: string
+  senderCompany?: string
+  senderAddress: string
+  receiverName: string
+  receiverPhone: string
+  receiverCompany?: string
+  receiverProvinceCode: string
+  receiverCityCode: string
+  receiverDistrictCode: string
+  receiverAddress: string
+  goodsList: GoodsItemPayload[]
+  payMethod: number
+  freightFee?: number
+  deliveryFee?: number
+  pickupFee?: number
+  otherFee?: number
+  receiptFee?: number
+  makeBillFee?: number
+  insuranceFee?: number
+  cashBack?: number
+  oweBack?: number
+  deliveryMethod: number
+  codAmount?: number
+  payeeName?: string
+  bankName?: string
+  bankCardNo?: string
+  remark?: string
+}
+
+/** 异步导出任务（D8） */
+export interface ExportTask {
+  id: number
+  taskType: string
+  status: number
+  totalRows?: number
+  processedRows: number
+  fileName?: string
+  fileSize?: number
+  failReason?: string
+  expireTime?: string
+  createTime?: string
+  startTime?: string
+  finishTime?: string
+}

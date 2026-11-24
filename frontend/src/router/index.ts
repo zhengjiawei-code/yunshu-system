@@ -29,6 +29,18 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'Dashboard',
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '首页', icon: 'HomeFilled', affix: true, parents: [] }
+      },
+      {
+        path: 'operation/waybill/:id/amend',
+        name: 'OperationWaybillAmend',
+        component: () => import('@/views/operation/waybill/amend.vue'),
+        meta: { title: '运单改单', parents: ['运营管理'] }
+      },
+      {
+        path: 'operation/waybill/:id',
+        name: 'OperationWaybillDetail',
+        component: () => import('@/views/operation/waybill/detail.vue'),
+        meta: { title: '运单详情', parents: ['运营管理'] }
       }
     ]
   },
