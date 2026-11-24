@@ -321,7 +321,7 @@ export interface WaybillDetail {
   nodes: WaybillRouteNodeRecord[]
   goods: WaybillGoodsRecord[]
   logs: WaybillLogRecord[]
-  amendLogs: WaybillLogRecord[]
+  amendLogs: WaybillAmendLogRecord[]
   childCount: number
 }
 
@@ -350,8 +350,20 @@ export interface WaybillChildren {
 export interface WaybillFieldChange {
   field: string
   label: string
-  before: string
-  after: string
+  /** 清空为 null */
+  before: string | null
+  /** 清空为 null */
+  after: string | null
+}
+
+/** 详情页「改单信息」tab 的改单记录：日志元信息 + 字段级明细 */
+export interface WaybillAmendLogRecord {
+  id: number
+  operatorName?: string
+  createTime?: string
+  reason?: string
+  changeCount: number
+  changes: WaybillFieldChange[]
 }
 
 export interface WaybillAmendResult {

@@ -2,6 +2,8 @@ package com.yunshu.modules.operation.service;
 
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
@@ -21,6 +23,7 @@ import com.yunshu.modules.operation.mapper.BizWaybillMapper;
 import com.yunshu.modules.operation.mapper.BizWaybillRouteNodeMapper;
 import com.yunshu.modules.operation.vo.CustomerMatchVO;
 import com.yunshu.modules.operation.vo.RouteCandidateVO;
+import com.yunshu.modules.operation.vo.WaybillAmendLogVO;
 import com.yunshu.modules.operation.vo.WaybillAmendVO;
 import com.yunshu.modules.operation.vo.WaybillDetailVO;
 import com.yunshu.modules.operation.vo.WaybillFieldChangeVO;
@@ -229,6 +232,7 @@ public class WaybillService {
         List<BizWaybillLog> amendLogs = logs.stream()
                 .filter(log -> Integer.valueOf(WaybillEnums.LogAction.AMEND.getCode()).equals(log.getActionType()))
                 .toList();
+        List<WaybillAmendLogVO> amendRecords = amendLogs.stream().map(this::toAmendLogVO).toList();
         int childCount = isChild(waybill) ? 0 : Math.toIntExact(waybillMapper.selectCount(
                 Wrappers.<BizWaybill>lambdaQuery().eq(BizWaybill::getParentId, waybill.getId())));
 
@@ -237,8 +241,32 @@ public class WaybillService {
         vo.setNodes(nodes);
         vo.setGoods(goods);
         vo.setLogs(logs);
-        vo.setAmendLogs(amendLogs);
+        vo.setAmendLogs(amendRecords);
         vo.setChildCount(childCount);
+        return vo;
+    }
+
+    /** 改单日志转展示对象：changes 从 after_snapshot 一次解析，旧记录无快照时返回空明细 */
+    private WaybillAmendLogVO toAmendLogVO(BizWaybillLog log) {
+        List<WaybillFieldChangeVO> changes = new ArrayList<>();
+        if (StringUtils.hasText(log.getAfterSnapshot())) {
+            try {
+                JsonNode node = objectMapper.readTree(log.getAfterSnapshot()).path("changes");
+                if (node.isArray()) {
+                    changes = objectMapper.convertValue(node, new TypeReference<List<WaybillFieldChangeVO>>() {
+                    });
+                }
+            } catch (Exception ignored) {
+                // 历史快照格式异常不阻断详情，按无明细展示
+            }
+        }
+        WaybillAmendLogVO vo = new WaybillAmendLogVO();
+        vo.setId(log.getId());
+        vo.setOperatorName(log.getOperatorName());
+        vo.setCreateTime(log.getCreateTime());
+        vo.setReason(log.getReason());
+        vo.setChanges(changes);
+        vo.setChangeCount(changes.size());
         return vo;
     }
 

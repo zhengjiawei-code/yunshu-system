@@ -21,8 +21,8 @@ public class WaybillDetailVO {
     /** 操作日志（挂母单，时间倒序） */
     private List<BizWaybillLog> logs;
 
-    /** 改单记录（action_type=6，时间倒序），详情页「改单信息」tab 直接消费 */
-    private List<BizWaybillLog> amendLogs;
+    /** 改单记录（action_type=6，时间倒序，含字段级明细），详情页「改单信息」tab 直接消费 */
+    private List<WaybillAmendLogVO> amendLogs;
 
     /** 有效子单数；子单为 0 */
     private Integer childCount;
