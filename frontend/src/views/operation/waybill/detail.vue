@@ -88,12 +88,12 @@
                       v-for="(c, i) in row.changes"
                       :key="i"
                       class="change-line"
-                      :title="`${c.label}：${c.before || '空'} → ${c.after || '空'}`"
+                      :title="`${c.label}：${c.before || '—'} → ${c.after || '—'}`"
                     >
                       <span class="change-label">{{ c.label }}：</span>
-                      <span class="change-before">{{ c.before || '空' }}</span>
+                      <span class="change-before">{{ c.before || '—' }}</span>
                       <span class="change-arrow">→</span>
-                      <span class="change-after">{{ c.after || '空' }}</span>
+                      <span class="change-after">{{ c.after || '—' }}</span>
                     </div>
                   </template>
                 </el-table-column>
@@ -299,8 +299,7 @@ onMounted(loadDetail)
 }
 
 .change-before {
-  color: var(--color-text-placeholder);
-  text-decoration: line-through;
+  color: var(--color-text-secondary);
 }
 
 .change-arrow {
