@@ -20,12 +20,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,7 +37,7 @@ import java.util.stream.Collectors;
 
 /**
  * 开单路由拼接（方案第 6 章）。
- * 链路只允许两种形态：O --E2--> R，或 O --E1*--> D --E2--> R。
+ * 链路支持三种形态：O --E2--> R、O --E1*--> D --E2--> R、O --E1*--> D（网点名命中，直达收尾）。
  * 排序：节点数升序 → 末段直达优先 → 区域匹配深度（区县>市>省）→ 总时效 → 总里程 → 末段排序号 → 末段 id。
  * 路由两表豁免数据权限，公司授权在服务层显式过滤。
  */
@@ -117,6 +120,8 @@ public class RouteCandidateService {
                 result.addAll(found);
             }
         }
+        // 目的地关键字也匹配运达网点名称：命中网点时追加“以网点收尾”的直达候选
+        appendHubCandidates(kw, originDeptId, context, result);
         result.sort(candidateComparator());
         result.stream().limit(MAX_CANDIDATES).forEach(item -> item.setRecommended(false));
         List<RouteCandidateVO> limitedResult = result.stream().limit(MAX_CANDIDATES).toList();
@@ -132,6 +137,8 @@ public class RouteCandidateService {
         }
         RouteContext context = loadContext(List.of(districtCode.trim()));
         List<RouteCandidateVO> result = candidatesFor(districtCode.trim(), originDeptId, context);
+        // 保存/切换线路时同样保留“以网点收尾”的直达候选，保证与下拉选项一致
+        appendHubCandidatesByDistrict(districtCode.trim(), originDeptId, context, result);
         result.sort(candidateComparator());
         List<RouteCandidateVO> limited = result.stream().limit(MAX_CANDIDATES).toList();
         limited.stream().filter(item -> !Boolean.TRUE.equals(item.getNoRoute())).findFirst()
@@ -276,6 +283,167 @@ public class RouteCandidateService {
         result.forEach(item -> item.setRecommended(false));
         result.forEach(item -> item.setNoRoute(false));
         return result;
+    }
+
+    /** 关键字命中网点名：为每个可达网点追加“以网点收尾”的直达候选 */
+    private void appendHubCandidates(String keyword, Long originDeptId, RouteContext context,
+                                     List<RouteCandidateVO> out) {
+        if (originDeptId == null || !context.depts().containsKey(originDeptId)) {
+            return;
+        }
+        List<SysDept> matched = context.depts().values().stream()
+                .filter(this::isHubDept)
+                .filter(item -> item.getDeptName() != null && item.getDeptName().contains(keyword))
+                .filter(item -> !Objects.equals(item.getId(), originDeptId))
+                .sorted(Comparator.comparing(SysDept::getId))
+                .toList();
+        for (SysDept hub : matched) {
+            addHubCandidate(originDeptId, hub, context, out);
+        }
+    }
+
+    /** 保存/切换线路：按目的区县补回该区县下可达网点的直达候选 */
+    private void appendHubCandidatesByDistrict(String districtCode, Long originDeptId, RouteContext context,
+                                               List<RouteCandidateVO> out) {
+        if (originDeptId == null || !context.depts().containsKey(originDeptId)) {
+            return;
+        }
+        List<SysDept> hubs = context.depts().values().stream()
+                .filter(this::isHubDept)
+                .filter(item -> districtCode.equals(item.getDistrictCode()))
+                .filter(item -> !Objects.equals(item.getId(), originDeptId))
+                .sorted(Comparator.comparing(SysDept::getId))
+                .toList();
+        for (SysDept hub : hubs) {
+            addHubCandidate(originDeptId, hub, context, out);
+        }
+    }
+
+    private void addHubCandidate(Long originDeptId, SysDept hub, RouteContext context,
+                                 List<RouteCandidateVO> out) {
+        List<SysRoute> chain = shortestRouteChain(originDeptId, hub.getId(), context.routes());
+        if (chain == null || chain.isEmpty() || hub.getDistrictCode() == null) {
+            return;
+        }
+        SysRegion district = regionMapper.selectById(hub.getDistrictCode());
+        if (district == null || district.getLevel() == null || district.getLevel() != 3) {
+            return;
+        }
+        SysRegion city = StringUtils.hasText(district.getParentCode())
+                ? regionMapper.selectById(district.getParentCode()) : null;
+        SysRegion province = city != null && StringUtils.hasText(city.getParentCode())
+                ? regionMapper.selectById(city.getParentCode()) : null;
+
+        RouteCandidateVO vo = new RouteCandidateVO();
+        List<RouteCandidateVO.Node> nodes = new ArrayList<>();
+        List<String> keys = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        BigDecimal hours = BigDecimal.ZERO;
+        BigDecimal mileage = BigDecimal.ZERO;
+        boolean hoursMissing = false;
+        boolean mileageMissing = false;
+        int seq = 1;
+        for (SysRoute route : chain) {
+            RouteCandidateVO.Node node = new RouteCandidateVO.Node();
+            node.setSeq(seq++);
+            node.setRouteScope(SCOPE_ROUTE);
+            node.setRouteId(route.getId());
+            node.setRouteCode(route.getRouteCode());
+            node.setRouteCategory(route.getRouteCategory());
+            node.setFromDeptId(route.getOriginDeptId());
+            node.setFromDeptName(deptName(context.depts(), route.getOriginDeptId()));
+            node.setToDeptId(route.getDestDeptId());
+            node.setToDeptName(deptName(context.depts(), route.getDestDeptId()));
+            node.setMileage(route.getMileage());
+            node.setTransitHours(route.getTransitHours());
+            node.setWarehouseArea(route.getWarehouseArea());
+            nodes.add(node);
+            keys.add(SCOPE_ROUTE + ":" + route.getId());
+            if (route.getTransitHours() == null) {
+                hoursMissing = true;
+            } else {
+                hours = hours.add(route.getTransitHours());
+            }
+            if (route.getMileage() == null) {
+                mileageMissing = true;
+            } else {
+                mileage = mileage.add(route.getMileage());
+            }
+            if (names.isEmpty()) {
+                names.add(deptName(context.depts(), route.getOriginDeptId()));
+            }
+            names.add(deptName(context.depts(), route.getDestDeptId()));
+        }
+
+        vo.setNodes(nodes);
+        vo.setRouteKeys(keys);
+        vo.setNodeCount(chain.size() + 1);
+        vo.setEndType(TYPE_DIRECT);
+        vo.setMatchLevel(3);
+        vo.setTotalHours(hoursMissing ? null : hours.setScale(2, java.math.RoundingMode.HALF_UP));
+        vo.setTotalMileage(mileageMissing ? null : mileage.setScale(2, java.math.RoundingMode.HALF_UP));
+        vo.setChainText(String.join(" → ", names));
+        vo.setDistrictCode(district.getCode());
+        vo.setDistrictName(district.getName());
+        vo.setCityCode(city == null ? null : city.getCode());
+        vo.setCityName(city == null ? null : city.getName());
+        vo.setProvinceCode(province == null ? null : province.getCode());
+        vo.setProvinceName(province == null ? null : province.getName());
+        vo.setDestName(joinRegionName(province, city, district));
+        vo.setDestHubId(hub.getId());
+        vo.setDestHubName(hub.getDeptName());
+        vo.setNoRoute(false);
+        vo.setRecommended(false);
+        out.add(vo);
+    }
+
+    /** 广度优先找最短 E1 链路；不可达返回 null */
+    private List<SysRoute> shortestRouteChain(Long origin, Long target, List<SysRoute> routes) {
+        if (Objects.equals(origin, target)) {
+            return null;
+        }
+        Map<Long, List<SysRoute>> adjacency = new HashMap<>();
+        routes.forEach(route -> adjacency
+                .computeIfAbsent(route.getOriginDeptId(), key -> new ArrayList<>()).add(route));
+        adjacency.values().forEach(list -> list.sort(Comparator.comparing(SysRoute::getId)));
+
+        Map<Long, SysRoute> parent = new HashMap<>();
+        Map<Long, Integer> depth = new HashMap<>();
+        Set<Long> visited = new HashSet<>();
+        Deque<Long> queue = new ArrayDeque<>();
+        visited.add(origin);
+        depth.put(origin, 0);
+        queue.add(origin);
+        while (!queue.isEmpty()) {
+            Long current = queue.poll();
+            int currentDepth = depth.getOrDefault(current, 0);
+            if (currentDepth >= MAX_E1_EDGES) {
+                continue;
+            }
+            for (SysRoute route : adjacency.getOrDefault(current, List.of())) {
+                Long next = route.getDestDeptId();
+                if (next == null || !visited.add(next)) {
+                    continue;
+                }
+                parent.put(next, route);
+                depth.put(next, currentDepth + 1);
+                if (Objects.equals(next, target)) {
+                    LinkedList<SysRoute> chain = new LinkedList<>();
+                    Long cursor = target;
+                    while (!Objects.equals(cursor, origin)) {
+                        SysRoute edge = parent.get(cursor);
+                        if (edge == null) {
+                            return null;
+                        }
+                        chain.addFirst(edge);
+                        cursor = edge.getOriginDeptId();
+                    }
+                    return chain;
+                }
+                queue.add(next);
+            }
+        }
+        return null;
     }
 
     private void walk(Long current, Map<Long, List<SysRoute>> adjacency,
