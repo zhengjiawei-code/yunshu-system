@@ -73,13 +73,13 @@ const TEXT_KEYS = [
   'receiverProvinceCode', 'receiverCityCode', 'receiverDistrictCode', 'receiverAddress',
   'payeeName', 'bankName', 'bankCardNo', 'remark'
 ] as const
-/** 数值/码值列：同样只提交改动项，清空按 null 显式提交 */
-const NUMBER_KEYS = [
-  'payMethod', 'freightFee', 'deliveryFee', 'pickupFee', 'otherFee', 'receiptFee',
-  'makeBillFee', 'insuranceFee', 'cashBack', 'oweBack',
-  'prepaidFee', 'collectFee', 'monthlyFee', 'returnFee',
-  'deliveryMethod', 'codAmount'
+/** 数值/码值列：同样只提交改动项；金额清空按 0 提交（不传 null） */
+const MONEY_KEYS = [
+  'freightFee', 'deliveryFee', 'pickupFee', 'otherFee', 'receiptFee', 'makeBillFee',
+  'insuranceFee', 'cashBack', 'oweBack', 'codAmount',
+  'prepaidFee', 'collectFee', 'monthlyFee', 'returnFee'
 ] as const
+const NUMBER_KEYS = ['payMethod', 'deliveryMethod'] as const
 
 const originalText = ref<Record<string, string | null>>({})
 const originalNumber = ref<Record<string, number | null>>({})
@@ -133,7 +133,7 @@ async function loadDetail() {
       TEXT_KEYS.map((key) => [key, textOf((form as Record<string, unknown>)[key])])
     )
     originalNumber.value = Object.fromEntries(
-      NUMBER_KEYS.map((key) => [key, numberOf((form as Record<string, unknown>)[key])])
+      [...MONEY_KEYS, ...NUMBER_KEYS].map((key) => [key, numberOf((form as Record<string, unknown>)[key])])
     )
     originalGoods.value = goodsFingerprint()
   } catch {
@@ -166,6 +166,14 @@ function buildPayload(): { payload: WaybillAmendPayload; dirty: string[] } {
     const current = textOf(source[key])
     if (current !== originalText.value[key]) {
       payload[key] = current
+      dirty.push(key)
+    }
+  }
+  for (const key of MONEY_KEYS) {
+    const current = numberOf(source[key])
+    if (current !== originalNumber.value[key]) {
+      // 金额清空统一按 0 提交，不传 null
+      payload[key] = current ?? 0
       dirty.push(key)
     }
   }
