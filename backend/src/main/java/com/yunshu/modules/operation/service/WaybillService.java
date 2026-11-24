@@ -74,6 +74,23 @@ public class WaybillService {
     private final WaybillNoGenerator noGenerator;
     private final ObjectMapper objectMapper;
 
+    /** 改单可写白名单：payload 里只有这些键会被接受 */
+    private static final Set<String> AMENDABLE_FIELDS = Set.of(
+            "senderCompany", "senderName", "senderPhone", "senderAddress",
+            "receiverCompany", "receiverName", "receiverPhone",
+            "receiverProvinceCode", "receiverCityCode", "receiverDistrictCode", "receiverAddress",
+            "goodsList", "payMethod",
+            "freightFee", "deliveryFee", "pickupFee", "otherFee", "receiptFee", "makeBillFee",
+            "insuranceFee", "cashBack", "oweBack",
+            "prepaidFee", "collectFee", "monthlyFee", "returnFee",
+            "deliveryMethod", "codAmount", "payeeName", "bankName", "bankCardNo", "remark");
+    /** 参与运费合计的输入项；出现任意一项即重算派生金额 */
+    private static final Set<String> FEE_FIELDS = Set.of(
+            "freightFee", "deliveryFee", "pickupFee", "otherFee", "receiptFee", "makeBillFee",
+            "insuranceFee", "cashBack", "oweBack");
+    private static final Set<String> REGION_FIELDS = Set.of(
+            "receiverProvinceCode", "receiverCityCode", "receiverDistrictCode");
+
     @Transactional(rollbackFor = Exception.class)
     public WaybillSaveVO create(WaybillSaveRequest request) {
         DataScopeContext context = DataScopeContext.require("开单保存");
@@ -269,14 +286,14 @@ public class WaybillService {
     }
 
     /**
-     * 改单（方案第 8 节 / D4 / D12 / D13）：
-     * 只接受白名单字段，状态 20–90 可改；金额重算复用 WaybillAmountCalculator；
-     * 字段级 diff 写入 after_snapshot.changes，日志 action_type=6，一期 audit_status=0。
+     * 改单（方案第 8 节 / D4 / D12 / D13）：patch 语义。
+     * present 为请求体里实际出现的字段名；只有出现的字段才校验、才进 UPDATE 与 changes，
+     * 未出现的字段保持原值，禁止全量覆盖。金额派生仅在本单涉及金额输入时重算。
      */
     @Transactional(rollbackFor = Exception.class)
-    public WaybillAmendVO amend(Long id, WaybillAmendRequest request) {
+    public WaybillAmendVO amend(Long id, WaybillAmendRequest request, Set<String> present) {
         DataScopeContext context = DataScopeContext.require("运单改单");
-        if (request == null) {
+        if (request == null || present == null || present.isEmpty()) {
             throw new BizException("改单内容不能为空");
         }
         BizWaybill waybill = selectVisible(id);
@@ -291,72 +308,69 @@ public class WaybillService {
             throw new BizException("改单原因不能超过 200 字");
         }
         String version = normalizeVersion(request.getVersion());
-        validateAmend(request);
-        ReceiverRegion region = resolveReceiverRegion(request);
-        GoodsSummary goods = summarize(request.getGoodsList());
-        WaybillAmountCalculator.AmountResult amounts = amountCalculator.calculate(request);
-        List<BizWaybillGoods> oldGoods = goodsMapper.selectList(Wrappers.<BizWaybillGoods>lambdaQuery()
-                .eq(BizWaybillGoods::getWaybillId, waybill.getId())
-                .orderByAsc(BizWaybillGoods::getSeq));
-        List<WaybillFieldChangeVO> changes = diffAmend(waybill, oldGoods, request, region, amounts);
+
+        Set<String> fields = new LinkedHashSet<>(present);
+        fields.retainAll(AMENDABLE_FIELDS);
+        if (fields.isEmpty()) {
+            throw new BizException("未检测到任何修改");
+        }
+        validateAmend(request, fields);
+
+        ReceiverRegion region = fields.stream().anyMatch(REGION_FIELDS::contains)
+                ? resolveReceiverRegion(request) : null;
+        List<WaybillSaveRequest.GoodsItem> goodsItems = fields.contains("goodsList")
+                ? (request.getGoodsList() == null ? new ArrayList<>() : request.getGoodsList()) : null;
+        GoodsSummary goods = goodsItems == null ? null : summarize(goodsItems);
+        boolean recalc = fields.stream().anyMatch(FEE_FIELDS::contains) || fields.contains("payMethod");
+        WaybillAmountCalculator.AmountResult amounts = recalc ? calculatePatch(waybill, request, fields) : null;
+
+        List<BizWaybillGoods> oldGoods = goodsItems == null ? new ArrayList<>()
+                : goodsMapper.selectList(Wrappers.<BizWaybillGoods>lambdaQuery()
+                        .eq(BizWaybillGoods::getWaybillId, waybill.getId())
+                        .orderByAsc(BizWaybillGoods::getSeq));
+        List<WaybillFieldChangeVO> changes = diffAmend(waybill, oldGoods, request, fields, region, amounts, goodsItems);
         if (changes.isEmpty()) {
             throw new BizException("未检测到任何修改");
         }
         Map<String, Object> before = snapshot(waybill);
 
         UpdateWrapper<BizWaybill> update = Wrappers.<BizWaybill>update();
-        update.eq("id", waybill.getId())
-                .eq("update_time", version)
-                .set("sender_company", trimToNull(request.getSenderCompany()))
-                .set("sender_name", request.getSenderName().trim())
-                .set("sender_phone", request.getSenderPhone().trim())
-                .set("sender_address", request.getSenderAddress().trim())
-                .set("receiver_company", trimToNull(request.getReceiverCompany()))
-                .set("receiver_name", request.getReceiverName().trim())
-                .set("receiver_phone", request.getReceiverPhone().trim())
-                .set("receiver_province_code", region.provinceCode())
-                .set("receiver_province_name", region.provinceName())
-                .set("receiver_city_code", region.cityCode())
-                .set("receiver_city_name", region.cityName())
-                .set("receiver_district_code", region.districtCode())
-                .set("receiver_district_name", region.districtName())
-                .set("receiver_address", request.getReceiverAddress().trim())
-                .set("goods_name", goods.name())
-                .set("goods_type", goods.type())
-                .set("package_type", goods.packageType())
-                .set("quantity", goods.quantity())
-                .set("weight", goods.weight())
-                .set("volume", goods.volume())
-                .set("goods_remark", goods.remark())
-                .set("pay_method", request.getPayMethod())
-                .set("freight_fee", money(request.getFreightFee()))
-                .set("delivery_fee", money(request.getDeliveryFee()))
-                .set("pickup_fee", money(request.getPickupFee()))
-                .set("other_fee", money(request.getOtherFee()))
-                .set("receipt_fee", money(request.getReceiptFee()))
-                .set("make_bill_fee", money(request.getMakeBillFee()))
-                .set("insurance_fee", money(request.getInsuranceFee()))
-                .set("total_fee", amounts.totalFee())
-                .set("cash_back", money(request.getCashBack()))
-                .set("owe_back", money(request.getOweBack()))
-                .set("rebate_total", amounts.rebateTotal())
-                .set("valid_freight", amounts.validFreight())
-                .set("prepaid_fee", amounts.prepaidFee())
-                .set("collect_fee", amounts.collectFee())
-                .set("monthly_fee", amounts.monthlyFee())
-                .set("return_fee", amounts.returnFee())
-                .set("delivery_method", request.getDeliveryMethod())
-                .set("cod_amount", money(request.getCodAmount()))
-                .set("payee_name", trimToNull(request.getPayeeName()))
-                .set("bank_name", trimToNull(request.getBankName()))
-                .set("bank_card_no", trimToNull(request.getBankCardNo()))
-                .set("remark", trimToNull(request.getRemark()))
-                .set("update_by", requireUserId(context));
+        update.eq("id", waybill.getId()).eq("update_time", version);
+        applyAmendSets(update, request, fields);
+        if (region != null) {
+            update.set("receiver_province_code", region.provinceCode())
+                    .set("receiver_province_name", region.provinceName())
+                    .set("receiver_city_code", region.cityCode())
+                    .set("receiver_city_name", region.cityName())
+                    .set("receiver_district_code", region.districtCode())
+                    .set("receiver_district_name", region.districtName());
+        }
+        if (goods != null) {
+            update.set("goods_name", goods.name())
+                    .set("goods_type", goods.type())
+                    .set("package_type", goods.packageType())
+                    .set("quantity", goods.quantity())
+                    .set("weight", goods.weight())
+                    .set("volume", goods.volume())
+                    .set("goods_remark", goods.remark());
+        }
+        if (amounts != null) {
+            update.set("total_fee", amounts.totalFee())
+                    .set("rebate_total", amounts.rebateTotal())
+                    .set("valid_freight", amounts.validFreight())
+                    .set("prepaid_fee", amounts.prepaidFee())
+                    .set("collect_fee", amounts.collectFee())
+                    .set("monthly_fee", amounts.monthlyFee())
+                    .set("return_fee", amounts.returnFee());
+        }
+        update.set("update_by", requireUserId(context));
         int rows = waybillMapper.update(null, update);
         if (rows == 0) {
             throw new BizException(409, "运单已被他人修改，请刷新后重试");
         }
-        replaceGoods(waybill.getId(), waybill.getDeptId(), request.getGoodsList(), oldGoods);
+        if (goodsItems != null) {
+            replaceGoods(waybill.getId(), waybill.getDeptId(), goodsItems, oldGoods);
+        }
         BizWaybill updated = waybillMapper.selectById(waybill.getId());
         Map<String, Object> after = snapshot(updated);
         after.put("changes", changes);
@@ -366,6 +380,104 @@ public class WaybillService {
         vo.setWaybill(updated);
         vo.setChanges(changes);
         return vo;
+    }
+
+    /** 只把 payload 中出现的标量字段写入 SET；清空即写 NULL */
+    private void applyAmendSets(UpdateWrapper<BizWaybill> update, WaybillAmendRequest request, Set<String> fields) {
+        if (fields.contains("senderCompany")) {
+            update.set("sender_company", trimToNull(request.getSenderCompany()));
+        }
+        if (fields.contains("senderName")) {
+            update.set("sender_name", trimToNull(request.getSenderName()));
+        }
+        if (fields.contains("senderPhone")) {
+            update.set("sender_phone", trimToNull(request.getSenderPhone()));
+        }
+        if (fields.contains("senderAddress")) {
+            update.set("sender_address", trimToNull(request.getSenderAddress()));
+        }
+        if (fields.contains("receiverCompany")) {
+            update.set("receiver_company", trimToNull(request.getReceiverCompany()));
+        }
+        if (fields.contains("receiverName")) {
+            update.set("receiver_name", trimToNull(request.getReceiverName()));
+        }
+        if (fields.contains("receiverPhone")) {
+            update.set("receiver_phone", trimToNull(request.getReceiverPhone()));
+        }
+        if (fields.contains("receiverAddress")) {
+            update.set("receiver_address", trimToNull(request.getReceiverAddress()));
+        }
+        if (fields.contains("payMethod")) {
+            update.set("pay_method", request.getPayMethod());
+        }
+        if (fields.contains("deliveryMethod")) {
+            update.set("delivery_method", request.getDeliveryMethod());
+        }
+        if (fields.contains("freightFee")) {
+            update.set("freight_fee", moneyOrNull(request.getFreightFee()));
+        }
+        if (fields.contains("deliveryFee")) {
+            update.set("delivery_fee", moneyOrNull(request.getDeliveryFee()));
+        }
+        if (fields.contains("pickupFee")) {
+            update.set("pickup_fee", moneyOrNull(request.getPickupFee()));
+        }
+        if (fields.contains("otherFee")) {
+            update.set("other_fee", moneyOrNull(request.getOtherFee()));
+        }
+        if (fields.contains("receiptFee")) {
+            update.set("receipt_fee", moneyOrNull(request.getReceiptFee()));
+        }
+        if (fields.contains("makeBillFee")) {
+            update.set("make_bill_fee", moneyOrNull(request.getMakeBillFee()));
+        }
+        if (fields.contains("insuranceFee")) {
+            update.set("insurance_fee", moneyOrNull(request.getInsuranceFee()));
+        }
+        if (fields.contains("cashBack")) {
+            update.set("cash_back", moneyOrNull(request.getCashBack()));
+        }
+        if (fields.contains("oweBack")) {
+            update.set("owe_back", moneyOrNull(request.getOweBack()));
+        }
+        if (fields.contains("codAmount")) {
+            update.set("cod_amount", moneyOrNull(request.getCodAmount()));
+        }
+        if (fields.contains("payeeName")) {
+            update.set("payee_name", trimToNull(request.getPayeeName()));
+        }
+        if (fields.contains("bankName")) {
+            update.set("bank_name", trimToNull(request.getBankName()));
+        }
+        if (fields.contains("bankCardNo")) {
+            update.set("bank_card_no", trimToNull(request.getBankCardNo()));
+        }
+        if (fields.contains("remark")) {
+            update.set("remark", trimToNull(request.getRemark()));
+        }
+    }
+
+    /** 金额派生：以「payload 优先、未出现取库中原值」拼出有效入参后交给计算器 */
+    private WaybillAmountCalculator.AmountResult calculatePatch(BizWaybill waybill, WaybillAmendRequest request,
+                                                                Set<String> fields) {
+        WaybillSaveRequest effective = new WaybillSaveRequest();
+        effective.setFreightFee(fields.contains("freightFee") ? request.getFreightFee() : waybill.getFreightFee());
+        effective.setDeliveryFee(fields.contains("deliveryFee") ? request.getDeliveryFee() : waybill.getDeliveryFee());
+        effective.setPickupFee(fields.contains("pickupFee") ? request.getPickupFee() : waybill.getPickupFee());
+        effective.setOtherFee(fields.contains("otherFee") ? request.getOtherFee() : waybill.getOtherFee());
+        effective.setReceiptFee(fields.contains("receiptFee") ? request.getReceiptFee() : waybill.getReceiptFee());
+        effective.setMakeBillFee(fields.contains("makeBillFee") ? request.getMakeBillFee() : waybill.getMakeBillFee());
+        effective.setInsuranceFee(fields.contains("insuranceFee") ? request.getInsuranceFee() : waybill.getInsuranceFee());
+        effective.setCashBack(fields.contains("cashBack") ? request.getCashBack() : waybill.getCashBack());
+        effective.setOweBack(fields.contains("oweBack") ? request.getOweBack() : waybill.getOweBack());
+        effective.setDeclaredValue(waybill.getDeclaredValue());
+        effective.setPayMethod(fields.contains("payMethod") ? request.getPayMethod() : waybill.getPayMethod());
+        effective.setPrepaidFee(fields.contains("prepaidFee") ? request.getPrepaidFee() : waybill.getPrepaidFee());
+        effective.setCollectFee(fields.contains("collectFee") ? request.getCollectFee() : waybill.getCollectFee());
+        effective.setMonthlyFee(fields.contains("monthlyFee") ? request.getMonthlyFee() : waybill.getMonthlyFee());
+        effective.setReturnFee(fields.contains("returnFee") ? request.getReturnFee() : waybill.getReturnFee());
+        return amountCalculator.calculate(effective);
     }
 
     /** 可选开单网点：管理范围 + 启用 + 分拨中心/网点 + 允许发货 */
@@ -446,86 +558,46 @@ public class WaybillService {
         return label == null ? "未知状态(" + status + ")" : label;
     }
 
-    private void validateAmend(WaybillAmendRequest request) {
+    /** patch 校验：只校验 payload 里出现的字段；不再拦截空值（留空即置空） */
+    private void validateAmend(WaybillAmendRequest request, Set<String> fields) {
         List<String> errors = new ArrayList<>();
-        if (!StringUtils.hasText(request.getSenderName())) {
-            errors.add("发货人不能为空");
-        }
-        if (!StringUtils.hasText(request.getSenderPhone())) {
-            errors.add("发货电话不能为空");
-        }
-        if (!StringUtils.hasText(request.getSenderAddress())) {
-            errors.add("发货地址不能为空");
-        }
-        if (!StringUtils.hasText(request.getReceiverName())) {
-            errors.add("收货人不能为空");
-        }
-        if (!StringUtils.hasText(request.getReceiverPhone())) {
-            errors.add("收货电话不能为空");
-        }
-        if (!StringUtils.hasText(request.getReceiverAddress())) {
-            errors.add("收货地址不能为空");
-        }
-        if (!StringUtils.hasText(request.getReceiverProvinceCode())
-                || !StringUtils.hasText(request.getReceiverCityCode())
-                || !StringUtils.hasText(request.getReceiverDistrictCode())) {
-            errors.add("收货省、市、区县必须选择到区县级");
-        }
-        if (request.getPayMethod() == null) {
-            errors.add("请选择支付方式");
-        } else if (!WaybillEnums.PayMethod.isValid(request.getPayMethod())) {
+        if (fields.contains("payMethod") && request.getPayMethod() != null
+                && !WaybillEnums.PayMethod.isValid(request.getPayMethod())) {
             errors.add("支付方式码值非法");
         }
-        if (request.getFreightFee() == null) {
-            errors.add("运费不能为空");
-        } else if (request.getFreightFee().compareTo(BigDecimal.ZERO) < 0) {
-            errors.add("运费不能小于0");
-        }
-        if (request.getDeliveryMethod() == null) {
-            errors.add("请选择送货方式");
-        } else if (!WaybillEnums.DeliveryMethod.isValid(request.getDeliveryMethod())) {
+        if (fields.contains("deliveryMethod") && request.getDeliveryMethod() != null
+                && !WaybillEnums.DeliveryMethod.isValid(request.getDeliveryMethod())) {
             errors.add("送货方式码值非法");
-        } else if (request.getDeliveryMethod() == 1 || request.getDeliveryMethod() == 3) {
-            if (request.getDeliveryFee() == null) {
-                errors.add("送货方式为送货或大车直送时，送货费不能为空");
-            } else if (request.getDeliveryFee().compareTo(BigDecimal.ZERO) < 0) {
-                errors.add("送货费不能小于0");
+        }
+        for (String key : FEE_FIELDS) {
+            BigDecimal value = feeValue(request, key);
+            if (value != null && value.compareTo(BigDecimal.ZERO) < 0) {
+                errors.add(feeLabel(key) + "不能小于0");
             }
         }
-        if (request.getGoodsList() == null || request.getGoodsList().isEmpty()) {
-            errors.add("请至少录入一行货物明细");
-        } else {
+        if (fields.contains("codAmount") && request.getCodAmount() != null
+                && request.getCodAmount().compareTo(BigDecimal.ZERO) < 0) {
+            errors.add("代收货款不能小于0");
+        }
+        if (fields.contains("goodsList") && request.getGoodsList() != null) {
             for (int i = 0; i < request.getGoodsList().size(); i++) {
                 WaybillSaveRequest.GoodsItem item = request.getGoodsList().get(i);
-                String prefix = "第" + (i + 1) + "行货物";
-                if (item == null || !StringUtils.hasText(item.getGoodsName())) {
-                    errors.add(prefix + "名称不能为空");
+                if (item == null) {
                     continue;
                 }
-                if (item.getQuantity() == null || item.getQuantity() < 1) {
-                    errors.add(prefix + "件数必须为大于等于1的整数");
+                String prefix = "第" + (i + 1) + "行货物";
+                if (item.getQuantity() != null && item.getQuantity() < 0) {
+                    errors.add(prefix + "件数不能小于0");
                 }
-                if (item.getWeight() == null || item.getWeight().compareTo(BigDecimal.ZERO) <= 0) {
-                    errors.add(prefix + "重量必须大于0");
+                if (item.getWeight() != null && item.getWeight().compareTo(BigDecimal.ZERO) < 0) {
+                    errors.add(prefix + "重量不能小于0");
                 }
-                if (item.getVolume() == null || item.getVolume().compareTo(BigDecimal.ZERO) <= 0) {
-                    errors.add(prefix + "体积必须大于0");
+                if (item.getVolume() != null && item.getVolume().compareTo(BigDecimal.ZERO) < 0) {
+                    errors.add(prefix + "体积不能小于0");
                 }
             }
         }
-        BigDecimal cod = request.getCodAmount() == null ? BigDecimal.ZERO : request.getCodAmount();
-        if (cod.compareTo(BigDecimal.ZERO) > 0) {
-            if (!StringUtils.hasText(request.getPayeeName())) {
-                errors.add("代收货款大于0时，收款人不能为空");
-            }
-            if (!StringUtils.hasText(request.getBankName())) {
-                errors.add("代收货款大于0时，开户行不能为空");
-            }
-            if (!StringUtils.hasText(request.getBankCardNo())) {
-                errors.add("代收货款大于0时，银行卡号不能为空");
-            }
-        }
-        if (request.getRemark() != null && request.getRemark().length() > 500) {
+        if (fields.contains("remark") && request.getRemark() != null && request.getRemark().length() > 500) {
             errors.add("备注不能超过500字");
         }
         if (!errors.isEmpty()) {
@@ -533,103 +605,194 @@ public class WaybillService {
         }
     }
 
-    /** 字段级 diff（方案 8.5）：只比较可改白名单字段；货物明细按行比较 */
+    private BigDecimal feeValue(WaybillAmendRequest request, String key) {
+        return switch (key) {
+            case "freightFee" -> request.getFreightFee();
+            case "deliveryFee" -> request.getDeliveryFee();
+            case "pickupFee" -> request.getPickupFee();
+            case "otherFee" -> request.getOtherFee();
+            case "receiptFee" -> request.getReceiptFee();
+            case "makeBillFee" -> request.getMakeBillFee();
+            case "insuranceFee" -> request.getInsuranceFee();
+            case "cashBack" -> request.getCashBack();
+            case "oweBack" -> request.getOweBack();
+            default -> null;
+        };
+    }
+
+    private String feeLabel(String key) {
+        return switch (key) {
+            case "freightFee" -> "运费";
+            case "deliveryFee" -> "送货费";
+            case "pickupFee" -> "提货费";
+            case "otherFee" -> "其他费";
+            case "receiptFee" -> "回单费";
+            case "makeBillFee" -> "制单费";
+            case "insuranceFee" -> "保费";
+            case "cashBack" -> "现返";
+            case "oweBack" -> "欠返";
+            default -> key;
+        };
+    }
+
+    /**
+     * 字段级 diff（方案 8.5）：只比较 payload 中出现的字段。
+     * region/goodsItems 为 null 表示该组未参与本次改单；amounts 为 null 表示不重算派生金额。
+     */
     private List<WaybillFieldChangeVO> diffAmend(BizWaybill waybill, List<BizWaybillGoods> oldGoods,
-                                                 WaybillAmendRequest request, ReceiverRegion region,
-                                                 WaybillAmountCalculator.AmountResult amounts) {
+                                                 WaybillAmendRequest request, Set<String> fields,
+                                                 ReceiverRegion region,
+                                                 WaybillAmountCalculator.AmountResult amounts,
+                                                 List<WaybillSaveRequest.GoodsItem> goodsItems) {
         List<WaybillFieldChangeVO> changes = new ArrayList<>();
-        addChange(changes, "senderCompany", "发货单位", waybill.getSenderCompany(),
-                trimToNull(request.getSenderCompany()));
-        addChange(changes, "senderName", "发货人", waybill.getSenderName(),
-                trimToNull(request.getSenderName()));
-        addChange(changes, "senderPhone", "发货电话", waybill.getSenderPhone(),
-                trimToNull(request.getSenderPhone()));
-        addChange(changes, "senderAddress", "发货地址", waybill.getSenderAddress(),
-                trimToNull(request.getSenderAddress()));
-        addChange(changes, "receiverCompany", "收货单位", waybill.getReceiverCompany(),
-                trimToNull(request.getReceiverCompany()));
-        addChange(changes, "receiverName", "收货人", waybill.getReceiverName(),
-                trimToNull(request.getReceiverName()));
-        addChange(changes, "receiverPhone", "收货电话", waybill.getReceiverPhone(),
-                trimToNull(request.getReceiverPhone()));
-        addChange(changes, "receiverProvinceName", "收货省", waybill.getReceiverProvinceName(),
-                region.provinceName());
-        addChange(changes, "receiverCityName", "收货市", waybill.getReceiverCityName(),
-                region.cityName());
-        addChange(changes, "receiverDistrictName", "收货区县", waybill.getReceiverDistrictName(),
-                region.districtName());
-        addChange(changes, "receiverAddress", "收货地址", waybill.getReceiverAddress(),
-                trimToNull(request.getReceiverAddress()));
-
-        addChange(changes, "freightFee", "运费", moneyText(waybill.getFreightFee()),
-                moneyText(request.getFreightFee()));
-        addChange(changes, "deliveryFee", "送货费", moneyText(waybill.getDeliveryFee()),
-                moneyText(request.getDeliveryFee()));
-        addChange(changes, "pickupFee", "提货费", moneyText(waybill.getPickupFee()),
-                moneyText(request.getPickupFee()));
-        addChange(changes, "otherFee", "其他费", moneyText(waybill.getOtherFee()),
-                moneyText(request.getOtherFee()));
-        addChange(changes, "receiptFee", "回单费", moneyText(waybill.getReceiptFee()),
-                moneyText(request.getReceiptFee()));
-        addChange(changes, "makeBillFee", "制单费", moneyText(waybill.getMakeBillFee()),
-                moneyText(request.getMakeBillFee()));
-        addChange(changes, "insuranceFee", "保费", moneyText(waybill.getInsuranceFee()),
-                moneyText(request.getInsuranceFee()));
-        addChange(changes, "cashBack", "现返", moneyText(waybill.getCashBack()),
-                moneyText(request.getCashBack()));
-        addChange(changes, "oweBack", "欠返", moneyText(waybill.getOweBack()),
-                moneyText(request.getOweBack()));
-        addChange(changes, "codAmount", "代收货款", moneyText(waybill.getCodAmount()),
-                moneyText(request.getCodAmount()));
-        addChange(changes, "totalFee", "运费合计", moneyText(waybill.getTotalFee()),
-                moneyText(amounts.totalFee()));
-        addChange(changes, "rebateTotal", "返款合计", moneyText(waybill.getRebateTotal()),
-                moneyText(amounts.rebateTotal()));
-        addChange(changes, "validFreight", "有效运费", moneyText(waybill.getValidFreight()),
-                moneyText(amounts.validFreight()));
-        addChange(changes, "prepaidFee", "现付运费", moneyText(waybill.getPrepaidFee()),
-                moneyText(amounts.prepaidFee()));
-        addChange(changes, "collectFee", "到付运费", moneyText(waybill.getCollectFee()),
-                moneyText(amounts.collectFee()));
-        addChange(changes, "monthlyFee", "月结运费", moneyText(waybill.getMonthlyFee()),
-                moneyText(amounts.monthlyFee()));
-        addChange(changes, "returnFee", "回付运费", moneyText(waybill.getReturnFee()),
-                moneyText(amounts.returnFee()));
-
-        addChange(changes, "payMethod", "支付方式", payMethodText(waybill.getPayMethod()),
-                payMethodText(request.getPayMethod()));
-        addChange(changes, "deliveryMethod", "送货方式", deliveryMethodText(waybill.getDeliveryMethod()),
-                deliveryMethodText(request.getDeliveryMethod()));
-        addChange(changes, "payeeName", "收款人", waybill.getPayeeName(), trimToNull(request.getPayeeName()));
-        addChange(changes, "bankName", "开户行", waybill.getBankName(), trimToNull(request.getBankName()));
-        addChange(changes, "bankCardNo", "银行卡号", maskCard(waybill.getBankCardNo()),
-                maskCard(request.getBankCardNo()));
-        addChange(changes, "remark", "备注", waybill.getRemark(), trimToNull(request.getRemark()));
-
-        List<WaybillSaveRequest.GoodsItem> newRows = request.getGoodsList();
-        if (oldGoods.size() != newRows.size()) {
-            addChange(changes, "goodsRowCount", "货物明细行数",
-                    String.valueOf(oldGoods.size()), String.valueOf(newRows.size()));
+        if (fields.contains("senderCompany")) {
+            addChange(changes, "senderCompany", "发货单位", waybill.getSenderCompany(),
+                    trimToNull(request.getSenderCompany()));
         }
-        int rowCount = Math.min(oldGoods.size(), newRows.size());
-        for (int i = 0; i < rowCount; i++) {
-            BizWaybillGoods old = oldGoods.get(i);
-            WaybillSaveRequest.GoodsItem item = newRows.get(i);
-            String prefix = "货物明细第" + (i + 1) + "行·";
-            addChange(changes, "goods[" + i + "].goodsName", prefix + "名称",
-                    old.getGoodsName(), trimToNull(item.getGoodsName()));
-            addChange(changes, "goods[" + i + "].goodsType", prefix + "类型",
-                    old.getGoodsType(), trimToNull(item.getGoodsType()));
-            addChange(changes, "goods[" + i + "].packageType", prefix + "包装",
-                    old.getPackageType(), trimToNull(item.getPackageType()));
-            addChange(changes, "goods[" + i + "].quantity", prefix + "件数",
-                    String.valueOf(old.getQuantity()), String.valueOf(item.getQuantity()));
-            addChange(changes, "goods[" + i + "].weight", prefix + "重量(kg)",
-                    scaleText(old.getWeight()), scaleText(item.getWeight()));
-            addChange(changes, "goods[" + i + "].volume", prefix + "体积(m³)",
-                    scaleText(old.getVolume()), scaleText(item.getVolume()));
-            addChange(changes, "goods[" + i + "].goodsRemark", prefix + "备注",
-                    old.getGoodsRemark(), trimToNull(item.getGoodsRemark()));
+        if (fields.contains("senderName")) {
+            addChange(changes, "senderName", "发货人", waybill.getSenderName(),
+                    trimToNull(request.getSenderName()));
+        }
+        if (fields.contains("senderPhone")) {
+            addChange(changes, "senderPhone", "发货电话", waybill.getSenderPhone(),
+                    trimToNull(request.getSenderPhone()));
+        }
+        if (fields.contains("senderAddress")) {
+            addChange(changes, "senderAddress", "发货地址", waybill.getSenderAddress(),
+                    trimToNull(request.getSenderAddress()));
+        }
+        if (fields.contains("receiverCompany")) {
+            addChange(changes, "receiverCompany", "收货单位", waybill.getReceiverCompany(),
+                    trimToNull(request.getReceiverCompany()));
+        }
+        if (fields.contains("receiverName")) {
+            addChange(changes, "receiverName", "收货人", waybill.getReceiverName(),
+                    trimToNull(request.getReceiverName()));
+        }
+        if (fields.contains("receiverPhone")) {
+            addChange(changes, "receiverPhone", "收货电话", waybill.getReceiverPhone(),
+                    trimToNull(request.getReceiverPhone()));
+        }
+        if (region != null) {
+            addChange(changes, "receiverProvinceName", "收货省", waybill.getReceiverProvinceName(),
+                    region.provinceName());
+            addChange(changes, "receiverCityName", "收货市", waybill.getReceiverCityName(),
+                    region.cityName());
+            addChange(changes, "receiverDistrictName", "收货区县", waybill.getReceiverDistrictName(),
+                    region.districtName());
+        }
+        if (fields.contains("receiverAddress")) {
+            addChange(changes, "receiverAddress", "收货地址", waybill.getReceiverAddress(),
+                    trimToNull(request.getReceiverAddress()));
+        }
+
+        if (fields.contains("freightFee")) {
+            addChange(changes, "freightFee", "运费", moneyText(waybill.getFreightFee()),
+                    moneyText(request.getFreightFee()));
+        }
+        if (fields.contains("deliveryFee")) {
+            addChange(changes, "deliveryFee", "送货费", moneyText(waybill.getDeliveryFee()),
+                    moneyText(request.getDeliveryFee()));
+        }
+        if (fields.contains("pickupFee")) {
+            addChange(changes, "pickupFee", "提货费", moneyText(waybill.getPickupFee()),
+                    moneyText(request.getPickupFee()));
+        }
+        if (fields.contains("otherFee")) {
+            addChange(changes, "otherFee", "其他费", moneyText(waybill.getOtherFee()),
+                    moneyText(request.getOtherFee()));
+        }
+        if (fields.contains("receiptFee")) {
+            addChange(changes, "receiptFee", "回单费", moneyText(waybill.getReceiptFee()),
+                    moneyText(request.getReceiptFee()));
+        }
+        if (fields.contains("makeBillFee")) {
+            addChange(changes, "makeBillFee", "制单费", moneyText(waybill.getMakeBillFee()),
+                    moneyText(request.getMakeBillFee()));
+        }
+        if (fields.contains("insuranceFee")) {
+            addChange(changes, "insuranceFee", "保费", moneyText(waybill.getInsuranceFee()),
+                    moneyText(request.getInsuranceFee()));
+        }
+        if (fields.contains("cashBack")) {
+            addChange(changes, "cashBack", "现返", moneyText(waybill.getCashBack()),
+                    moneyText(request.getCashBack()));
+        }
+        if (fields.contains("oweBack")) {
+            addChange(changes, "oweBack", "欠返", moneyText(waybill.getOweBack()),
+                    moneyText(request.getOweBack()));
+        }
+        if (fields.contains("codAmount")) {
+            addChange(changes, "codAmount", "代收货款", moneyText(waybill.getCodAmount()),
+                    moneyText(request.getCodAmount()));
+        }
+        if (amounts != null) {
+            addChange(changes, "totalFee", "运费合计", moneyText(waybill.getTotalFee()),
+                    moneyText(amounts.totalFee()));
+            addChange(changes, "rebateTotal", "返款合计", moneyText(waybill.getRebateTotal()),
+                    moneyText(amounts.rebateTotal()));
+            addChange(changes, "validFreight", "有效运费", moneyText(waybill.getValidFreight()),
+                    moneyText(amounts.validFreight()));
+            addChange(changes, "prepaidFee", "现付运费", moneyText(waybill.getPrepaidFee()),
+                    moneyText(amounts.prepaidFee()));
+            addChange(changes, "collectFee", "到付运费", moneyText(waybill.getCollectFee()),
+                    moneyText(amounts.collectFee()));
+            addChange(changes, "monthlyFee", "月结运费", moneyText(waybill.getMonthlyFee()),
+                    moneyText(amounts.monthlyFee()));
+            addChange(changes, "returnFee", "回付运费", moneyText(waybill.getReturnFee()),
+                    moneyText(amounts.returnFee()));
+        }
+
+        if (fields.contains("payMethod")) {
+            addChange(changes, "payMethod", "支付方式", payMethodText(waybill.getPayMethod()),
+                    payMethodText(request.getPayMethod()));
+        }
+        if (fields.contains("deliveryMethod")) {
+            addChange(changes, "deliveryMethod", "送货方式", deliveryMethodText(waybill.getDeliveryMethod()),
+                    deliveryMethodText(request.getDeliveryMethod()));
+        }
+        if (fields.contains("payeeName")) {
+            addChange(changes, "payeeName", "收款人", waybill.getPayeeName(), trimToNull(request.getPayeeName()));
+        }
+        if (fields.contains("bankName")) {
+            addChange(changes, "bankName", "开户行", waybill.getBankName(), trimToNull(request.getBankName()));
+        }
+        if (fields.contains("bankCardNo")) {
+            addChange(changes, "bankCardNo", "银行卡号", maskCard(waybill.getBankCardNo()),
+                    maskCard(request.getBankCardNo()));
+        }
+        if (fields.contains("remark")) {
+            addChange(changes, "remark", "备注", waybill.getRemark(), trimToNull(request.getRemark()));
+        }
+
+        if (goodsItems != null) {
+            if (oldGoods.size() != goodsItems.size()) {
+                addChange(changes, "goodsRowCount", "货物明细行数",
+                        String.valueOf(oldGoods.size()), String.valueOf(goodsItems.size()));
+            }
+            int rowCount = Math.min(oldGoods.size(), goodsItems.size());
+            for (int i = 0; i < rowCount; i++) {
+                BizWaybillGoods old = oldGoods.get(i);
+                WaybillSaveRequest.GoodsItem item = goodsItems.get(i);
+                if (item == null) {
+                    continue;
+                }
+                String prefix = "货物明细第" + (i + 1) + "行·";
+                addChange(changes, "goods[" + i + "].goodsName", prefix + "名称",
+                        old.getGoodsName(), trimToNull(item.getGoodsName()));
+                addChange(changes, "goods[" + i + "].goodsType", prefix + "类型",
+                        old.getGoodsType(), trimToNull(item.getGoodsType()));
+                addChange(changes, "goods[" + i + "].packageType", prefix + "包装",
+                        old.getPackageType(), trimToNull(item.getPackageType()));
+                addChange(changes, "goods[" + i + "].quantity", prefix + "件数",
+                        String.valueOf(old.getQuantity()), String.valueOf(nzInt(item.getQuantity())));
+                addChange(changes, "goods[" + i + "].weight", prefix + "重量(kg)",
+                        scaleText(old.getWeight()), scaleText(nzDecimal(item.getWeight())));
+                addChange(changes, "goods[" + i + "].volume", prefix + "体积(m³)",
+                        scaleText(old.getVolume()), scaleText(nzDecimal(item.getVolume())));
+                addChange(changes, "goods[" + i + "].goodsRemark", prefix + "备注",
+                        old.getGoodsRemark(), trimToNull(item.getGoodsRemark()));
+            }
         }
         return changes;
     }
@@ -736,7 +899,20 @@ public class WaybillService {
     }
 
     private String moneyText(BigDecimal value) {
-        return value == null ? "0.00" : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+        return value == null ? "" : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    /** 金额落库：null 表示「置空」，非 null 才按两位小数写入 */
+    private BigDecimal moneyOrNull(BigDecimal value) {
+        return value == null ? null : value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private int nzInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private BigDecimal nzDecimal(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private String scaleText(BigDecimal value) {
@@ -896,10 +1072,15 @@ public class WaybillService {
         String type = null;
         String packageType = null;
         for (WaybillSaveRequest.GoodsItem item : items) {
-            quantity += item.getQuantity();
+            if (item == null) {
+                continue;
+            }
+            quantity += nzInt(item.getQuantity());
             weight = weight.add(scale3(item.getWeight()));
             volume = volume.add(scale3(item.getVolume()));
-            names.add(item.getGoodsName().trim());
+            if (StringUtils.hasText(item.getGoodsName())) {
+                names.add(item.getGoodsName().trim());
+            }
             if (type == null && StringUtils.hasText(item.getGoodsType())) {
                 type = item.getGoodsType().trim();
             }
@@ -944,10 +1125,10 @@ public class WaybillService {
             BizWaybillGoods row = i < existing.size() ? existing.get(i) : new BizWaybillGoods();
             row.setWaybillId(waybillId);
             row.setSeq(i + 1);
-            row.setGoodsName(item.getGoodsName().trim());
+            row.setGoodsName(item.getGoodsName() == null ? "" : item.getGoodsName().trim());
             row.setGoodsType(trimToNull(item.getGoodsType()));
             row.setPackageType(trimToNull(item.getPackageType()));
-            row.setQuantity(item.getQuantity());
+            row.setQuantity(nzInt(item.getQuantity()));
             row.setWeight(scale3(item.getWeight()));
             row.setVolume(scale3(item.getVolume()));
             row.setGoodsRemark(trimToNull(item.getGoodsRemark()));
@@ -1071,7 +1252,7 @@ public class WaybillService {
     }
 
     private BigDecimal scale3(BigDecimal value) {
-        return value.setScale(3, RoundingMode.HALF_UP);
+        return value == null ? new BigDecimal("0.000") : value.setScale(3, RoundingMode.HALF_UP);
     }
 
     private String trimToNull(String value) {

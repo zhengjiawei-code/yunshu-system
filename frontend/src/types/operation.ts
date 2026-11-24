@@ -362,34 +362,39 @@ export interface WaybillAmendResult {
 export interface WaybillAmendPayload {
   reason: string
   version: string
-  senderName: string
-  senderPhone: string
-  senderCompany?: string
-  senderAddress: string
-  receiverName: string
-  receiverPhone: string
-  receiverCompany?: string
-  receiverProvinceCode: string
-  receiverCityCode: string
-  receiverDistrictCode: string
-  receiverAddress: string
-  goodsList: GoodsItemPayload[]
-  payMethod: number
-  freightFee?: number
-  deliveryFee?: number
-  pickupFee?: number
-  otherFee?: number
-  receiptFee?: number
-  makeBillFee?: number
-  insuranceFee?: number
-  cashBack?: number
-  oweBack?: number
-  deliveryMethod: number
-  codAmount?: number
-  payeeName?: string
-  bankName?: string
-  bankCardNo?: string
-  remark?: string
+  /** patch 语义：只出现实际改动过的字段；清空用 null 显式提交 */
+  senderName?: string | null
+  senderPhone?: string | null
+  senderCompany?: string | null
+  senderAddress?: string | null
+  receiverName?: string | null
+  receiverPhone?: string | null
+  receiverCompany?: string | null
+  receiverProvinceCode?: string | null
+  receiverCityCode?: string | null
+  receiverDistrictCode?: string | null
+  receiverAddress?: string | null
+  goodsList?: GoodsItemPayload[]
+  payMethod?: number | null
+  freightFee?: number | null
+  deliveryFee?: number | null
+  pickupFee?: number | null
+  otherFee?: number | null
+  receiptFee?: number | null
+  makeBillFee?: number | null
+  insuranceFee?: number | null
+  cashBack?: number | null
+  oweBack?: number | null
+  prepaidFee?: number | null
+  collectFee?: number | null
+  monthlyFee?: number | null
+  returnFee?: number | null
+  deliveryMethod?: number | null
+  codAmount?: number | null
+  payeeName?: string | null
+  bankName?: string | null
+  bankCardNo?: string | null
+  remark?: string | null
 }
 
 /** 异步导出任务（D8） */

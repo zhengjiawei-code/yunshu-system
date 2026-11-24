@@ -50,10 +50,7 @@ public class WaybillAmountCalculator {
         BigDecimal valid = total.subtract(rebate).setScale(2, RoundingMode.HALF_UP);
 
         Integer payMethod = request.getPayMethod();
-        if (payMethod == null) {
-            throw new BizException("请选择支付方式");
-        }
-        if (payMethod < 1 || payMethod > 5) {
+        if (payMethod != null && (payMethod < 1 || payMethod > 5)) {
             throw new BizException("支付方式码值非法");
         }
 
@@ -61,25 +58,28 @@ public class WaybillAmountCalculator {
         BigDecimal collect = ZERO;
         BigDecimal monthly = ZERO;
         BigDecimal returnFee = ZERO;
-        switch (payMethod) {
-            case 1 -> prepaid = total;
-            case 2 -> collect = total;
-            case 3 -> monthly = total;
-            case 4 -> returnFee = total;
-            case 5 -> {
-                prepaid = nonNegative(request.getPrepaidFee(), "现付运费");
-                collect = nonNegative(request.getCollectFee(), "到付运费");
-                monthly = nonNegative(request.getMonthlyFee(), "月结运费");
-                returnFee = nonNegative(request.getReturnFee(), "回付运费");
-                BigDecimal sum = prepaid.add(collect).add(monthly).add(returnFee)
-                        .setScale(2, RoundingMode.HALF_UP);
-                if (sum.compareTo(total) != 0) {
-                    BigDecimal diff = total.subtract(sum).setScale(2, RoundingMode.HALF_UP);
-                    throw new BizException("支付方式为多笔付时，现付/到付/月结/回付四项合计必须等于运费合计，当前差额 "
-                            + diff.toPlainString());
+        // 改单允许清空支付方式：按未分配处理，四项均为 0
+        if (payMethod != null) {
+            switch (payMethod) {
+                case 1 -> prepaid = total;
+                case 2 -> collect = total;
+                case 3 -> monthly = total;
+                case 4 -> returnFee = total;
+                case 5 -> {
+                    prepaid = nonNegative(request.getPrepaidFee(), "现付运费");
+                    collect = nonNegative(request.getCollectFee(), "到付运费");
+                    monthly = nonNegative(request.getMonthlyFee(), "月结运费");
+                    returnFee = nonNegative(request.getReturnFee(), "回付运费");
+                    BigDecimal sum = prepaid.add(collect).add(monthly).add(returnFee)
+                            .setScale(2, RoundingMode.HALF_UP);
+                    if (sum.compareTo(total) != 0) {
+                        BigDecimal diff = total.subtract(sum).setScale(2, RoundingMode.HALF_UP);
+                        throw new BizException("支付方式为多笔付时，现付/到付/月结/回付四项合计必须等于运费合计，当前差额 "
+                                + diff.toPlainString());
+                    }
                 }
+                default -> throw new BizException("支付方式码值非法");
             }
-            default -> throw new BizException("支付方式码值非法");
         }
         return new AmountResult(total, rebate, valid, prepaid, collect, monthly, returnFee);
     }

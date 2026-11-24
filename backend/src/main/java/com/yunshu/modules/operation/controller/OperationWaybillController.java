@@ -1,5 +1,8 @@
 package com.yunshu.modules.operation.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yunshu.common.result.ApiResult;
 import com.yunshu.modules.operation.dto.WaybillAmendRequest;
 import com.yunshu.modules.operation.dto.WaybillListQuery;
@@ -35,8 +38,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 运营管理 · 开单揽收：目的地候选、路由候选、客户匹配、开单保存、预开单只读 */
 @Tag(name = "运营管理-开单揽收")
@@ -50,6 +55,7 @@ public class OperationWaybillController {
     private final RouteCandidateService routeCandidateService;
     private final CustomerMatchService customerMatchService;
     private final PreOrderService preOrderService;
+    private final ObjectMapper objectMapper;
 
     @Operation(summary = "可选开单网点（管理范围内的启用分拨中心/网点）")
     @GetMapping("/open-depts")
@@ -109,11 +115,14 @@ public class OperationWaybillController {
         return ApiResult.ok(waybillService.voidWaybill(id, request));
     }
 
-    @Operation(summary = "改单：白名单字段、状态 20–90、金额重算、字段级 diff 日志（一期直接生效）")
+    @Operation(summary = "改单：patch 语义，只写 payload 出现的字段；状态 20–90；金额重算；字段级 diff 日志")
     @PutMapping("/waybills/{id}/amend")
     public ApiResult<WaybillAmendVO> amend(@PathVariable Long id,
-                                          @RequestBody WaybillAmendRequest request) {
-        return ApiResult.ok(waybillService.amend(id, request));
+                                          @RequestBody JsonNode body) throws JsonProcessingException {
+        Set<String> present = new LinkedHashSet<>();
+        body.fieldNames().forEachRemaining(present::add);
+        WaybillAmendRequest request = objectMapper.treeToValue(body, WaybillAmendRequest.class);
+        return ApiResult.ok(waybillService.amend(id, request, present));
     }
 
     @Operation(summary = "预开单只读列表（本阶段占位）")

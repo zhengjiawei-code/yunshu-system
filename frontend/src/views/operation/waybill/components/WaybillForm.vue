@@ -68,17 +68,17 @@
               <span v-else class="ro-value">{{ text(model.senderCompany) }}</span>
             </div>
             <div class="field">
-              <span class="lbl"><i v-if="!readonly" class="star">*</i>发货人</span>
+              <span class="lbl">发货人</span>
               <el-input v-if="!readonly" v-model="model.senderName" size="small" />
               <span v-else class="ro-value">{{ text(model.senderName) }}</span>
             </div>
             <div class="field">
-              <span class="lbl"><i v-if="!readonly" class="star">*</i>发货电话</span>
+              <span class="lbl">发货电话</span>
               <el-input v-if="!readonly" v-model="model.senderPhone" size="small" />
               <span v-else class="ro-value">{{ text(model.senderPhone) }}</span>
             </div>
             <div class="field span2">
-              <span class="lbl"><i v-if="!readonly" class="star">*</i>发货地址</span>
+              <span class="lbl">发货地址</span>
               <el-input v-if="!readonly" v-model="model.senderAddress" size="small" />
               <span v-else class="ro-value" :title="model.senderAddress">{{ text(model.senderAddress) }}</span>
             </div>
@@ -94,17 +94,17 @@
               <span v-else class="ro-value">{{ text(model.receiverCompany) }}</span>
             </div>
             <div class="field">
-              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货人</span>
+              <span class="lbl">收货人</span>
               <el-input v-if="!readonly" v-model="model.receiverName" size="small" />
               <span v-else class="ro-value">{{ text(model.receiverName) }}</span>
             </div>
             <div class="field">
-              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货电话</span>
+              <span class="lbl">收货电话</span>
               <el-input v-if="!readonly" v-model="model.receiverPhone" size="small" />
               <span v-else class="ro-value">{{ text(model.receiverPhone) }}</span>
             </div>
             <div class="field span2">
-              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货地区</span>
+              <span class="lbl">收货地区</span>
               <div v-if="readonly" class="ro-value">{{ regionText }}</div>
               <div v-else class="region-selects">
                 <el-select
@@ -138,7 +138,7 @@
               </div>
             </div>
             <div class="field span2">
-              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货地址</span>
+              <span class="lbl">收货地址</span>
               <el-input v-if="!readonly" v-model="model.receiverAddress" size="small" />
               <span v-else class="ro-value" :title="model.receiverAddress">{{ text(model.receiverAddress) }}</span>
             </div>
@@ -160,7 +160,7 @@
         <el-table-column type="index" label="序号" width="48" align="center" />
         <el-table-column label="货物名称" min-width="150">
           <template #default="{ row }">
-            <el-input v-if="!readonly" v-model="row.goodsName" size="small" placeholder="必填" />
+            <el-input v-if="!readonly" v-model="row.goodsName" size="small" placeholder="选填" />
             <span v-else class="cell-text">{{ text(row.goodsName) }}</span>
           </template>
         </el-table-column>
@@ -296,7 +296,7 @@
         </div>
 
         <div class="field">
-          <span class="lbl"><i v-if="!readonly" class="star">*</i>支付方式</span>
+          <span class="lbl">支付方式</span>
           <el-select v-if="!readonly" v-model="model.payMethod" size="small" placeholder="请选择">
             <el-option v-for="item in PAY_METHOD_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
@@ -324,7 +324,7 @@
 
         <div class="grid two pay-extra">
           <div class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>送货方式</span>
+            <span class="lbl">送货方式</span>
             <el-select v-if="!readonly" v-model="model.deliveryMethod" size="small" placeholder="请选择">
               <el-option
                 v-for="item in DELIVERY_METHOD_OPTIONS"
@@ -375,17 +375,17 @@
         </div>
         <div class="field">
           <span class="lbl">收款人</span>
-          <el-input v-if="!readonly" v-model="model.payeeName" size="small" placeholder="代收>0 必填" />
+          <el-input v-if="!readonly" v-model="model.payeeName" size="small" placeholder="选填" />
           <span v-else class="ro-value">{{ text(model.payeeName) }}</span>
         </div>
         <div class="field">
           <span class="lbl">银行名称</span>
-          <el-input v-if="!readonly" v-model="model.bankName" size="small" placeholder="代收>0 必填" />
+          <el-input v-if="!readonly" v-model="model.bankName" size="small" placeholder="选填" />
           <span v-else class="ro-value">{{ text(model.bankName) }}</span>
         </div>
         <div class="field">
           <span class="lbl">银行卡号</span>
-          <el-input v-if="!readonly" v-model="model.bankCardNo" size="small" placeholder="代收>0 必填" />
+          <el-input v-if="!readonly" v-model="model.bankCardNo" size="small" placeholder="选填" />
           <span v-else class="ro-value">{{ maskCard(model.bankCardNo) }}</span>
         </div>
       </div>
@@ -715,12 +715,6 @@ onMounted(async () => {
   color: var(--color-text-regular);
   font-size: 12px;
   white-space: nowrap;
-}
-
-.star {
-  color: var(--color-danger);
-  font-style: normal;
-  margin-right: 1px;
 }
 
 .field :deep(.el-input),

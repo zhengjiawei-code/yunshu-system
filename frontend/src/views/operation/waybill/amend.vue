@@ -19,7 +19,7 @@
         <section class="card reason-card">
           <div class="sec-head">
             <span class="sec-title">改单原因</span>
-            <span class="reason-hint">必填，≤200 字；写入操作日志 action_type=6</span>
+            <span class="reason-hint">必填，≤200 字；仅提交实际改动字段，未改字段保持原值</span>
           </div>
           <el-input
             v-model="reason"
@@ -66,6 +66,53 @@ const form = reactive<WaybillFormModel>({})
 const goods = ref<Array<Partial<WaybillGoodsRecord>>>([])
 const reason = ref('')
 
+/** 文本列：提交时只带与原始值不同的项；清空按 null 显式提交 */
+const TEXT_KEYS = [
+  'senderCompany', 'senderName', 'senderPhone', 'senderAddress',
+  'receiverCompany', 'receiverName', 'receiverPhone',
+  'receiverProvinceCode', 'receiverCityCode', 'receiverDistrictCode', 'receiverAddress',
+  'payeeName', 'bankName', 'bankCardNo', 'remark'
+] as const
+/** 数值/码值列：同样只提交改动项，清空按 null 显式提交 */
+const NUMBER_KEYS = [
+  'payMethod', 'freightFee', 'deliveryFee', 'pickupFee', 'otherFee', 'receiptFee',
+  'makeBillFee', 'insuranceFee', 'cashBack', 'oweBack',
+  'prepaidFee', 'collectFee', 'monthlyFee', 'returnFee',
+  'deliveryMethod', 'codAmount'
+] as const
+
+const originalText = ref<Record<string, string | null>>({})
+const originalNumber = ref<Record<string, number | null>>({})
+const originalGoods = ref('')
+
+function textOf(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function numberOf(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isNaN(num) ? null : num
+}
+
+/** 货物明细整体作为一项提交：行内任一处变化即视为 goodsList 变更 */
+function normalizedGoods() {
+  return goods.value.map((row) => ({
+    goodsName: row.goodsName?.trim() || '',
+    goodsType: row.goodsType?.trim() || null,
+    packageType: row.packageType?.trim() || null,
+    quantity: Number(row.quantity ?? 0),
+    weight: Number(row.weight ?? 0),
+    volume: Number(row.volume ?? 0),
+    goodsRemark: row.goodsRemark?.trim() || null
+  }))
+}
+
+function goodsFingerprint(): string {
+  return JSON.stringify(normalizedGoods())
+}
+
+
 function waybillId(): number {
   return Number(route.params.id)
 }
@@ -82,6 +129,13 @@ async function loadDetail() {
     waybill.value = result.waybill
     Object.assign(form, result.waybill)
     goods.value = result.goods.map((item) => ({ ...item }))
+    originalText.value = Object.fromEntries(
+      TEXT_KEYS.map((key) => [key, textOf((form as Record<string, unknown>)[key])])
+    )
+    originalNumber.value = Object.fromEntries(
+      NUMBER_KEYS.map((key) => [key, numberOf((form as Record<string, unknown>)[key])])
+    )
+    originalGoods.value = goodsFingerprint()
   } catch {
     waybill.value = null
   } finally {
@@ -97,80 +151,36 @@ function goBack() {
 function validate(): string | undefined {
   if (!reason.value.trim()) return '请填写改单原因'
   if (reason.value.trim().length > 200) return '改单原因不能超过 200 字'
-  if (!form.senderName?.trim()) return '发货人不能为空'
-  if (!form.senderPhone?.trim()) return '发货电话不能为空'
-  if (!form.senderAddress?.trim()) return '发货地址不能为空'
-  if (!form.receiverName?.trim()) return '收货人不能为空'
-  if (!form.receiverPhone?.trim()) return '收货电话不能为空'
-  if (!form.receiverProvinceCode || !form.receiverCityCode || !form.receiverDistrictCode) {
-    return '收货省、市、区县必须选择到区县级'
-  }
-  if (!form.receiverAddress?.trim()) return '收货地址不能为空'
-  if (!form.payMethod) return '请选择支付方式'
-  if (!form.deliveryMethod) return '请选择送货方式'
-  if (form.freightFee === undefined || form.freightFee === null) return '运费不能为空'
-  if ((form.deliveryMethod === 1 || form.deliveryMethod === 3) && (form.deliveryFee === undefined || form.deliveryFee === null)) {
-    return '送货方式为送货或大车直送时，送货费不能为空'
-  }
-  if (!goods.value.length) return '请至少录入一行货物明细'
-  for (let i = 0; i < goods.value.length; i++) {
-    const row = goods.value[i]
-    const prefix = `第${i + 1}行货物`
-    if (!row.goodsName?.trim()) return `${prefix}名称不能为空`
-    if (!row.quantity || row.quantity < 1) return `${prefix}件数必须为大于等于1的整数`
-    if (!row.weight || Number(row.weight) <= 0) return `${prefix}重量必须大于0`
-    if (!row.volume || Number(row.volume) <= 0) return `${prefix}体积必须大于0`
-  }
-  const cod = Number(form.codAmount || 0)
-  if (cod > 0) {
-    if (!form.payeeName?.trim()) return '代收货款大于0时，收款人不能为空'
-    if (!form.bankName?.trim()) return '代收货款大于0时，开户行不能为空'
-    if (!form.bankCardNo?.trim()) return '代收货款大于0时，银行卡号不能为空'
-  }
   return undefined
 }
 
-function buildPayload(): WaybillAmendPayload {
-  return {
+/** 只收集「实际改过」的字段：与加载时的原值比较，清空按 null 显式提交 */
+function buildPayload(): { payload: WaybillAmendPayload; dirty: string[] } {
+  const payload: Record<string, unknown> = {
     reason: reason.value.trim(),
-    version: waybill.value?.updateTime || '',
-    senderName: form.senderName?.trim() || '',
-    senderPhone: form.senderPhone?.trim() || '',
-    senderCompany: form.senderCompany?.trim() || undefined,
-    senderAddress: form.senderAddress?.trim() || '',
-    receiverName: form.receiverName?.trim() || '',
-    receiverPhone: form.receiverPhone?.trim() || '',
-    receiverCompany: form.receiverCompany?.trim() || undefined,
-    receiverProvinceCode: form.receiverProvinceCode || '',
-    receiverCityCode: form.receiverCityCode || '',
-    receiverDistrictCode: form.receiverDistrictCode || '',
-    receiverAddress: form.receiverAddress?.trim() || '',
-    goodsList: goods.value.map((row) => ({
-      goodsName: row.goodsName?.trim() || '',
-      goodsType: row.goodsType?.trim() || undefined,
-      packageType: row.packageType?.trim() || undefined,
-      quantity: Number(row.quantity || 0),
-      weight: Number(row.weight || 0),
-      volume: Number(row.volume || 0),
-      goodsRemark: row.goodsRemark?.trim() || undefined
-    })),
-    payMethod: Number(form.payMethod),
-    freightFee: Number(form.freightFee || 0),
-    deliveryFee: Number(form.deliveryFee || 0),
-    pickupFee: Number(form.pickupFee || 0),
-    otherFee: Number(form.otherFee || 0),
-    receiptFee: Number(form.receiptFee || 0),
-    makeBillFee: Number(form.makeBillFee || 0),
-    insuranceFee: Number(form.insuranceFee || 0),
-    cashBack: Number(form.cashBack || 0),
-    oweBack: Number(form.oweBack || 0),
-    deliveryMethod: Number(form.deliveryMethod),
-    codAmount: Number(form.codAmount || 0),
-    payeeName: form.payeeName?.trim() || undefined,
-    bankName: form.bankName?.trim() || undefined,
-    bankCardNo: form.bankCardNo?.trim() || undefined,
-    remark: form.remark?.trim() || undefined
+    version: waybill.value?.updateTime || ''
   }
+  const source = form as Record<string, unknown>
+  const dirty: string[] = []
+  for (const key of TEXT_KEYS) {
+    const current = textOf(source[key])
+    if (current !== originalText.value[key]) {
+      payload[key] = current
+      dirty.push(key)
+    }
+  }
+  for (const key of NUMBER_KEYS) {
+    const current = numberOf(source[key])
+    if (current !== originalNumber.value[key]) {
+      payload[key] = current
+      dirty.push(key)
+    }
+  }
+  if (goodsFingerprint() !== originalGoods.value) {
+    payload.goodsList = normalizedGoods()
+    dirty.push('goodsList')
+  }
+  return { payload: payload as unknown as WaybillAmendPayload, dirty }
 }
 
 async function submit() {
@@ -180,9 +190,14 @@ async function submit() {
     return
   }
   if (!waybill.value?.id) return
+  const { payload, dirty } = buildPayload()
+  if (!dirty.length) {
+    ElMessage.warning('未检测到任何修改')
+    return
+  }
   submitting.value = true
   try {
-    await amendWaybill(waybill.value.id, buildPayload())
+    await amendWaybill(waybill.value.id, payload)
     ElMessage.success('改单成功')
     router.replace(`/operation/waybill/${waybill.value.id}`)
   } catch {

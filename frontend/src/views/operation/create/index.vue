@@ -355,61 +355,69 @@
         <section class="card fee-card">
           <div class="sec-head">
             <div class="sec-title">费用项</div>
-            <div class="fee-total">运费合计 <b>¥{{ money(totalCents) }}</b></div>
+            <span class="fee-hint">金额由服务端重算</span>
           </div>
-          <div class="fee-grid">
-            <label class="fee-cell"><span class="fee-lbl"><i class="star">*</i>运费</span>
-              <el-input-number
-                v-model="form.freightFee"
-                size="small"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                :class="{ 'is-empty': form.freightFee == null }"
-              />
-              <span class="std">标准 —</span>
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">现返</span>
-              <el-input-number v-model="form.cashBack" size="small" :min="0" :precision="2" :controls="false" />
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">欠返</span>
-              <el-input-number v-model="form.oweBack" size="small" :min="0" :precision="2" :controls="false" />
-            </label>
-            <label class="fee-cell"><span class="fee-lbl"><i v-if="deliveryFeeRequired" class="star">*</i>送货费</span>
-              <el-input-number
-                v-model="form.deliveryFee"
-                size="small"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                :class="{ 'is-empty': deliveryFeeRequired && form.deliveryFee == null }"
-              />
-              <span class="std">标准 —</span>
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">声明价值</span>
-              <el-input-number v-model="form.declaredValue" size="small" :min="0" :precision="2" :controls="false" />
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">保费</span>
-              <el-input-number v-model="form.insuranceFee" size="small" :min="0" :precision="2" :controls="false" />
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">提货费</span>
-              <el-input-number v-model="form.pickupFee" size="small" :min="0" :precision="2" :controls="false" />
-              <span class="std">标准 —</span>
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">其他费</span>
-              <el-input-number v-model="form.otherFee" size="small" :min="0" :precision="2" :controls="false" />
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">回单费</span>
-              <el-input-number v-model="form.receiptFee" size="small" :min="0" :precision="2" :controls="false" />
-            </label>
-            <label class="fee-cell"><span class="fee-lbl">制单费</span>
-              <el-input-number v-model="form.makeBillFee" size="small" :min="0" :precision="2" :controls="false" />
-            </label>
+          <div class="fee-groups">
+            <div class="fee-group">
+              <div class="fee-group-title">运输与返款</div>
+              <div class="fee-grid">
+                <label class="fee-cell"><span class="fee-lbl"><i class="star">*</i>运费</span>
+                  <el-input-number
+                    v-model="form.freightFee"
+                    size="small"
+                    :min="0"
+                    :precision="2"
+                    :controls="false"
+                    :class="{ 'is-empty': form.freightFee == null }"
+                  />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl"><i v-if="deliveryFeeRequired" class="star">*</i>送货费</span>
+                  <el-input-number
+                    v-model="form.deliveryFee"
+                    size="small"
+                    :min="0"
+                    :precision="2"
+                    :controls="false"
+                    :class="{ 'is-empty': deliveryFeeRequired && form.deliveryFee == null }"
+                  />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl">提货费</span>
+                  <el-input-number v-model="form.pickupFee" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl">现返</span>
+                  <el-input-number v-model="form.cashBack" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl">欠返</span>
+                  <el-input-number v-model="form.oweBack" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+              </div>
+            </div>
+
+            <div class="fee-group">
+              <div class="fee-group-title">其他费用</div>
+              <div class="fee-grid">
+                <label class="fee-cell"><span class="fee-lbl">其他费</span>
+                  <el-input-number v-model="form.otherFee" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl">回单费</span>
+                  <el-input-number v-model="form.receiptFee" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl">制单费</span>
+                  <el-input-number v-model="form.makeBillFee" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl">保费</span>
+                  <el-input-number v-model="form.insuranceFee" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+                <label class="fee-cell"><span class="fee-lbl">声明价值</span>
+                  <el-input-number v-model="form.declaredValue" size="small" :min="0" :precision="2" :controls="false" />
+                </label>
+              </div>
+            </div>
           </div>
           <div class="fee-foot">
-            <span>返款合计 <b>¥{{ money(rebateCents) }}</b></span>
-            <span :class="{ negative: validCents < 0 }">有效运费 <b>¥{{ money(validCents) }}</b>{{ validCents < 0 ? '（负值）' : '' }}</span>
-            <span class="fee-formula">返款合计=现返+欠返；有效运费=运费合计−返款合计</span>
+            <span>运费合计 <b>{{ money(totalCents) }}</b></span>
+            <span>返款合计 <b>{{ money(rebateCents) }}</b></span>
+            <span :class="{ negative: validCents < 0 }">有效运费 <b>{{ money(validCents) }}</b>{{ validCents < 0 ? '（负值）' : '' }}</span>
           </div>
         </section>
 
@@ -1749,39 +1757,44 @@ onBeforeUnmount(() => {
 }
 
 .goods-table .col-idx {
-  width: 3.5%;
+  width: 4%;
 }
 
 .goods-table .col-name {
-  width: 22%;
+  width: 19%;
 }
 
 .goods-table .col-type {
-  width: 10%;
+  width: 11%;
 }
 
 .goods-table .col-pack {
-  width: 10%;
+  width: 12%;
 }
 
 .goods-table .col-num {
-  width: 10%;
+  width: 9.5%;
 }
 
 .goods-table .col-qty {
-  width: 9%;
+  width: 8%;
 }
 
 .goods-table .col-remark {
-  width: 21.5%;
+  width: 22%;
 }
 
 .goods-table .col-op {
-  width: 4%;
+  width: 5%;
+  white-space: nowrap;
 }
 
 .goods-table .center {
   text-align: center;
+}
+
+.goods-table :deep(.el-input) {
+  width: 100%;
 }
 
 .goods-table :deep(.el-input__wrapper) {
@@ -1804,17 +1817,35 @@ onBeforeUnmount(() => {
   padding: 0 6px;
 }
 
+.goods-table :deep(.el-button) {
+  white-space: nowrap;
+}
+
 .goods-add {
   margin-top: 3px;
 }
 
-.fee-total {
-  color: var(--color-text-secondary);
+.fee-hint {
+  font-size: 11px;
+  color: var(--color-text-placeholder);
+  white-space: nowrap;
 }
 
-.fee-total b {
-  color: var(--color-danger);
-  font-size: 14px;
+.fee-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fee-group {
+  min-width: 0;
+}
+
+.fee-group-title {
+  height: 16px;
+  line-height: 16px;
+  font-size: 11px;
+  color: var(--color-text-placeholder);
 }
 
 .fee-grid {
@@ -1826,8 +1857,9 @@ onBeforeUnmount(() => {
 .fee-cell {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
+  height: 28px;
 }
 
 .fee-lbl {
@@ -1835,6 +1867,7 @@ onBeforeUnmount(() => {
   text-align: right;
   color: var(--color-text-regular);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .fee-cell :deep(.el-input-number) {
@@ -1842,39 +1875,31 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.std {
-  flex: 0 0 34px;
-  font-size: 10px;
-  color: var(--color-text-disabled);
-  background: #f5f7fa;
-  border-radius: 2px;
-  border-bottom: 1px dashed var(--color-border-base);
-  white-space: nowrap;
-  cursor: not-allowed;
+.fee-cell :deep(.el-input__wrapper) {
+  background: #fff;
+  border-radius: 4px;
 }
 
 .fee-foot {
   display: flex;
   align-items: center;
-  gap: 18px;
-  margin-top: 5px;
-  padding-top: 4px;
+  justify-content: flex-end;
+  gap: 26px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px dashed var(--color-border-light);
   color: var(--color-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .fee-foot b {
   color: var(--color-text-primary);
+  font-family: var(--font-family-number);
 }
 
 .fee-foot .negative b {
   color: var(--color-danger);
-}
-
-.fee-formula {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--color-text-placeholder);
 }
 
 .pay-block {
