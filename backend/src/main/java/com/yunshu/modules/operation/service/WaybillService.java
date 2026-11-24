@@ -1,21 +1,31 @@
 package com.yunshu.modules.operation.service;
 
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yunshu.common.datascope.DataScopeContext;
 import com.yunshu.common.exception.BizException;
+import com.yunshu.modules.operation.constant.WaybillEnums;
+import com.yunshu.modules.operation.dto.WaybillAmendRequest;
 import com.yunshu.modules.operation.dto.WaybillSaveRequest;
+import com.yunshu.modules.operation.dto.WaybillVoidRequest;
 import com.yunshu.modules.operation.entity.BizCustomer;
 import com.yunshu.modules.operation.entity.BizWaybill;
 import com.yunshu.modules.operation.entity.BizWaybillGoods;
+import com.yunshu.modules.operation.entity.BizWaybillLog;
 import com.yunshu.modules.operation.entity.BizWaybillRouteNode;
 import com.yunshu.modules.operation.mapper.BizCustomerMapper;
 import com.yunshu.modules.operation.mapper.BizWaybillGoodsMapper;
+import com.yunshu.modules.operation.mapper.BizWaybillLogMapper;
 import com.yunshu.modules.operation.mapper.BizWaybillMapper;
 import com.yunshu.modules.operation.mapper.BizWaybillRouteNodeMapper;
 import com.yunshu.modules.operation.vo.CustomerMatchVO;
 import com.yunshu.modules.operation.vo.RouteCandidateVO;
+import com.yunshu.modules.operation.vo.WaybillAmendVO;
 import com.yunshu.modules.operation.vo.WaybillDetailVO;
+import com.yunshu.modules.operation.vo.WaybillFieldChangeVO;
 import com.yunshu.modules.operation.vo.WaybillSaveVO;
+import com.yunshu.modules.operation.vo.WaybillVoidVO;
 import com.yunshu.modules.system.dept.entity.SysDept;
 import com.yunshu.modules.system.dept.mapper.SysDeptMapper;
 import com.yunshu.modules.system.dept.service.UserOrgService;
@@ -31,9 +41,12 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -49,6 +62,7 @@ public class WaybillService {
     private final BizWaybillMapper waybillMapper;
     private final BizWaybillRouteNodeMapper nodeMapper;
     private final BizWaybillGoodsMapper goodsMapper;
+    private final BizWaybillLogMapper logMapper;
     private final BizCustomerMapper customerMapper;
     private final SysDeptMapper deptMapper;
     private final SysUserMapper userMapper;
@@ -58,6 +72,7 @@ public class WaybillService {
     private final RouteCandidateService routeCandidateService;
     private final WaybillAmountCalculator amountCalculator;
     private final WaybillNoGenerator noGenerator;
+    private final ObjectMapper objectMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public WaybillSaveVO create(WaybillSaveRequest request) {
@@ -176,7 +191,7 @@ public class WaybillService {
         return toSaveVO(waybill);
     }
 
-    /** 详情：数据权限由拦截器追加 dept_id 条件，越权等同不存在 */
+    /** 详情：数据权限由拦截器追加 dept_id 条件，越权等同不存在；日志统一挂母单 */
     public WaybillDetailVO detail(Long id) {
         BizWaybill waybill = id == null ? null : waybillMapper.selectById(id);
         if (waybill == null) {
@@ -188,10 +203,168 @@ public class WaybillService {
         List<BizWaybillGoods> goods = goodsMapper.selectList(Wrappers.<BizWaybillGoods>lambdaQuery()
                 .eq(BizWaybillGoods::getWaybillId, id)
                 .orderByAsc(BizWaybillGoods::getSeq));
+        Long logWaybillId = isChild(waybill) && waybill.getParentId() != null
+                ? waybill.getParentId() : waybill.getId();
+        List<BizWaybillLog> logs = logMapper.selectList(Wrappers.<BizWaybillLog>lambdaQuery()
+                .eq(BizWaybillLog::getWaybillId, logWaybillId)
+                .orderByDesc(BizWaybillLog::getCreateTime)
+                .orderByDesc(BizWaybillLog::getId));
+        List<BizWaybillLog> amendLogs = logs.stream()
+                .filter(log -> Integer.valueOf(WaybillEnums.LogAction.AMEND.getCode()).equals(log.getActionType()))
+                .toList();
+        int childCount = isChild(waybill) ? 0 : Math.toIntExact(waybillMapper.selectCount(
+                Wrappers.<BizWaybill>lambdaQuery().eq(BizWaybill::getParentId, waybill.getId())));
+
         WaybillDetailVO vo = new WaybillDetailVO();
         vo.setWaybill(waybill);
         vo.setNodes(nodes);
         vo.setGoods(goods);
+        vo.setLogs(logs);
+        vo.setAmendLogs(amendLogs);
+        vo.setChildCount(childCount);
+        return vo;
+    }
+
+    /**
+     * 作废（方案 6.1 / D5）：一期任意状态可作废，900 拒绝重复作废；
+     * 原因必填 ≤500 字；写 action_type=4 日志，before_snapshot.waybill.status 即作废时状态。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public WaybillVoidVO voidWaybill(Long id, WaybillVoidRequest request) {
+        DataScopeContext context = DataScopeContext.require("作废运单");
+        if (request == null) {
+            throw new BizException("作废原因不能为空");
+        }
+        String reason = trimToNull(request.getReason());
+        if (reason == null) {
+            throw new BizException("作废原因不能为空");
+        }
+        if (reason.length() > 500) {
+            throw new BizException("作废原因不能超过 500 字");
+        }
+        String version = normalizeVersion(request.getVersion());
+        BizWaybill waybill = selectVisible(id);
+        if (WaybillEnums.Status.isVoided(waybill.getStatus())) {
+            throw new BizException("该运单已作废");
+        }
+        Map<String, Object> before = snapshot(waybill);
+
+        UpdateWrapper<BizWaybill> update = Wrappers.<BizWaybill>update();
+        update.eq("id", waybill.getId())
+                .eq("update_time", version)
+                .set("status", WaybillEnums.Status.VOIDED.getCode())
+                .set("update_by", requireUserId(context));
+        int rows = waybillMapper.update(null, update);
+        if (rows == 0) {
+            throw new BizException(409, "运单已被他人修改，请刷新后重试");
+        }
+        BizWaybill updated = waybillMapper.selectById(waybill.getId());
+        writeLog(waybill, WaybillEnums.LogAction.VOID, reason, before, snapshot(updated), context);
+
+        WaybillVoidVO vo = new WaybillVoidVO();
+        vo.setId(updated.getId());
+        vo.setStatus(updated.getStatus());
+        vo.setUpdateTime(updated.getUpdateTime());
+        return vo;
+    }
+
+    /**
+     * 改单（方案第 8 节 / D4 / D12 / D13）：
+     * 只接受白名单字段，状态 20–90 可改；金额重算复用 WaybillAmountCalculator；
+     * 字段级 diff 写入 after_snapshot.changes，日志 action_type=6，一期 audit_status=0。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public WaybillAmendVO amend(Long id, WaybillAmendRequest request) {
+        DataScopeContext context = DataScopeContext.require("运单改单");
+        if (request == null) {
+            throw new BizException("改单内容不能为空");
+        }
+        BizWaybill waybill = selectVisible(id);
+        if (!WaybillEnums.Status.amendable(waybill.getStatus())) {
+            throw new BizException("当前状态不可改单：" + statusText(waybill.getStatus()));
+        }
+        String reason = trimToNull(request.getReason());
+        if (reason == null) {
+            throw new BizException("改单原因不能为空");
+        }
+        if (reason.length() > 200) {
+            throw new BizException("改单原因不能超过 200 字");
+        }
+        String version = normalizeVersion(request.getVersion());
+        validateAmend(request);
+        ReceiverRegion region = resolveReceiverRegion(request);
+        GoodsSummary goods = summarize(request.getGoodsList());
+        WaybillAmountCalculator.AmountResult amounts = amountCalculator.calculate(request);
+        List<BizWaybillGoods> oldGoods = goodsMapper.selectList(Wrappers.<BizWaybillGoods>lambdaQuery()
+                .eq(BizWaybillGoods::getWaybillId, waybill.getId())
+                .orderByAsc(BizWaybillGoods::getSeq));
+        List<WaybillFieldChangeVO> changes = diffAmend(waybill, oldGoods, request, region, amounts);
+        if (changes.isEmpty()) {
+            throw new BizException("未检测到任何修改");
+        }
+        Map<String, Object> before = snapshot(waybill);
+
+        UpdateWrapper<BizWaybill> update = Wrappers.<BizWaybill>update();
+        update.eq("id", waybill.getId())
+                .eq("update_time", version)
+                .set("sender_company", trimToNull(request.getSenderCompany()))
+                .set("sender_name", request.getSenderName().trim())
+                .set("sender_phone", request.getSenderPhone().trim())
+                .set("sender_address", request.getSenderAddress().trim())
+                .set("receiver_company", trimToNull(request.getReceiverCompany()))
+                .set("receiver_name", request.getReceiverName().trim())
+                .set("receiver_phone", request.getReceiverPhone().trim())
+                .set("receiver_province_code", region.provinceCode())
+                .set("receiver_province_name", region.provinceName())
+                .set("receiver_city_code", region.cityCode())
+                .set("receiver_city_name", region.cityName())
+                .set("receiver_district_code", region.districtCode())
+                .set("receiver_district_name", region.districtName())
+                .set("receiver_address", request.getReceiverAddress().trim())
+                .set("goods_name", goods.name())
+                .set("goods_type", goods.type())
+                .set("package_type", goods.packageType())
+                .set("quantity", goods.quantity())
+                .set("weight", goods.weight())
+                .set("volume", goods.volume())
+                .set("goods_remark", goods.remark())
+                .set("pay_method", request.getPayMethod())
+                .set("freight_fee", money(request.getFreightFee()))
+                .set("delivery_fee", money(request.getDeliveryFee()))
+                .set("pickup_fee", money(request.getPickupFee()))
+                .set("other_fee", money(request.getOtherFee()))
+                .set("receipt_fee", money(request.getReceiptFee()))
+                .set("make_bill_fee", money(request.getMakeBillFee()))
+                .set("insurance_fee", money(request.getInsuranceFee()))
+                .set("total_fee", amounts.totalFee())
+                .set("cash_back", money(request.getCashBack()))
+                .set("owe_back", money(request.getOweBack()))
+                .set("rebate_total", amounts.rebateTotal())
+                .set("valid_freight", amounts.validFreight())
+                .set("prepaid_fee", amounts.prepaidFee())
+                .set("collect_fee", amounts.collectFee())
+                .set("monthly_fee", amounts.monthlyFee())
+                .set("return_fee", amounts.returnFee())
+                .set("delivery_method", request.getDeliveryMethod())
+                .set("cod_amount", money(request.getCodAmount()))
+                .set("payee_name", trimToNull(request.getPayeeName()))
+                .set("bank_name", trimToNull(request.getBankName()))
+                .set("bank_card_no", trimToNull(request.getBankCardNo()))
+                .set("remark", trimToNull(request.getRemark()))
+                .set("update_by", requireUserId(context));
+        int rows = waybillMapper.update(null, update);
+        if (rows == 0) {
+            throw new BizException(409, "运单已被他人修改，请刷新后重试");
+        }
+        replaceGoods(waybill.getId(), waybill.getDeptId(), request.getGoodsList(), oldGoods);
+        BizWaybill updated = waybillMapper.selectById(waybill.getId());
+        Map<String, Object> after = snapshot(updated);
+        after.put("changes", changes);
+        writeLog(waybill, WaybillEnums.LogAction.AMEND, reason, before, after, context);
+
+        WaybillAmendVO vo = new WaybillAmendVO();
+        vo.setWaybill(updated);
+        vo.setChanges(changes);
         return vo;
     }
 
@@ -230,6 +403,355 @@ public class WaybillService {
         if (deliveryMethod == 1 && Boolean.FALSE.equals(route.getDeliveryEnabled())) {
             throw new BizException(400, "该线路不提供送货服务");
         }
+    }
+
+    private boolean isChild(BizWaybill waybill) {
+        return waybill.getIsChild() != null && waybill.getIsChild() == 1;
+    }
+
+    /** 详情/写操作统一入口：越权等同不存在；子单额外校验母单可见性 */
+    private BizWaybill selectVisible(Long id) {
+        BizWaybill waybill = id == null ? null : waybillMapper.selectById(id);
+        if (waybill == null) {
+            throw new BizException(403, "无权访问该运单");
+        }
+        if (isChild(waybill) && waybill.getParentId() != null
+                && waybillMapper.selectById(waybill.getParentId()) == null) {
+            throw new BizException(403, "无权访问该运单");
+        }
+        return waybill;
+    }
+
+    /**
+     * 乐观锁令牌归一化：前端回传详情里的 updateTime（ISO 或 yyyy-MM-dd HH:mm:ss 均可）。
+     * 当前 biz_waybill 无 version 列，以 update_time 作为并发令牌（见方案实现说明）。
+     */
+    private String normalizeVersion(String version) {
+        String value = trimToNull(version);
+        if (value == null) {
+            throw new BizException("缺少并发版本号，请刷新后重试");
+        }
+        try {
+            LocalDateTime time = value.contains("T")
+                    ? LocalDateTime.parse(value.length() > 19 ? value.substring(0, 19) : value)
+                    : LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception ex) {
+            throw new BizException("并发版本号格式非法，请刷新后重试");
+        }
+    }
+
+    private String statusText(Integer status) {
+        String label = WaybillEnums.Status.labelOf(status);
+        return label == null ? "未知状态(" + status + ")" : label;
+    }
+
+    private void validateAmend(WaybillAmendRequest request) {
+        List<String> errors = new ArrayList<>();
+        if (!StringUtils.hasText(request.getSenderName())) {
+            errors.add("发货人不能为空");
+        }
+        if (!StringUtils.hasText(request.getSenderPhone())) {
+            errors.add("发货电话不能为空");
+        }
+        if (!StringUtils.hasText(request.getSenderAddress())) {
+            errors.add("发货地址不能为空");
+        }
+        if (!StringUtils.hasText(request.getReceiverName())) {
+            errors.add("收货人不能为空");
+        }
+        if (!StringUtils.hasText(request.getReceiverPhone())) {
+            errors.add("收货电话不能为空");
+        }
+        if (!StringUtils.hasText(request.getReceiverAddress())) {
+            errors.add("收货地址不能为空");
+        }
+        if (!StringUtils.hasText(request.getReceiverProvinceCode())
+                || !StringUtils.hasText(request.getReceiverCityCode())
+                || !StringUtils.hasText(request.getReceiverDistrictCode())) {
+            errors.add("收货省、市、区县必须选择到区县级");
+        }
+        if (request.getPayMethod() == null) {
+            errors.add("请选择支付方式");
+        } else if (!WaybillEnums.PayMethod.isValid(request.getPayMethod())) {
+            errors.add("支付方式码值非法");
+        }
+        if (request.getFreightFee() == null) {
+            errors.add("运费不能为空");
+        } else if (request.getFreightFee().compareTo(BigDecimal.ZERO) < 0) {
+            errors.add("运费不能小于0");
+        }
+        if (request.getDeliveryMethod() == null) {
+            errors.add("请选择送货方式");
+        } else if (!WaybillEnums.DeliveryMethod.isValid(request.getDeliveryMethod())) {
+            errors.add("送货方式码值非法");
+        } else if (request.getDeliveryMethod() == 1 || request.getDeliveryMethod() == 3) {
+            if (request.getDeliveryFee() == null) {
+                errors.add("送货方式为送货或大车直送时，送货费不能为空");
+            } else if (request.getDeliveryFee().compareTo(BigDecimal.ZERO) < 0) {
+                errors.add("送货费不能小于0");
+            }
+        }
+        if (request.getGoodsList() == null || request.getGoodsList().isEmpty()) {
+            errors.add("请至少录入一行货物明细");
+        } else {
+            for (int i = 0; i < request.getGoodsList().size(); i++) {
+                WaybillSaveRequest.GoodsItem item = request.getGoodsList().get(i);
+                String prefix = "第" + (i + 1) + "行货物";
+                if (item == null || !StringUtils.hasText(item.getGoodsName())) {
+                    errors.add(prefix + "名称不能为空");
+                    continue;
+                }
+                if (item.getQuantity() == null || item.getQuantity() < 1) {
+                    errors.add(prefix + "件数必须为大于等于1的整数");
+                }
+                if (item.getWeight() == null || item.getWeight().compareTo(BigDecimal.ZERO) <= 0) {
+                    errors.add(prefix + "重量必须大于0");
+                }
+                if (item.getVolume() == null || item.getVolume().compareTo(BigDecimal.ZERO) <= 0) {
+                    errors.add(prefix + "体积必须大于0");
+                }
+            }
+        }
+        BigDecimal cod = request.getCodAmount() == null ? BigDecimal.ZERO : request.getCodAmount();
+        if (cod.compareTo(BigDecimal.ZERO) > 0) {
+            if (!StringUtils.hasText(request.getPayeeName())) {
+                errors.add("代收货款大于0时，收款人不能为空");
+            }
+            if (!StringUtils.hasText(request.getBankName())) {
+                errors.add("代收货款大于0时，开户行不能为空");
+            }
+            if (!StringUtils.hasText(request.getBankCardNo())) {
+                errors.add("代收货款大于0时，银行卡号不能为空");
+            }
+        }
+        if (request.getRemark() != null && request.getRemark().length() > 500) {
+            errors.add("备注不能超过500字");
+        }
+        if (!errors.isEmpty()) {
+            throw new BizException(String.join("；", errors));
+        }
+    }
+
+    /** 字段级 diff（方案 8.5）：只比较可改白名单字段；货物明细按行比较 */
+    private List<WaybillFieldChangeVO> diffAmend(BizWaybill waybill, List<BizWaybillGoods> oldGoods,
+                                                 WaybillAmendRequest request, ReceiverRegion region,
+                                                 WaybillAmountCalculator.AmountResult amounts) {
+        List<WaybillFieldChangeVO> changes = new ArrayList<>();
+        addChange(changes, "senderCompany", "发货单位", waybill.getSenderCompany(),
+                trimToNull(request.getSenderCompany()));
+        addChange(changes, "senderName", "发货人", waybill.getSenderName(),
+                trimToNull(request.getSenderName()));
+        addChange(changes, "senderPhone", "发货电话", waybill.getSenderPhone(),
+                trimToNull(request.getSenderPhone()));
+        addChange(changes, "senderAddress", "发货地址", waybill.getSenderAddress(),
+                trimToNull(request.getSenderAddress()));
+        addChange(changes, "receiverCompany", "收货单位", waybill.getReceiverCompany(),
+                trimToNull(request.getReceiverCompany()));
+        addChange(changes, "receiverName", "收货人", waybill.getReceiverName(),
+                trimToNull(request.getReceiverName()));
+        addChange(changes, "receiverPhone", "收货电话", waybill.getReceiverPhone(),
+                trimToNull(request.getReceiverPhone()));
+        addChange(changes, "receiverProvinceName", "收货省", waybill.getReceiverProvinceName(),
+                region.provinceName());
+        addChange(changes, "receiverCityName", "收货市", waybill.getReceiverCityName(),
+                region.cityName());
+        addChange(changes, "receiverDistrictName", "收货区县", waybill.getReceiverDistrictName(),
+                region.districtName());
+        addChange(changes, "receiverAddress", "收货地址", waybill.getReceiverAddress(),
+                trimToNull(request.getReceiverAddress()));
+
+        addChange(changes, "freightFee", "运费", moneyText(waybill.getFreightFee()),
+                moneyText(request.getFreightFee()));
+        addChange(changes, "deliveryFee", "送货费", moneyText(waybill.getDeliveryFee()),
+                moneyText(request.getDeliveryFee()));
+        addChange(changes, "pickupFee", "提货费", moneyText(waybill.getPickupFee()),
+                moneyText(request.getPickupFee()));
+        addChange(changes, "otherFee", "其他费", moneyText(waybill.getOtherFee()),
+                moneyText(request.getOtherFee()));
+        addChange(changes, "receiptFee", "回单费", moneyText(waybill.getReceiptFee()),
+                moneyText(request.getReceiptFee()));
+        addChange(changes, "makeBillFee", "制单费", moneyText(waybill.getMakeBillFee()),
+                moneyText(request.getMakeBillFee()));
+        addChange(changes, "insuranceFee", "保费", moneyText(waybill.getInsuranceFee()),
+                moneyText(request.getInsuranceFee()));
+        addChange(changes, "cashBack", "现返", moneyText(waybill.getCashBack()),
+                moneyText(request.getCashBack()));
+        addChange(changes, "oweBack", "欠返", moneyText(waybill.getOweBack()),
+                moneyText(request.getOweBack()));
+        addChange(changes, "codAmount", "代收货款", moneyText(waybill.getCodAmount()),
+                moneyText(request.getCodAmount()));
+        addChange(changes, "totalFee", "运费合计", moneyText(waybill.getTotalFee()),
+                moneyText(amounts.totalFee()));
+        addChange(changes, "rebateTotal", "返款合计", moneyText(waybill.getRebateTotal()),
+                moneyText(amounts.rebateTotal()));
+        addChange(changes, "validFreight", "有效运费", moneyText(waybill.getValidFreight()),
+                moneyText(amounts.validFreight()));
+        addChange(changes, "prepaidFee", "现付运费", moneyText(waybill.getPrepaidFee()),
+                moneyText(amounts.prepaidFee()));
+        addChange(changes, "collectFee", "到付运费", moneyText(waybill.getCollectFee()),
+                moneyText(amounts.collectFee()));
+        addChange(changes, "monthlyFee", "月结运费", moneyText(waybill.getMonthlyFee()),
+                moneyText(amounts.monthlyFee()));
+        addChange(changes, "returnFee", "回付运费", moneyText(waybill.getReturnFee()),
+                moneyText(amounts.returnFee()));
+
+        addChange(changes, "payMethod", "支付方式", payMethodText(waybill.getPayMethod()),
+                payMethodText(request.getPayMethod()));
+        addChange(changes, "deliveryMethod", "送货方式", deliveryMethodText(waybill.getDeliveryMethod()),
+                deliveryMethodText(request.getDeliveryMethod()));
+        addChange(changes, "payeeName", "收款人", waybill.getPayeeName(), trimToNull(request.getPayeeName()));
+        addChange(changes, "bankName", "开户行", waybill.getBankName(), trimToNull(request.getBankName()));
+        addChange(changes, "bankCardNo", "银行卡号", maskCard(waybill.getBankCardNo()),
+                maskCard(request.getBankCardNo()));
+        addChange(changes, "remark", "备注", waybill.getRemark(), trimToNull(request.getRemark()));
+
+        List<WaybillSaveRequest.GoodsItem> newRows = request.getGoodsList();
+        if (oldGoods.size() != newRows.size()) {
+            addChange(changes, "goodsRowCount", "货物明细行数",
+                    String.valueOf(oldGoods.size()), String.valueOf(newRows.size()));
+        }
+        int rowCount = Math.min(oldGoods.size(), newRows.size());
+        for (int i = 0; i < rowCount; i++) {
+            BizWaybillGoods old = oldGoods.get(i);
+            WaybillSaveRequest.GoodsItem item = newRows.get(i);
+            String prefix = "货物明细第" + (i + 1) + "行·";
+            addChange(changes, "goods[" + i + "].goodsName", prefix + "名称",
+                    old.getGoodsName(), trimToNull(item.getGoodsName()));
+            addChange(changes, "goods[" + i + "].goodsType", prefix + "类型",
+                    old.getGoodsType(), trimToNull(item.getGoodsType()));
+            addChange(changes, "goods[" + i + "].packageType", prefix + "包装",
+                    old.getPackageType(), trimToNull(item.getPackageType()));
+            addChange(changes, "goods[" + i + "].quantity", prefix + "件数",
+                    String.valueOf(old.getQuantity()), String.valueOf(item.getQuantity()));
+            addChange(changes, "goods[" + i + "].weight", prefix + "重量(kg)",
+                    scaleText(old.getWeight()), scaleText(item.getWeight()));
+            addChange(changes, "goods[" + i + "].volume", prefix + "体积(m³)",
+                    scaleText(old.getVolume()), scaleText(item.getVolume()));
+            addChange(changes, "goods[" + i + "].goodsRemark", prefix + "备注",
+                    old.getGoodsRemark(), trimToNull(item.getGoodsRemark()));
+        }
+        return changes;
+    }
+
+    private void addChange(List<WaybillFieldChangeVO> changes, String field, String label,
+                           String before, String after) {
+        String oldValue = before == null ? "" : before.trim();
+        String newValue = after == null ? "" : after.trim();
+        if (oldValue.equals(newValue)) {
+            return;
+        }
+        WaybillFieldChangeVO change = new WaybillFieldChangeVO();
+        change.setField(field);
+        change.setLabel(label);
+        change.setBefore(oldValue);
+        change.setAfter(newValue);
+        changes.add(change);
+    }
+
+    /** 快照契约（方案 13 / biz_waybill_log 注释）：waybill + children，键名与库表一致 */
+    private Map<String, Object> snapshot(BizWaybill waybill) {
+        Map<String, Object> root = new LinkedHashMap<>();
+        Map<String, Object> main = new LinkedHashMap<>();
+        main.put("id", waybill.getId());
+        main.put("no", waybill.getWaybillNo());
+        main.put("status", waybill.getStatus());
+        main.put("parent_id", waybill.getParentId());
+        main.put("parent_no", waybill.getParentNo());
+        root.put("waybill", main);
+
+        List<Map<String, Object>> children = new ArrayList<>();
+        if (!isChild(waybill)) {
+            List<BizWaybill> rows = waybillMapper.selectList(Wrappers.<BizWaybill>lambdaQuery()
+                    .eq(BizWaybill::getParentId, waybill.getId())
+                    .orderByAsc(BizWaybill::getChildSeq)
+                    .orderByAsc(BizWaybill::getId));
+            for (BizWaybill child : rows) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", child.getId());
+                item.put("no", child.getWaybillNo());
+                item.put("seq", child.getChildSeq());
+                item.put("status", child.getStatus());
+                item.put("quantity", child.getQuantity());
+                item.put("weight", child.getWeight());
+                item.put("volume", child.getVolume());
+                children.add(item);
+            }
+        }
+        root.put("children", children);
+        return root;
+    }
+
+    /** 日志统一挂母单；子单操作也写母单 ID，与 biz_waybill_log 表注释一致 */
+    private void writeLog(BizWaybill target, WaybillEnums.LogAction action, String reason,
+                          Map<String, Object> before, Map<String, Object> after, DataScopeContext context) {
+        boolean child = isChild(target);
+        Long logWaybillId = child && target.getParentId() != null ? target.getParentId() : target.getId();
+        String logNo = child && target.getParentNo() != null ? target.getParentNo() : target.getWaybillNo();
+        BizWaybillLog log = new BizWaybillLog();
+        log.setWaybillId(logWaybillId);
+        log.setWaybillNo(logNo);
+        log.setActionType(action.getCode());
+        log.setBeforeSnapshot(toJson(before));
+        log.setAfterSnapshot(toJson(after));
+        log.setReason(reason);
+        log.setAuditStatus(0);
+        log.setOperatorId(requireUserId(context));
+        log.setOperatorName(operatorName(context));
+        log.setDeptId(context.getDeptId() != null ? context.getDeptId() : target.getDeptId());
+        logMapper.insert(log);
+    }
+
+    private String toJson(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new BizException(500, "操作快照序列化失败");
+        }
+    }
+
+    private Long requireUserId(DataScopeContext context) {
+        if (context.getUserId() == null) {
+            throw new BizException(401, "登录已失效，请重新登录");
+        }
+        return context.getUserId();
+    }
+
+    private String operatorName(DataScopeContext context) {
+        SysUser user = context.getUserId() == null ? null : userMapper.selectById(context.getUserId());
+        if (user != null && StringUtils.hasText(user.getRealName())) {
+            return user.getRealName();
+        }
+        return StringUtils.hasText(context.getUsername()) ? context.getUsername() : "系统";
+    }
+
+    private String payMethodText(Integer code) {
+        String label = WaybillEnums.PayMethod.labelOf(code);
+        return label == null ? "" : label;
+    }
+
+    private String deliveryMethodText(Integer code) {
+        String label = WaybillEnums.DeliveryMethod.labelOf(code);
+        return label == null ? "" : label;
+    }
+
+    private String moneyText(BigDecimal value) {
+        return value == null ? "0.00" : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private String scaleText(BigDecimal value) {
+        return value == null ? "" : value.setScale(3, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private String maskCard(String card) {
+        String value = trimToNull(card);
+        if (value == null) {
+            return "";
+        }
+        if (value.length() <= 8) {
+            return "****";
+        }
+        return value.substring(0, 4) + "****" + value.substring(value.length() - 4);
     }
 
     private void validate(WaybillSaveRequest request) {
@@ -408,6 +930,36 @@ public class WaybillService {
             goods.setGoodsRemark(trimToNull(item.getGoodsRemark()));
             goods.setDeptId(deptId);
             goodsMapper.insert(goods);
+        }
+    }
+
+    /**
+     * 改单货物明细：按行原位更新，新增行插入，多余行物理删除。
+     * biz_waybill_goods 唯一键 (waybill_id, seq) 不排除逻辑删除行，物理删除后才能复用序号。
+     */
+    private void replaceGoods(Long waybillId, Long deptId, List<WaybillSaveRequest.GoodsItem> items,
+                              List<BizWaybillGoods> existing) {
+        for (int i = 0; i < items.size(); i++) {
+            WaybillSaveRequest.GoodsItem item = items.get(i);
+            BizWaybillGoods row = i < existing.size() ? existing.get(i) : new BizWaybillGoods();
+            row.setWaybillId(waybillId);
+            row.setSeq(i + 1);
+            row.setGoodsName(item.getGoodsName().trim());
+            row.setGoodsType(trimToNull(item.getGoodsType()));
+            row.setPackageType(trimToNull(item.getPackageType()));
+            row.setQuantity(item.getQuantity());
+            row.setWeight(scale3(item.getWeight()));
+            row.setVolume(scale3(item.getVolume()));
+            row.setGoodsRemark(trimToNull(item.getGoodsRemark()));
+            if (row.getId() == null) {
+                row.setDeptId(deptId);
+                goodsMapper.insert(row);
+            } else {
+                goodsMapper.updateById(row);
+            }
+        }
+        for (int i = items.size(); i < existing.size(); i++) {
+            goodsMapper.physicalDeleteById(existing.get(i).getId());
         }
     }
 

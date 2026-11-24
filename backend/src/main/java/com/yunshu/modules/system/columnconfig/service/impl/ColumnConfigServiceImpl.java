@@ -31,7 +31,8 @@ public class ColumnConfigServiceImpl implements ColumnConfigService {
             "system:carrier",
             "system:route",
             "system:route-transfer",
-            "system:route-library"
+            "system:route-library",
+            "operation:waybill"
     );
 
     private static final int MAX_CONFIG_LENGTH = 64 * 1024;

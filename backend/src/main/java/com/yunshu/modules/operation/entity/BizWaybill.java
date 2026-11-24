@@ -199,4 +199,12 @@ public class BizWaybill {
 
     @TableLogic
     private Integer deleted;
+
+    /** 列表派生字段：有效子单数，非库表列 */
+    @TableField(exist = false)
+    private Integer childCount;
+
+    /** 列表派生字段：是否存在子单，非库表列 */
+    @TableField(exist = false)
+    private Boolean hasChildren;
 }
