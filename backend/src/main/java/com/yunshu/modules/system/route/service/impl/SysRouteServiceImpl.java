@@ -2,6 +2,7 @@ package com.yunshu.modules.system.route.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -16,6 +17,7 @@ import com.yunshu.modules.system.dept.service.UserOrgService;
 import com.yunshu.modules.system.region.entity.SysRegion;
 import com.yunshu.modules.system.region.mapper.SysRegionMapper;
 import com.yunshu.modules.system.route.dto.BatchGrantRequest;
+import com.yunshu.modules.system.route.dto.RouteFieldRequest;
 import com.yunshu.modules.system.route.dto.RouteQuery;
 import com.yunshu.modules.system.route.dto.RouteSaveRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchCarrierRequest;
@@ -53,6 +55,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -86,6 +89,15 @@ public class SysRouteServiceImpl implements SysRouteService {
     private static final int MAX_GRANT_BATCH = 50;
     private static final int MAX_MATCH_CANDIDATES = 50;
     private static final String BLOCK_DELETE = "路由被其他公司使用，不能取消，取消授权即可";
+    /** 短驳/干线内联编辑：文本列最大长度（与表结构一致） */
+    private static final Map<String, Integer> ROUTE_TEXT_FIELD_MAX = Map.of(
+            "warehouseArea", 100,
+            "contactName", 50,
+            "contactPhone", 20,
+            "serviceName", 50,
+            "servicePhone", 20);
+    private static final Set<String> ROUTE_NUMBER_FIELDS = Set.of("mileage", "transitHours");
+    private static final BigDecimal ROUTE_NUMBER_MAX = new BigDecimal("99999999.99");
 
     private final SysRouteMapper routeMapper;
     private final SysRouteTransferMapper transferMapper;
@@ -275,6 +287,50 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .set(SysRoute::getSortOrder, request.getSortOrder() == null ? 0 : request.getSortOrder())
                 .set(SysRoute::getRemark, trim(request.getRemark()))
                 .set(SysRoute::getUpdateBy, org.userId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @DS("master")
+    public String updateField(Long id, RouteFieldRequest request) {
+        UserOrgService.UserOrg org = userOrgService.current();
+        requireOwnerRoute(id, org);
+        String field = trim(request.getField());
+        if (field == null) {
+            throw new BizException("请指定要修改的字段");
+        }
+        LambdaUpdateWrapper<SysRoute> update = Wrappers.<SysRoute>lambdaUpdate()
+                .eq(SysRoute::getId, id)
+                .set(SysRoute::getUpdateBy, org.userId());
+        String normalized;
+        if (ROUTE_TEXT_FIELD_MAX.containsKey(field)) {
+            String value = trim(request.getValue());
+            int max = ROUTE_TEXT_FIELD_MAX.get(field);
+            if (value != null && value.length() > max) {
+                throw new BizException(fieldLabel(field) + "不能超过 " + max + " 个字符");
+            }
+            switch (field) {
+                case "warehouseArea" -> update.set(SysRoute::getWarehouseArea, value);
+                case "contactName" -> update.set(SysRoute::getContactName, value);
+                case "contactPhone" -> update.set(SysRoute::getContactPhone, value);
+                case "serviceName" -> update.set(SysRoute::getServiceName, value);
+                default -> update.set(SysRoute::getServicePhone, value);
+            }
+            normalized = value;
+        } else if (ROUTE_NUMBER_FIELDS.contains(field)) {
+            BigDecimal value = parseRouteNumber(field, request.getValue());
+            if ("mileage".equals(field)) {
+                update.set(SysRoute::getMileage, value);
+            } else {
+                update.set(SysRoute::getTransitHours, value);
+            }
+            normalized = value == null ? null : value.toPlainString();
+        } else {
+            throw new BizException("不支持修改该字段");
+        }
+        // 只 set 当前字段，避免整行覆盖别人刚改的其他字段
+        routeMapper.update(null, update);
+        return normalized;
     }
 
     @Override
@@ -1494,6 +1550,41 @@ public class SysRouteServiceImpl implements SysRouteService {
         if (request.getTransitHours() != null && request.getTransitHours().signum() < 0) {
             throw new BizException("时效不能为负");
         }
+    }
+
+    /** 内联数字录入：空=清空；负数拒绝；四舍五入保留两位小数 */
+    private BigDecimal parseRouteNumber(String field, String raw) {
+        String text = trim(raw);
+        if (text == null) {
+            return null;
+        }
+        BigDecimal value;
+        try {
+            value = new BigDecimal(text);
+        } catch (NumberFormatException e) {
+            throw new BizException(fieldLabel(field) + "请输入数字");
+        }
+        if (value.signum() < 0) {
+            throw new BizException(fieldLabel(field) + "不能为负");
+        }
+        BigDecimal scaled = value.setScale(2, RoundingMode.HALF_UP);
+        if (scaled.compareTo(ROUTE_NUMBER_MAX) > 0) {
+            throw new BizException(fieldLabel(field) + "超出允许范围");
+        }
+        return scaled;
+    }
+
+    private String fieldLabel(String field) {
+        return switch (field) {
+            case "warehouseArea" -> "库区";
+            case "mileage" -> "里程";
+            case "transitHours" -> "时效";
+            case "contactName" -> "线路联系人";
+            case "contactPhone" -> "联系电话";
+            case "serviceName" -> "线路客服";
+            case "servicePhone" -> "客服电话";
+            default -> "该字段";
+        };
     }
 
     private String resolveRouteName(String input, int category, SysDept origin, SysDept dest) {

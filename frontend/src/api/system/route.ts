@@ -3,6 +3,7 @@ import type {
   BatchGrantResult,
   RegionLibraryQuery,
   RegionLibraryPage,
+  RouteEditableField,
   RouteGrantRecord,
   RouteMatchResult,
   RoutePage,
@@ -34,6 +35,15 @@ export function createRoute(payload: RouteSavePayload): Promise<RouteSaveResult>
 
 export function updateRoute(id: number, payload: RouteSavePayload): Promise<void> {
   return request({ url: `/v1/system/routes/${id}`, method: 'put', data: payload })
+}
+
+/** 短驳/干线单字段增量更新：value 传空字符串表示清空（落库 NULL），返回落库规范值 */
+export function updateRouteField(
+  id: number,
+  field: RouteEditableField,
+  value: string
+): Promise<string | null> {
+  return request({ url: `/v1/system/routes/${id}/field`, method: 'put', data: { field, value } })
 }
 
 export function deleteRoute(id: number): Promise<void> {

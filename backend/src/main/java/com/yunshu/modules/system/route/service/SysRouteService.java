@@ -1,6 +1,7 @@
 package com.yunshu.modules.system.route.service;
 
 import com.yunshu.modules.system.route.dto.BatchGrantRequest;
+import com.yunshu.modules.system.route.dto.RouteFieldRequest;
 import com.yunshu.modules.system.route.dto.RouteQuery;
 import com.yunshu.modules.system.route.dto.RouteSaveRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchCarrierRequest;
@@ -34,6 +35,9 @@ public interface SysRouteService {
     RouteSaveResultVO create(RouteSaveRequest request);
 
     void update(Long id, RouteSaveRequest request);
+
+    /** 单据字段增量更新：仅更新一个字段，返回落库后的规范值（清空返回 null） */
+    String updateField(Long id, RouteFieldRequest request);
 
     void delete(Long id);
 

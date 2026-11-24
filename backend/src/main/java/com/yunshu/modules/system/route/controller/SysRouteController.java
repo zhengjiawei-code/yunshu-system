@@ -3,6 +3,7 @@ package com.yunshu.modules.system.route.controller;
 import com.yunshu.common.result.ApiResult;
 import com.yunshu.modules.system.route.dto.BatchGrantRequest;
 import com.yunshu.modules.system.route.dto.GrantRequest;
+import com.yunshu.modules.system.route.dto.RouteFieldRequest;
 import com.yunshu.modules.system.route.dto.RouteQuery;
 import com.yunshu.modules.system.route.dto.RouteSaveRequest;
 import com.yunshu.modules.system.route.dto.TransferBatchCarrierRequest;
@@ -78,6 +79,12 @@ public class SysRouteController {
     public ApiResult<Void> update(@PathVariable Long id, @RequestBody @Valid RouteSaveRequest request) {
         routeService.update(id, request);
         return ApiResult.ok();
+    }
+
+    @Operation(summary = "短驳/干线路由单字段增量更新（库区/里程/时效/联系人/电话/客服），返回落库规范值")
+    @PutMapping("/{id}/field")
+    public ApiResult<String> updateField(@PathVariable Long id, @RequestBody @Valid RouteFieldRequest request) {
+        return ApiResult.ok(routeService.updateField(id, request));
     }
 
     @Operation(summary = "取消路由（存在其他授权时拒绝）")

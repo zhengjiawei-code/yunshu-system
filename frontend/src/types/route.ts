@@ -1,4 +1,14 @@
 /** 路由类型：Tab1 1=短驳 2=干线；Tab2 transferType 1=直达 2=外转 */
+/** 短驳/干线支持列表内联编辑的字段 */
+export type RouteEditableField =
+  | 'warehouseArea'
+  | 'mileage'
+  | 'transitHours'
+  | 'contactName'
+  | 'contactPhone'
+  | 'serviceName'
+  | 'servicePhone'
+
 export interface RouteRecord {
   id: number
   routeCode: string

@@ -171,7 +171,16 @@
                       />
                     </div>
                   </template>
-                  <template #default="{ row }">{{ row.warehouseArea || '—' }}</template>
+                  <template #default="{ row }">
+                    <route-field-editor
+                      :row="row"
+                      field="warehouseArea"
+                      type="text"
+                      :maxlength="100"
+                      :editable="row.editable"
+                      @updated="(value) => (row.warehouseArea = value === null ? undefined : String(value))"
+                    />
+                  </template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.mileage" prop="mileage" label="里程(km)" min-width="110" align="right" sortable="custom">
@@ -186,7 +195,16 @@
                       />
                     </div>
                   </template>
-                  <template #default="{ row }">{{ formatNumber(row.mileage) }}</template>
+                  <template #default="{ row }">
+                    <route-field-editor
+                      :row="row"
+                      field="mileage"
+                      type="number"
+                      align="right"
+                      :editable="row.editable"
+                      @updated="(value) => (row.mileage = value === null ? undefined : Number(value))"
+                    />
+                  </template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.transitHours" prop="transitHours" label="时效(小时)" min-width="110" align="right" sortable="custom">
@@ -201,7 +219,16 @@
                       />
                     </div>
                   </template>
-                  <template #default="{ row }">{{ formatNumber(row.transitHours) }}</template>
+                  <template #default="{ row }">
+                    <route-field-editor
+                      :row="row"
+                      field="transitHours"
+                      type="number"
+                      align="right"
+                      :editable="row.editable"
+                      @updated="(value) => (row.transitHours = value === null ? undefined : Number(value))"
+                    />
+                  </template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.contactName" prop="contactName" label="线路联系人" min-width="130">
@@ -219,7 +246,16 @@
                       />
                     </div>
                   </template>
-                  <template #default="{ row }">{{ row.contactName || '—' }}</template>
+                  <template #default="{ row }">
+                    <route-field-editor
+                      :row="row"
+                      field="contactName"
+                      type="text"
+                      :maxlength="50"
+                      :editable="row.editable"
+                      @updated="(value) => (row.contactName = value === null ? undefined : String(value))"
+                    />
+                  </template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.contactPhone" prop="contactPhone" label="联系电话" min-width="140">
@@ -237,7 +273,16 @@
                       />
                     </div>
                   </template>
-                  <template #default="{ row }">{{ row.contactPhone || '—' }}</template>
+                  <template #default="{ row }">
+                    <route-field-editor
+                      :row="row"
+                      field="contactPhone"
+                      type="text"
+                      :maxlength="20"
+                      :editable="row.editable"
+                      @updated="(value) => (row.contactPhone = value === null ? undefined : String(value))"
+                    />
+                  </template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.serviceName" prop="serviceName" label="线路客服" min-width="120">
@@ -255,7 +300,16 @@
                       />
                     </div>
                   </template>
-                  <template #default="{ row }">{{ row.serviceName || '—' }}</template>
+                  <template #default="{ row }">
+                    <route-field-editor
+                      :row="row"
+                      field="serviceName"
+                      type="text"
+                      :maxlength="50"
+                      :editable="row.editable"
+                      @updated="(value) => (row.serviceName = value === null ? undefined : String(value))"
+                    />
+                  </template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.servicePhone" prop="servicePhone" label="客服电话" min-width="140">
@@ -273,7 +327,16 @@
                       />
                     </div>
                   </template>
-                  <template #default="{ row }">{{ row.servicePhone || '—' }}</template>
+                  <template #default="{ row }">
+                    <route-field-editor
+                      :row="row"
+                      field="servicePhone"
+                      type="text"
+                      :maxlength="20"
+                      :editable="row.editable"
+                      @updated="(value) => (row.servicePhone = value === null ? undefined : String(value))"
+                    />
+                  </template>
                 </el-table-column>
 
                 <el-table-column v-if="routeColumnState.ownerCompanyName" prop="ownerCompanyName" label="创建公司" min-width="170" sortable="custom">
@@ -1126,6 +1189,7 @@ import StatusTag from '@/components/base/StatusTag.vue'
 import SmartTable from '@/components/base/SmartTable.vue'
 import { isTextMatchMode, type TextMatchMode } from '@/utils/textFilter'
 import RouteFormDrawer from './components/RouteFormDrawer.vue'
+import RouteFieldEditor from './components/RouteFieldEditor.vue'
 import TransferServiceEditor from './components/TransferServiceEditor.vue'
 import AliasCellEditor from './components/AliasCellEditor.vue'
 import RouteGrantDialog from './components/RouteGrantDialog.vue'
@@ -1645,11 +1709,6 @@ function routeRowIndex(index: number) {
 
 function transferRowIndex(index: number) {
   return (transferPage.value - 1) * transferPageSize.value + index + 1
-}
-
-function formatNumber(value?: number | null) {
-  if (value === undefined || value === null) return '—'
-  return Number(value).toFixed(2)
 }
 
 function flattenDeptOptions(nodes: ManageScopeNode[]): Array<{ label: string; value: number }> {
