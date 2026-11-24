@@ -1620,7 +1620,15 @@ onBeforeUnmount(() => {
   opacity: 0.7;
 }
 
-.cand-dest,
+/* 目的地要完整显示省市区（含四级乡镇全称），超长换行不截断 */
+.cand-dest {
+  min-width: 0;
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 18px;
+}
+
 .cand-hub {
   min-width: 0;
   overflow: hidden;
