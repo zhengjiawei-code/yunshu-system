@@ -126,7 +126,7 @@
                       v-if="!item.noRoute"
                       class="cand-service"
                       :title="'提供服务：' + (item.provideServices || '—')"
-                    ><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
+                    ><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
                     <span v-else>—</span>
                   </span>
                 </button>
@@ -187,7 +187,7 @@
                     <span
                       class="cand-service"
                       :title="'提供服务：' + (item.provideServices || '—')"
-                    ><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
+                    ><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
                   </span>
                 </button>
               </div>
@@ -1576,7 +1576,7 @@ onBeforeUnmount(() => {
 .cand-head,
 .cand-row {
   display: grid;
-  grid-template-columns: 190px 84px minmax(0, 1fr) 150px 158px;
+  grid-template-columns: 190px 84px minmax(0, 1fr) 150px 120px;
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -1693,28 +1693,15 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 
+/* 列头已是“提供服务”，单元格只显示值，不再重复标签 */
 .cand-service {
   flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.svc-tag {
-  display: inline-block;
-  box-sizing: border-box;
-  margin-right: 4px;
-  padding: 0 4px;
-  border: 1px solid #eef0f4;
-  border-radius: 3px;
-  background: #f7f8fa;
-  color: #667085;
-  font-size: 12px;
-  font-style: normal;
-  line-height: 18px;
+  min-width: 0;
 }
 
 .svc-value {
-  color: inherit;
+  color: var(--color-text-regular);
+  font-size: 12px;
 }
 
 .cand-none {
