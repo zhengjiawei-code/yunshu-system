@@ -486,6 +486,10 @@
 
 ### 9.5 索引与容量
 
+- 字符集/排序规则：`utf8mb4 / utf8mb4_0900_ai_ci`，与全库 26 张表及库默认一致，禁止 `general_ci`（避免 JOIN 报 `Illegal mix of collations`）。
+- 实体约定：`BizExportTask.deleted` 加 `@TableLogic`；`create_time/update_time` 由数据库默认值与 `ON UPDATE` 维护。
+- 数据权限：`biz_export_task` 登记为**豁免表**（与 `biz_waybill_no_seq` 同类）。理由：任务属用户私有，且后台导出线程无请求上下文；服务层查询/下载一律强制 `create_by = 当前用户`，下载时再校验当前四档权限与 `dept_id`，防止机构切换后越权；`dept_id` 仅用于审计与统计。
+
 - 索引：`idx_user_status(create_by, status)`、`idx_status_expire(status, expire_time)`、`idx_type_time(task_type, create_time)`。
 - 容量估算：20 万行 × 40 列约 60–120MB/任务；按日期分桶，避免单目录文件过多。
 
@@ -574,6 +578,7 @@
 ## 13. 数据库迁移清单（V22 / V23 / V24，均待家伟批准，未执行）
 
 > 当前库版本 **21**；三项迁移均只出稿，位于 `outputs/ddl/*_pending*.sql`，**未移入 Flyway、未执行**。
+> 建表字符集统一 `utf8mb4` + `utf8mb4_0900_ai_ci`（已核：库默认与全部 26 张表均为此组合，无 `general_ci` 表）。
 
 | 版本 | 文件 | 内容 | 依赖 | 回滚 |
 |---|---|---|---|---|

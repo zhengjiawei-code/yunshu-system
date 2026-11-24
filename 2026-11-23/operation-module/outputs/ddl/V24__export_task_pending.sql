@@ -32,5 +32,5 @@ CREATE TABLE biz_export_task (
     KEY idx_dept_time (dept_id, create_time)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_general_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '导出任务表：异步导出任务与文件元信息';
