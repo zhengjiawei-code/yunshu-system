@@ -217,7 +217,7 @@
               </div>
             </label>
             <label class="field span2"><span class="lbl">发货地址</span>
-              <el-input v-model="form.senderAddress" :class="{ 'is-empty': !form.senderAddress }" />
+              <el-input v-model="form.senderAddress" />
             </label>
           </div>
         </section>
@@ -269,7 +269,7 @@
             </div>
             <div v-if="receiverRegionHint" class="region-hint span2">{{ receiverRegionHint }}</div>
             <label class="field span2"><span class="lbl"><i v-if="receiverAddressRequired" class="star">*</i>收货地址</span>
-              <el-input v-model="form.receiverAddress" :class="{ 'is-empty': !form.receiverAddress }" />
+              <el-input v-model="form.receiverAddress" :class="{ 'is-empty': receiverAddressRequired && !form.receiverAddress }" />
             </label>
           </div>
         </section>
@@ -683,6 +683,14 @@ const deliveryFeeRequired = computed(() => form.deliveryMethod === 1 || form.del
 
 /** 收货地址仅送货(1)/大车直送(3) 必填；自提(2) 不要求（发货地址非必填） */
 const receiverAddressRequired = computed(() => form.deliveryMethod === 1 || form.deliveryMethod === 3)
+
+/** 切换送货方式后立即按新规则重算错误态（表单无 el-form 校验，错误态由类名驱动，这里同步错误条） */
+watch(
+  () => form.deliveryMethod,
+  () => {
+    if (submitted.value) errorList.value = collectErrors()
+  }
+)
 
 /** 选中线路的服务能力；未选或字段缺省（兜底直达）视为都可选 */
 const routePickupEnabled = computed(() => selectedRoute.value?.pickupEnabled !== false)
