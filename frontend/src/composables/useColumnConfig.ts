@@ -218,11 +218,13 @@ function defaultState(def: ColumnDef): ColumnItemState {
 export function useColumnConfig(
   pageKey: string,
   schema: ColumnDef[],
-  options: { leadingKeys?: string[] } = {}
+  options: { leadingKeys?: string[]; moveAfter?: Record<string, string> } = {}
 ) {
   const configurable = computed(() => schema.filter((item) => !item.ignored))
   /** 页面指定的前置列：存量配置与默认配置都需保证这些列排在最前，顺序以数组为准 */
   const leadingKeys = options.leadingKeys ?? []
+  /** 页面指定的相对位置：key 需要紧跟在 anchor 列之后（存量配置同样生效） */
+  const moveAfter = options.moveAfter ?? {}
   const states = ref<ColumnItemState[]>(configurable.value.map(defaultState))
   const loading = ref(false)
   const saving = ref(false)
@@ -244,7 +246,28 @@ export function useColumnConfig(
     for (const def of configurable.value) {
       if (!seen.has(def.key)) result.push(defaultState(def))
     }
-    return applyLeadingOrder(result)
+    return applyMoveAfter(applyLeadingOrder(result))
+  }
+
+  /**
+   * 相对位置迁移：把指定列移动到锚点列之后，保证存量的旧顺序也与新规则一致。
+   * 未声明规则的页面原样返回。
+   */
+  function applyMoveAfter(list: ColumnItemState[]): ColumnItemState[] {
+    const rules = Object.entries(moveAfter)
+    if (!rules.length) return list
+    let result = list
+    for (const [key, anchor] of rules) {
+      const item = result.find((state) => state.key === key)
+      const anchorIndex = result.findIndex((state) => state.key === anchor)
+      if (!item || anchorIndex < 0) continue
+      if (result.indexOf(item) === anchorIndex + 1) continue
+      const next = result.filter((state) => state.key !== key)
+      const nextAnchorIndex = next.findIndex((state) => state.key === anchor)
+      next.splice(nextAnchorIndex + 1, 0, item)
+      result = next
+    }
+    return result
   }
 
   /**

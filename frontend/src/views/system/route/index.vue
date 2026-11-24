@@ -694,6 +694,31 @@
                       <template #default="{ row }">{{ row.destLeafName || '—' }}</template>
                     </el-table-column>
 
+                    <el-table-column v-if="transferColumnState.alias" prop="alias" label="别名" min-width="150" sortable="custom">
+                      <template #header>
+                        <div class="col-head">
+                          <span class="col-head__label">别名</span>
+                          <column-filter
+                            v-if="col('alias').filterType !== 'none'"
+                            v-model="transferFilters.alias"
+                            :type="col('alias').filterType"
+                            :filter-mode="col('alias').filterMode"
+                            :text-mode="transferTextModes.alias"
+                            placeholder="别名"
+                            @update:mode="(mode) => (transferTextModes.alias = mode)"
+                            @change="onTransferTextFilter"
+                          />
+                        </div>
+                      </template>
+                      <template #default="{ row }">
+                        <alias-cell-editor
+                          :row="row"
+                          :editable="row.editable"
+                          @updated="(value) => (row.alias = value)"
+                        />
+                      </template>
+                    </el-table-column>
+
                     <el-table-column
                       v-if="transferColumnState.destProvinceName"
                       prop="destProvinceName"
@@ -781,31 +806,6 @@
                         </div>
                       </template>
                       <template #default="{ row }">{{ row.destTownName || '—' }}</template>
-                    </el-table-column>
-
-                    <el-table-column v-if="transferColumnState.alias" prop="alias" label="别名" min-width="150" sortable="custom">
-                      <template #header>
-                        <div class="col-head">
-                          <span class="col-head__label">别名</span>
-                          <column-filter
-                            v-if="col('alias').filterType !== 'none'"
-                            v-model="transferFilters.alias"
-                            :type="col('alias').filterType"
-                            :filter-mode="col('alias').filterMode"
-                            :text-mode="transferTextModes.alias"
-                            placeholder="别名"
-                            @update:mode="(mode) => (transferTextModes.alias = mode)"
-                            @change="onTransferTextFilter"
-                          />
-                        </div>
-                      </template>
-                      <template #default="{ row }">
-                        <alias-cell-editor
-                          :row="row"
-                          :editable="row.editable"
-                          @updated="(value) => (row.alias = value)"
-                        />
-                      </template>
                     </el-table-column>
 
                     <el-table-column v-if="transferColumnState.regionLevel" prop="regionLevel" label="级别" width="96" align="center" sortable="custom">
@@ -1210,6 +1210,12 @@ const transferSchema = reactive<ColumnDef[]>([
   { key: 'routeName', label: '路由名称', prop: 'routeName', filterType: 'text', defaultHidden: true },
   { key: 'regionFullName', label: '目的地', prop: 'regionFullName', filterType: 'text' },
   {
+    key: 'alias',
+    label: '别名',
+    prop: 'alias',
+    filterType: 'text'
+  },
+  {
     key: 'destProvinceName',
     label: '目的地省',
     prop: 'destProvinceName',
@@ -1236,12 +1242,6 @@ const transferSchema = reactive<ColumnDef[]>([
     prop: 'destTownName',
     filterType: 'select',
     filterOptions: []
-  },
-  {
-    key: 'alias',
-    label: '别名',
-    prop: 'alias',
-    filterType: 'text'
   },
   {
     key: 'regionLevel',
@@ -1358,7 +1358,8 @@ const {
   defaultFiltersRaw: transferDefaultFilters,
   filterModesParam: transferFilterModesParam
 } = useColumnConfig('system:route-transfer', transferSchema, {
-  leadingKeys: ['status', 'grantScope']
+  leadingKeys: ['status', 'grantScope'],
+  moveAfter: { alias: 'regionFullName' }
 })
 
 const transferColumnState = computed(
