@@ -1237,7 +1237,6 @@ defineOptions({ name: 'SystemRoute' })
 
 const routeSchema = reactive<ColumnDef[]>([
   { key: 'routeCode', label: '路由编码', prop: 'routeCode', filterType: 'text', locked: true },
-  { key: 'routeName', label: '线路名称', prop: 'routeName', filterType: 'text' },
   {
     key: 'routeCategory',
     label: '类型',
@@ -1268,6 +1267,8 @@ const routeSchema = reactive<ColumnDef[]>([
       { label: '停用', value: false }
     ]
   },
+  // 线路名称排在状态之后：默认顺序与存量配置都由 moveAfter 兜底
+  { key: 'routeName', label: '线路名称', prop: 'routeName', filterType: 'text' },
   { key: 'sortOrder', label: '排序号', prop: 'sortOrder', filterType: 'none', filterHidden: true, align: 'right' },
   { key: 'updateTime', label: '更新时间', prop: 'updateTime', filterType: 'daterange', align: 'center' },
   {
@@ -1439,7 +1440,9 @@ const {
   reset: resetRouteColumnConfig,
   defaultFiltersRaw: routeDefaultFilters,
   filterModesParam: routeFilterModesParam
-} = useColumnConfig('system:route', routeSchema)
+} = useColumnConfig('system:route', routeSchema, {
+  moveAfter: { status: 'destDeptName', routeName: 'status' }
+})
 
 const routeColumnState = computed(
   () =>

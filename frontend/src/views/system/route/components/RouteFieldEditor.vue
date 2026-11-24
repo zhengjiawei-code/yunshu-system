@@ -188,11 +188,15 @@ async function commit() {
 
 .route-field-editor__value.is-editable {
   cursor: pointer;
-  border-bottom: 1px dashed var(--el-color-primary-light-5);
+  padding: 0 4px;
+  border: 1px dashed #dcdfe6;
+  border-radius: 2px;
+  line-height: 20px;
 }
 
 .route-field-editor__value.is-editable:hover {
   color: var(--el-color-primary);
+  border-color: #c0c4cc;
 }
 
 .route-field-editor__input {
