@@ -602,7 +602,7 @@ public class SysRouteServiceImpl implements SysRouteService {
                             .set(SysRouteTransfer::getRegionFullName, regionFullName(region))
                             .set(SysRouteTransfer::getAlias, requestAlias != null ? requestAlias
                                     : StringUtils.hasText(existing.getAlias()) ? existing.getAlias()
-                                    : regionFullName(region))
+                                    : region.getName())
                             .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
                             .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled)
                             .set(SysRouteTransfer::getUpdateBy, org.userId()));
@@ -633,7 +633,7 @@ public class SysRouteServiceImpl implements SysRouteService {
                 transferMapper.update(null, Wrappers.<SysRouteTransfer>lambdaUpdate()
                         .eq(SysRouteTransfer::getId, deleted.getId())
                         .set(SysRouteTransfer::getAlias,
-                                requestAlias != null ? requestAlias : regionFullName(region))
+                                requestAlias != null ? requestAlias : region.getName())
                         .set(SysRouteTransfer::getPickupEnabled, pickupEnabled)
                         .set(SysRouteTransfer::getDeliveryEnabled, deliveryEnabled));
                 ensureGrant(SCOPE_TRANSFER, deleted.getId(), org);
@@ -653,7 +653,7 @@ public class SysRouteServiceImpl implements SysRouteService {
             route.setRegionCode(region.getCode());
             route.setRegionLevel(region.getLevel());
             route.setRegionFullName(regionFullName(region));
-            route.setAlias(requestAlias != null ? requestAlias : regionFullName(region));
+            route.setAlias(requestAlias != null ? requestAlias : region.getName());
             route.setCarrierId(null);
             route.setOwnerCompanyId(org.companyId());
             route.setStatus(true);

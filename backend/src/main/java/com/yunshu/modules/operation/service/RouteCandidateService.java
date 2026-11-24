@@ -362,6 +362,29 @@ public class RouteCandidateService {
         }
     }
 
+    /**
+     * 直达候选（以网点收尾）的服务能力配置来源：按目的地区划匹配外转配置。
+     * 查询条件 region_code=目标区划 + status 启用 + deleted=0（@TableLogic 自动追加）；
+     * 同一区划挂在不同网点下有多条时：优先 apply_dept_id=运达网点，其次 id 最小；
+     * 一条都查不到返回 null，由调用方按“自提+送货”兜底。
+     */
+    private SysRouteTransfer findHubTransfer(Long destHubId, String regionCode) {
+        if (!StringUtils.hasText(regionCode)) {
+            return null;
+        }
+        List<SysRouteTransfer> matched = transferMapper.selectList(Wrappers.<SysRouteTransfer>lambdaQuery()
+                .eq(SysRouteTransfer::getRegionCode, regionCode)
+                .eq(SysRouteTransfer::getStatus, true)
+                .orderByAsc(SysRouteTransfer::getId));
+        if (matched.isEmpty()) {
+            return null;
+        }
+        return matched.stream()
+                .filter(item -> Objects.equals(item.getApplyDeptId(), destHubId))
+                .findFirst()
+                .orElse(matched.get(0));
+    }
+
     private RouteCandidateVO addHubCandidate(Long originDeptId, SysDept hub, RouteContext context,
                                              List<RouteCandidateVO> out) {
         List<SysRoute> chain = shortestRouteChain(originDeptId, hub.getId(), context.routes());
@@ -418,13 +441,24 @@ public class RouteCandidateService {
             names.add(deptName(context.depts(), route.getDestDeptId()));
         }
 
+        // 服务能力读该网点在该区划的真实外转配置；未配置才用“自提+送货”兜底
+        SysRouteTransfer serviceConfig = findHubTransfer(hub.getId(), district.getCode());
+        boolean pickup = true;
+        boolean delivery = true;
+        String provideServices = DEFAULT_SERVICES;
+        if (serviceConfig != null) {
+            pickup = serviceConfig.getPickupEnabled() == null || serviceConfig.getPickupEnabled();
+            delivery = serviceConfig.getDeliveryEnabled() == null || serviceConfig.getDeliveryEnabled();
+            provideServices = resolveProvideServices(pickup, delivery, serviceConfig.getId());
+        }
+
         vo.setNodes(nodes);
         vo.setRouteKeys(keys);
         vo.setNodeCount(chain.size() + 1);
         vo.setEndType(TYPE_DIRECT);
-        vo.setPickupEnabled(true);
-        vo.setDeliveryEnabled(true);
-        vo.setProvideServices("自提+送货");
+        vo.setPickupEnabled(pickup);
+        vo.setDeliveryEnabled(delivery);
+        vo.setProvideServices(provideServices);
         vo.setMatchLevel(3);
         vo.setTotalHours(hoursMissing ? null : hours.setScale(2, java.math.RoundingMode.HALF_UP));
         vo.setTotalMileage(mileageMissing ? null : mileage.setScale(2, java.math.RoundingMode.HALF_UP));
@@ -436,12 +470,10 @@ public class RouteCandidateService {
         vo.setProvinceCode(province == null ? null : province.getCode());
         vo.setProvinceName(province == null ? null : province.getName());
         vo.setDestName(joinRegionName(province, city, district));
-        // 无外转记录的直达候选：别名取网点区划全称，保证不为空
-        vo.setDestAlias(vo.getDestName());
+        // 无外转记录的直达候选：别名取网点区划短名，保证不为空
+        vo.setDestAlias(district.getName());
         vo.setDestHubId(hub.getId());
         vo.setDestHubName(hub.getDeptName());
-        // 无外转配置的直达候选：无服务配置可读，按默认“自提+送货”兜底展示，不代表真实配置
-        vo.setProvideServices(DEFAULT_SERVICES);
         vo.setNoRoute(false);
         vo.setRecommended(false);
         String key = String.join(",", keys);
@@ -651,7 +683,7 @@ public class RouteCandidateService {
         vo.setProvinceName(province == null ? null : province.getName());
         String destName = joinRegionName(province, city, district);
         vo.setDestName(destName);
-        vo.setDestAlias(StringUtils.hasText(transfer.getAlias()) ? transfer.getAlias() : destName);
+        vo.setDestAlias(StringUtils.hasText(transfer.getAlias()) ? transfer.getAlias() : district.getName());
         SysDept hub = resolveDestHub(district.getCode(), context.depts());
         if (hub == null) {
             // 末段区划本身无归属网点时，再取末段起点/适用机构（若其本身是网点，
@@ -710,7 +742,7 @@ public class RouteCandidateService {
             vo.setProvinceCode(province == null ? null : province.getCode());
             vo.setProvinceName(province == null ? null : province.getName());
             vo.setDestName(joinRegionName(province, city, district));
-            vo.setDestAlias(vo.getDestName());
+            vo.setDestAlias(district.getName());
             vo.setChainText(joinRegionName(province, city, district));
         }
         return vo;
