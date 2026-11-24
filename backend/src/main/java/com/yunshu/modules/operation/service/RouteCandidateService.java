@@ -161,6 +161,7 @@ public class RouteCandidateService {
         result.sort(candidateComparator());
         result.stream().limit(MAX_CANDIDATES).forEach(item -> item.setRecommended(false));
         List<RouteCandidateVO> limitedResult = result.stream().limit(MAX_CANDIDATES).toList();
+        // 推荐只标排序后的第一条：含干线链路已在排序中前置；整批都无干线时自然退回第一条
         limitedResult.stream().filter(item -> !Boolean.TRUE.equals(item.getNoRoute())).findFirst()
                 .ifPresent(item -> item.setRecommended(true));
         return limitedResult;
@@ -184,6 +185,7 @@ public class RouteCandidateService {
         }
         result.sort(candidateComparator());
         List<RouteCandidateVO> limited = result.stream().limit(MAX_CANDIDATES).toList();
+        // 与下拉候选同一套规则：排序首条含干线优先，整批无干线时退回第一条
         limited.stream().filter(item -> !Boolean.TRUE.equals(item.getNoRoute())).findFirst()
                 .ifPresent(item -> item.setRecommended(true));
         return limited;
@@ -790,9 +792,23 @@ public class RouteCandidateService {
         return dept == null ? "" : dept.getDeptName();
     }
 
+    /** 链路是否含干线路由段（routeKeys 中出现 1:<routeId>），纯外转链路只有 2:<transferId> */
+    private boolean hasRouteSegment(RouteCandidateVO item) {
+        return item.getRouteKeys() != null
+                && item.getRouteKeys().stream().anyMatch(key -> key.startsWith(SCOPE_ROUTE + ":"));
+    }
+
+    /**
+     * 排序规则（依次比较）：
+     * 1) 含干线路由段的链路优先于纯外转链路（开单优先走优干线路由）；
+     * 2) 同档节点数少优先；
+     * 3) 同档同节点数直达优先于外转；
+     * 4) 其余沿用原有稳定次序（区域匹配深度、时效、里程、末段 id、目的名称），保证顺序唯一确定。
+     */
     private Comparator<RouteCandidateVO> candidateComparator() {
         return Comparator
                 .comparing((RouteCandidateVO item) -> Boolean.TRUE.equals(item.getNoRoute()) ? 1 : 0)
+                .thenComparing(item -> hasRouteSegment(item) ? 0 : 1)
                 .thenComparing(item -> item.getNodeCount() == null ? Integer.MAX_VALUE : item.getNodeCount())
                 .thenComparing(item -> item.getEndType() == null || item.getEndType() != TYPE_DIRECT ? 1 : 0)
                 .thenComparing(item -> item.getMatchLevel() == null ? 0 : -item.getMatchLevel())
