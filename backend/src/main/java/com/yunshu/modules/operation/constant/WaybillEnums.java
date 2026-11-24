@@ -173,7 +173,7 @@ public final class WaybillEnums {
         }
     }
 
-    /** 末段类型 */
+    /** 路由类型 */
     public enum RouteEndType {
         DIRECT(1, "直达"),
         TRANSFER(2, "外转");

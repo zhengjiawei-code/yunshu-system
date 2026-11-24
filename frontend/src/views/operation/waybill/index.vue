@@ -318,7 +318,7 @@ const schema = reactive<WaybillColumn[]>([
   { key: 'isChild', label: '是否子单', prop: 'isChild', width: 100, filterType: 'select', selectMultiple: true, filterOptions: CHILD_FLAG_OPTIONS, dict: CHILD_FLAG_OPTIONS, defaultHidden: true },
   { key: 'childSeq', label: '子单序号', prop: 'childSeq', width: 96, filterType: 'numberrange', numeric: 'number', align: 'right', defaultHidden: true },
   { key: 'routeNodeCount', label: '路由节点数', prop: 'routeNodeCount', width: 100, filterType: 'numberrange', numeric: 'number', align: 'right', defaultHidden: true },
-  { key: 'routeEndType', label: '末段类型', prop: 'routeEndType', width: 100, filterType: 'select', selectMultiple: true, filterOptions: ROUTE_END_TYPE_OPTIONS, dict: ROUTE_END_TYPE_OPTIONS, defaultHidden: true },
+  { key: 'routeEndType', label: '路由类型', prop: 'routeEndType', width: 100, filterType: 'select', selectMultiple: true, filterOptions: ROUTE_END_TYPE_OPTIONS, dict: ROUTE_END_TYPE_OPTIONS, defaultHidden: true },
   { key: 'preOrderNo', label: '来源预开单号', prop: 'preOrderNo', width: 170, defaultHidden: true },
   { key: 'operation', label: '操作', elKey: 'label:操作', width: 160, filterType: 'none', sortable: false, locked: true }
 ])

@@ -1,59 +1,56 @@
 <template>
-  <div class="wf">
+  <div class="wf" :class="{ 'is-readonly': readonly }">
     <section class="card">
       <div class="sec-head">
         <span class="sec-title">基本信息</span>
-        <div class="hub-tags">
-          <span class="hub-tag">始发：{{ model.originHubName || '—' }}</span>
-          <span class="hub-arrow">→</span>
-          <span class="hub-tag">运达：{{ model.destHubName || '—' }}</span>
-          <span v-if="model.routeEndType" class="route-badge">
-            {{ dictText(ROUTE_END_TYPE_OPTIONS, model.routeEndType) }}
-          </span>
+      </div>
+
+      <div class="grid four">
+        <div class="field">
+          <span class="lbl">关联单号</span>
+          <span class="ro-value">{{ text(model.relatedNo) }}</span>
+        </div>
+        <div class="field">
+          <span class="lbl">业务类型</span>
+          <span class="ro-value">{{ dictText(BIZ_TYPE_OPTIONS, model.bizType) }}</span>
+        </div>
+        <div class="field">
+          <span class="lbl">业务员</span>
+          <span class="ro-value">{{ text(model.salesName) }}</span>
+        </div>
+        <div class="field">
+          <span class="lbl">客户名称</span>
+          <span class="ro-value">{{ text(model.customerName) }}</span>
         </div>
       </div>
 
-      <div class="grid four">
-        <label class="field">
-          <span class="lbl">关联单号</span>
-          <el-input v-model="model.relatedNo" :disabled="readonly" placeholder="—" />
-        </label>
-        <label class="field">
-          <span class="lbl">业务类型</span>
-          <el-select v-model="model.bizType" :disabled="readonly" placeholder="请选择">
-            <el-option v-for="item in BIZ_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </label>
-        <label class="field">
-          <span class="lbl">业务员</span>
-          <el-input v-model="model.salesName" :disabled="readonly" placeholder="—" />
-        </label>
-        <label class="field">
-          <span class="lbl">客户名称</span>
-          <el-input v-model="model.customerName" :disabled="true" placeholder="—" />
-        </label>
+      <div class="grid four mt4">
+        <div class="field">
+          <span class="lbl">目的地</span>
+          <span class="ro-value" :title="model.destName">{{ text(model.destName) }}</span>
+        </div>
+        <div class="field">
+          <span class="lbl">运达网点</span>
+          <span class="ro-value" :title="model.destHubName">{{ text(model.destHubName) }}</span>
+        </div>
+        <div class="field span2">
+          <span class="lbl">线路</span>
+          <span class="ro-value" :title="model.routeName">{{ text(model.routeName) }}</span>
+        </div>
       </div>
 
-      <div class="grid four">
-        <label class="field">
-          <span class="lbl">目的地</span>
-          <el-input v-model="model.destName" :disabled="true" />
-        </label>
-        <label class="field">
-          <span class="lbl">运达网点</span>
-          <el-input v-model="model.destHubName" :disabled="true" />
-        </label>
-        <label class="field span2">
-          <span class="lbl">线路</span>
-          <el-input v-model="model.routeName" :disabled="true" />
-        </label>
-      </div>
-      <div class="route-meta">
-        路由节点 {{ model.routeNodeCount ?? 0 }} 个
-        <span class="dot">·</span>
-        末段类型：{{ dictText(ROUTE_END_TYPE_OPTIONS, model.routeEndType) }}
-        <span class="dot">·</span>
-        目的地/线路为开单派生字段，改单不可修改
+      <div class="route-strip">
+        <span class="route-label">路由</span>
+        <b>{{ text(model.originHubName) }}</b>
+        <span class="route-arrow">→</span>
+        <b>{{ text(model.destHubName) }}</b>
+        <span v-if="!readonly && model.routeEndType" class="route-type">
+          <span class="route-type-label">路由类型</span>
+          <span class="route-badge">
+            {{ dictText(ROUTE_END_TYPE_OPTIONS, model.routeEndType) }}
+          </span>
+        </span>
+        <span class="route-meta">节点 {{ model.routeNodeCount ?? 0 }} 个</span>
       </div>
     </section>
 
@@ -64,78 +61,88 @@
       <div class="grid two party-grid">
         <div class="party">
           <div class="party-title">发货方</div>
-          <label class="field">
-            <span class="lbl">发货单位</span>
-            <el-input v-model="model.senderCompany" :disabled="readonly" placeholder="选填" />
-          </label>
-          <label class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>发货人</span>
-            <el-input v-model="model.senderName" :disabled="readonly" />
-          </label>
-          <label class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>发货电话</span>
-            <el-input v-model="model.senderPhone" :disabled="readonly" />
-          </label>
-          <label class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>发货地址</span>
-            <el-input v-model="model.senderAddress" :disabled="readonly" />
-          </label>
+          <div class="party-inner">
+            <div class="field">
+              <span class="lbl">发货单位</span>
+              <el-input v-if="!readonly" v-model="model.senderCompany" size="small" placeholder="选填" />
+              <span v-else class="ro-value">{{ text(model.senderCompany) }}</span>
+            </div>
+            <div class="field">
+              <span class="lbl"><i v-if="!readonly" class="star">*</i>发货人</span>
+              <el-input v-if="!readonly" v-model="model.senderName" size="small" />
+              <span v-else class="ro-value">{{ text(model.senderName) }}</span>
+            </div>
+            <div class="field">
+              <span class="lbl"><i v-if="!readonly" class="star">*</i>发货电话</span>
+              <el-input v-if="!readonly" v-model="model.senderPhone" size="small" />
+              <span v-else class="ro-value">{{ text(model.senderPhone) }}</span>
+            </div>
+            <div class="field span2">
+              <span class="lbl"><i v-if="!readonly" class="star">*</i>发货地址</span>
+              <el-input v-if="!readonly" v-model="model.senderAddress" size="small" />
+              <span v-else class="ro-value" :title="model.senderAddress">{{ text(model.senderAddress) }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="party">
           <div class="party-title">收货方</div>
-          <label class="field">
-            <span class="lbl">收货单位</span>
-            <el-input v-model="model.receiverCompany" :disabled="readonly" placeholder="选填" />
-          </label>
-          <label class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>收货人</span>
-            <el-input v-model="model.receiverName" :disabled="readonly" />
-          </label>
-          <label class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>收货电话</span>
-            <el-input v-model="model.receiverPhone" :disabled="readonly" />
-          </label>
-          <div class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>收货地区</span>
-            <div v-if="readonly" class="region-readonly">
-              {{ regionText }}
+          <div class="party-inner">
+            <div class="field">
+              <span class="lbl">收货单位</span>
+              <el-input v-if="!readonly" v-model="model.receiverCompany" size="small" placeholder="选填" />
+              <span v-else class="ro-value">{{ text(model.receiverCompany) }}</span>
             </div>
-            <div v-else class="region-selects">
-              <el-select
-                v-model="model.receiverProvinceCode"
-                placeholder="省"
-                size="small"
-                clearable
-                @change="onProvinceChange"
-              >
-                <el-option v-for="item in provinceOptions" :key="item.code" :label="item.name" :value="item.code" />
-              </el-select>
-              <el-select
-                v-model="model.receiverCityCode"
-                placeholder="市"
-                size="small"
-                clearable
-                :disabled="!model.receiverProvinceCode"
-                @change="onCityChange"
-              >
-                <el-option v-for="item in cityOptions" :key="item.code" :label="item.name" :value="item.code" />
-              </el-select>
-              <el-select
-                v-model="model.receiverDistrictCode"
-                placeholder="区县"
-                size="small"
-                clearable
-                :disabled="!model.receiverCityCode"
-              >
-                <el-option v-for="item in districtOptions" :key="item.code" :label="item.name" :value="item.code" />
-              </el-select>
+            <div class="field">
+              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货人</span>
+              <el-input v-if="!readonly" v-model="model.receiverName" size="small" />
+              <span v-else class="ro-value">{{ text(model.receiverName) }}</span>
+            </div>
+            <div class="field">
+              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货电话</span>
+              <el-input v-if="!readonly" v-model="model.receiverPhone" size="small" />
+              <span v-else class="ro-value">{{ text(model.receiverPhone) }}</span>
+            </div>
+            <div class="field span2">
+              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货地区</span>
+              <div v-if="readonly" class="ro-value">{{ regionText }}</div>
+              <div v-else class="region-selects">
+                <el-select
+                  v-model="model.receiverProvinceCode"
+                  placeholder="省"
+                  size="small"
+                  clearable
+                  @change="onProvinceChange"
+                >
+                  <el-option v-for="item in provinceOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+                <el-select
+                  v-model="model.receiverCityCode"
+                  placeholder="市"
+                  size="small"
+                  clearable
+                  :disabled="!model.receiverProvinceCode"
+                  @change="onCityChange"
+                >
+                  <el-option v-for="item in cityOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+                <el-select
+                  v-model="model.receiverDistrictCode"
+                  placeholder="区县"
+                  size="small"
+                  clearable
+                  :disabled="!model.receiverCityCode"
+                >
+                  <el-option v-for="item in districtOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+              </div>
+            </div>
+            <div class="field span2">
+              <span class="lbl"><i v-if="!readonly" class="star">*</i>收货地址</span>
+              <el-input v-if="!readonly" v-model="model.receiverAddress" size="small" />
+              <span v-else class="ro-value" :title="model.receiverAddress">{{ text(model.receiverAddress) }}</span>
             </div>
           </div>
-          <label class="field">
-            <span class="lbl"><i v-if="!readonly" class="star">*</i>收货地址</span>
-            <el-input v-model="model.receiverAddress" :disabled="readonly" />
-          </label>
         </div>
       </div>
     </section>
@@ -143,35 +150,35 @@
     <section class="card">
       <div class="sec-head">
         <span class="sec-title">货物明细</span>
-        <div class="goods-sum">
+        <span class="goods-sum">
           共 {{ goods.length }} 行 · 件数 {{ totals.quantity }} · 重量 {{ formatQuantity(totals.weight) }} kg ·
           体积 {{ formatQuantity(totals.volume) }} m³
-        </div>
+        </span>
       </div>
 
-      <el-table :data="goods" border size="small" class="goods-table" show-overflow-tooltip>
-        <el-table-column type="index" label="序号" width="56" align="center" />
-        <el-table-column label="货物名称" min-width="140">
+      <el-table :data="goods" border size="small" class="goods-table" :row-style="{ height: '28px' }">
+        <el-table-column type="index" label="序号" width="48" align="center" />
+        <el-table-column label="货物名称" min-width="150">
           <template #default="{ row }">
             <el-input v-if="!readonly" v-model="row.goodsName" size="small" placeholder="必填" />
-            <span v-else>{{ row.goodsName || '—' }}</span>
+            <span v-else class="cell-text">{{ text(row.goodsName) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="货物类型" min-width="110">
+        <el-table-column label="货物类型" width="88">
           <template #default="{ row }">
             <el-input v-if="!readonly" v-model="row.goodsType" size="small" placeholder="选填" />
-            <span v-else>{{ row.goodsType || '—' }}</span>
+            <span v-else class="cell-text">{{ text(row.goodsType) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="包装类型" width="120">
+        <el-table-column label="包装类型" width="100">
           <template #default="{ row }">
-            <el-select v-if="!readonly" v-model="row.packageType" size="small" clearable placeholder="选填">
+            <el-select v-if="!readonly" v-model="row.packageType" size="small" clearable>
               <el-option v-for="item in PACKAGE_TYPES" :key="item" :label="item" :value="item" />
             </el-select>
-            <span v-else>{{ row.packageType || '—' }}</span>
+            <span v-else class="cell-text">{{ text(row.packageType) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="件数" width="100" align="right">
+        <el-table-column label="件数" width="68" align="right">
           <template #default="{ row }">
             <el-input-number
               v-if="!readonly"
@@ -181,10 +188,10 @@
               :precision="0"
               :controls="false"
             />
-            <span v-else>{{ row.quantity ?? '—' }}</span>
+            <span v-else class="cell-num">{{ row.quantity ?? '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="体积(m³)" width="120" align="right">
+        <el-table-column label="体积(m³)" width="84" align="right">
           <template #default="{ row }">
             <el-input-number
               v-if="!readonly"
@@ -194,10 +201,10 @@
               :precision="3"
               :controls="false"
             />
-            <span v-else>{{ formatQuantity(row.volume) }}</span>
+            <span v-else class="cell-num">{{ formatQuantity(row.volume) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="重量(kg)" width="120" align="right">
+        <el-table-column label="重量(kg)" width="84" align="right">
           <template #default="{ row }">
             <el-input-number
               v-if="!readonly"
@@ -207,16 +214,16 @@
               :precision="3"
               :controls="false"
             />
-            <span v-else>{{ formatQuantity(row.weight) }}</span>
+            <span v-else class="cell-num">{{ formatQuantity(row.weight) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="备注" min-width="160">
+        <el-table-column label="备注" min-width="110">
           <template #default="{ row }">
             <el-input v-if="!readonly" v-model="row.goodsRemark" size="small" placeholder="选填" />
-            <span v-else>{{ row.goodsRemark || '—' }}</span>
+            <span v-else class="cell-text" :title="row.goodsRemark">{{ text(row.goodsRemark) }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="!readonly" label="操作" width="70" align="center">
+        <el-table-column v-if="!readonly" label="操作" width="56" align="center">
           <template #default="{ $index }">
             <el-button link type="danger" size="small" :disabled="goods.length <= 1" @click="removeGoods($index)">
               删除
@@ -231,137 +238,156 @@
       </div>
     </section>
 
-    <section class="card">
-      <div class="sec-head">
-        <span class="sec-title">费用项</span>
-      </div>
-      <div class="fee-grid">
-        <label v-for="item in feeFields" :key="item.key" class="fee-cell">
-          <span class="lbl">{{ item.label }}</span>
-          <el-input-number
-            v-model="model[item.key]"
-            :min="0"
-            :precision="2"
-            :controls="false"
-            :disabled="readonly || item.key === 'declaredValue'"
-            size="small"
-          />
-        </label>
-        <div class="fee-cell derived">
-          <span class="lbl">运费合计</span>
-          <span class="derived-value">{{ formatMoney(displayTotals.totalFee) }}</span>
+    <div class="grid two section-row">
+      <section class="card">
+        <div class="sec-head">
+          <span class="sec-title">费用项</span>
+          <span v-if="!readonly" class="fee-hint">声明价值不在改单范围；金额由服务端重算</span>
         </div>
-        <div class="fee-cell derived">
-          <span class="lbl">返款合计</span>
-          <span class="derived-value">{{ formatMoney(displayTotals.rebateTotal) }}</span>
-        </div>
-        <div class="fee-cell derived">
-          <span class="lbl">有效运费</span>
-          <span class="derived-value strong">{{ formatMoney(displayTotals.validFreight) }}</span>
-        </div>
-      </div>
-      <div v-if="!readonly" class="fee-hint">声明价值不在改单范围；金额由服务端按费用项重算，多笔付需四项合计等于运费合计。</div>
-    </section>
 
-    <section class="card">
-      <div class="sec-head">
-        <span class="sec-title">支付与配送</span>
-      </div>
-      <div class="grid four">
-        <label class="field">
+        <div class="fee-groups">
+          <div class="fee-group">
+            <div class="fee-group-title">运输与返款</div>
+            <div class="fee-grid">
+              <div v-for="item in transportFeeFields" :key="item.key" class="fee-cell">
+                <span class="fee-lbl">{{ item.label }}</span>
+                <el-input-number
+                  v-if="!readonly"
+                  v-model="model[item.key]"
+                  :min="0"
+                  :precision="2"
+                  :controls="false"
+                  size="small"
+                />
+                <span v-else class="ro-value num">{{ formatMoney(model[item.key]) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="fee-group">
+            <div class="fee-group-title">其他费用</div>
+            <div class="fee-grid">
+              <div v-for="item in otherFeeFields" :key="item.key" class="fee-cell">
+                <span class="fee-lbl">{{ item.label }}</span>
+                <el-input-number
+                  v-if="!readonly && item.key !== 'declaredValue'"
+                  v-model="model[item.key]"
+                  :min="0"
+                  :precision="2"
+                  :controls="false"
+                  size="small"
+                />
+                <span v-else class="ro-value num">{{ formatMoney(model[item.key]) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fee-foot">
+          <span>运费合计 <b>{{ formatMoney(displayTotals.totalFee) }}</b></span>
+          <span>返款合计 <b>{{ formatMoney(displayTotals.rebateTotal) }}</b></span>
+          <span class="strong">有效运费 <b>{{ formatMoney(displayTotals.validFreight) }}</b></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="sec-head">
+          <span class="sec-title">支付与配送</span>
+        </div>
+
+        <div class="field">
           <span class="lbl"><i v-if="!readonly" class="star">*</i>支付方式</span>
-          <el-select v-model="model.payMethod" :disabled="readonly" placeholder="请选择">
+          <el-select v-if="!readonly" v-model="model.payMethod" size="small" placeholder="请选择">
             <el-option v-for="item in PAY_METHOD_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
-        </label>
-        <label class="field">
-          <span class="lbl"><i v-if="!readonly" class="star">*</i>送货方式</span>
-          <el-select v-model="model.deliveryMethod" :disabled="readonly" placeholder="请选择">
-            <el-option
-              v-for="item in DELIVERY_METHOD_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-        </label>
-        <label class="field">
-          <span class="lbl">是否回单</span>
-          <el-select v-model="model.needReceipt" :disabled="true">
-            <el-option v-for="item in NEED_RECEIPT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </label>
-        <label class="field">
-          <span class="lbl">回单数量</span>
-          <el-input-number v-model="model.receiptCount" :min="0" :precision="0" :controls="false" :disabled="true" />
-        </label>
-        <label class="field">
-          <span class="lbl">是否等通知</span>
-          <el-select v-model="model.waitNotice" :disabled="true">
-            <el-option v-for="item in NEED_RECEIPT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </label>
-      </div>
+          <span v-else class="ro-value">{{ dictText(PAY_METHOD_OPTIONS, model.payMethod) }}</span>
+        </div>
 
-      <div v-if="model.payMethod === 5" class="pay-amounts">
-        <label v-for="item in payAllocations" :key="item.key" class="fee-cell">
-          <span class="lbl">{{ item.label }}</span>
-          <el-input-number
-            v-model="model[item.key]"
-            :min="0"
-            :precision="2"
-            :controls="false"
-            :disabled="readonly"
-            size="small"
-          />
-        </label>
-        <div class="pay-diff" :class="{ danger: Math.abs(payDiff) > 0.001 }">
+        <div class="grid four pay-amounts">
+          <div v-for="item in payAllocations" :key="item.key" class="field">
+            <span class="lbl">{{ item.label }}</span>
+            <el-input-number
+              v-if="!readonly && model.payMethod === 5"
+              v-model="model[item.key]"
+              :min="0"
+              :precision="2"
+              :controls="false"
+              size="small"
+            />
+            <span v-else class="ro-value num">{{ formatMoney(model[item.key]) }}</span>
+          </div>
+        </div>
+
+        <div v-if="model.payMethod === 5" class="pay-diff" :class="{ danger: Math.abs(payDiff) > 0.001 }">
           四项合计 {{ formatMoney(paySum) }}，与运费合计差额 {{ formatMoney(payDiff) }}
         </div>
-      </div>
 
-      <div class="grid two">
-        <label class="field span2">
-          <span class="lbl">备注</span>
-          <el-input
-            v-model="model.remark"
-            type="textarea"
-            :rows="2"
-            maxlength="500"
-            show-word-limit
-            :disabled="readonly"
-          />
-        </label>
-      </div>
-    </section>
+        <div class="grid two pay-extra">
+          <div class="field">
+            <span class="lbl"><i v-if="!readonly" class="star">*</i>送货方式</span>
+            <el-select v-if="!readonly" v-model="model.deliveryMethod" size="small" placeholder="请选择">
+              <el-option
+                v-for="item in DELIVERY_METHOD_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+            <span v-else class="ro-value">{{ dictText(DELIVERY_METHOD_OPTIONS, model.deliveryMethod) }}</span>
+          </div>
+          <div class="field">
+            <span class="lbl">是否回单</span>
+            <span class="ro-value">{{ dictText(NEED_RECEIPT_OPTIONS, model.needReceipt) }}</span>
+          </div>
+          <div class="field">
+            <span class="lbl">回单数量</span>
+            <span class="ro-value num">{{ model.receiptCount ?? 0 }}</span>
+          </div>
+          <div class="field">
+            <span class="lbl">是否等通知</span>
+            <span class="ro-value">{{ dictText(NEED_RECEIPT_OPTIONS, model.waitNotice) }}</span>
+          </div>
+          <div class="field span2">
+            <span class="lbl">备注</span>
+            <el-input v-if="!readonly" v-model="model.remark" size="small" maxlength="500" placeholder="选填" />
+            <span v-else class="ro-value" :title="model.remark">{{ text(model.remark) }}</span>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <section class="card">
       <div class="sec-head">
         <span class="sec-title">代收货款</span>
       </div>
       <div class="grid four">
-        <label class="field">
+        <div class="field">
           <span class="lbl">代收货款</span>
           <el-input-number
+            v-if="!readonly"
             v-model="model.codAmount"
             :min="0"
             :precision="2"
             :controls="false"
-            :disabled="readonly"
+            size="small"
           />
-        </label>
-        <label class="field">
+          <span v-else class="ro-value num">{{ formatMoney(model.codAmount) }}</span>
+        </div>
+        <div class="field">
           <span class="lbl">收款人</span>
-          <el-input v-model="model.payeeName" :disabled="readonly" placeholder="代收&gt;0 必填" />
-        </label>
-        <label class="field">
+          <el-input v-if="!readonly" v-model="model.payeeName" size="small" placeholder="代收>0 必填" />
+          <span v-else class="ro-value">{{ text(model.payeeName) }}</span>
+        </div>
+        <div class="field">
           <span class="lbl">银行名称</span>
-          <el-input v-model="model.bankName" :disabled="readonly" placeholder="代收&gt;0 必填" />
-        </label>
-        <label class="field">
+          <el-input v-if="!readonly" v-model="model.bankName" size="small" placeholder="代收>0 必填" />
+          <span v-else class="ro-value">{{ text(model.bankName) }}</span>
+        </div>
+        <div class="field">
           <span class="lbl">银行卡号</span>
-          <el-input v-model="model.bankCardNo" :disabled="readonly" placeholder="代收&gt;0 必填" />
-        </label>
+          <el-input v-if="!readonly" v-model="model.bankCardNo" size="small" placeholder="代收>0 必填" />
+          <span v-else class="ro-value">{{ maskCard(model.bankCardNo) }}</span>
+        </div>
       </div>
     </section>
   </div>
@@ -457,24 +483,27 @@ const props = withDefaults(
 
 const readonly = computed(() => props.readonly)
 
-const feeFields = [
+const transportFeeFields = [
   { key: 'freightFee', label: '运费' },
-  { key: 'cashBack', label: '现返' },
-  { key: 'oweBack', label: '欠返' },
   { key: 'deliveryFee', label: '送货费' },
-  { key: 'declaredValue', label: '声明价值' },
-  { key: 'insuranceFee', label: '保费' },
   { key: 'pickupFee', label: '提货费' },
+  { key: 'cashBack', label: '现返' },
+  { key: 'oweBack', label: '欠返' }
+] as const
+
+const otherFeeFields = [
   { key: 'otherFee', label: '其他费' },
   { key: 'receiptFee', label: '回单费' },
-  { key: 'makeBillFee', label: '制单费' }
+  { key: 'makeBillFee', label: '制单费' },
+  { key: 'insuranceFee', label: '保费' },
+  { key: 'declaredValue', label: '声明价值' }
 ] as const
 
 const payAllocations = [
-  { key: 'prepaidFee', label: '现付运费' },
-  { key: 'collectFee', label: '到付运费' },
-  { key: 'monthlyFee', label: '月结运费' },
-  { key: 'returnFee', label: '回付运费' }
+  { key: 'prepaidFee', label: '现付' },
+  { key: 'collectFee', label: '到付' },
+  { key: 'monthlyFee', label: '月结' },
+  { key: 'returnFee', label: '回付' }
 ] as const
 
 const totals = computed(() => {
@@ -496,14 +525,14 @@ const totals = computed(() => {
 const calcTotal = computed(() => {
   const keys = [
     'freightFee',
+    'deliveryFee',
+    'pickupFee',
     'cashBack',
     'oweBack',
-    'deliveryFee',
-    'insuranceFee',
-    'pickupFee',
     'otherFee',
     'receiptFee',
-    'makeBillFee'
+    'makeBillFee',
+    'insuranceFee'
   ] as const
   return round2(keys.reduce((sum, key) => sum + Number(props.model[key] || 0), 0))
 })
@@ -533,11 +562,22 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100
 }
 
+function text(value?: string | number | null): string {
+  return value === undefined || value === null || value === '' ? '—' : String(value)
+}
+
+function maskCard(card?: string | null): string {
+  const value = card?.trim()
+  if (!value) return '—'
+  if (value.length <= 8) return '****'
+  return `${value.slice(0, 4)}****${value.slice(-4)}`
+}
+
 const regionText = computed(() => {
-  const text = [props.model.receiverProvinceName, props.model.receiverCityName, props.model.receiverDistrictName]
+  const textValue = [props.model.receiverProvinceName, props.model.receiverCityName, props.model.receiverDistrictName]
     .filter(Boolean)
     .join(' / ')
-  return text || '—'
+  return textValue || '—'
 })
 
 /* ---------- 地区级联（仅改单可编辑时加载） ---------- */
@@ -601,29 +641,31 @@ onMounted(async () => {
 .wf {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 .card {
-  padding: 12px 14px;
-  border: 1px solid var(--color-border-light);
+  padding: 5px 10px 6px;
+  border: 1px solid var(--color-border-base);
   border-radius: 6px;
-  background: var(--color-bg-container);
+  background: var(--color-white, #fff);
 }
 
 .sec-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 10px;
+  min-height: 18px;
+  margin-bottom: 3px;
 }
 
 .sec-title {
   position: relative;
-  padding-left: 9px;
-  font-size: 14px;
-  font-weight: var(--font-weight-medium);
+  padding-left: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
   color: var(--color-text-primary);
 }
 
@@ -638,42 +680,21 @@ onMounted(async () => {
   background: var(--color-primary);
 }
 
-.hub-tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-
-.hub-tag {
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--color-bg-subtle);
-}
-
-.hub-arrow {
-  color: var(--color-text-placeholder);
-}
-
-.route-badge {
-  padding: 1px 7px;
-  border: 1px solid var(--color-primary-light-5);
-  border-radius: 3px;
-  color: var(--color-primary);
-}
-
 .grid {
   display: grid;
-  gap: 10px 14px;
+  gap: 5px 10px;
+}
+
+.grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .grid.four {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.grid.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.mt4 {
+  margin-top: 4px;
 }
 
 .span2 {
@@ -682,140 +703,341 @@ onMounted(async () => {
 
 .field {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  height: 28px;
 }
 
 .lbl {
-  color: var(--color-text-secondary);
+  flex: 0 0 62px;
+  text-align: right;
+  color: var(--color-text-regular);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .star {
   color: var(--color-danger);
   font-style: normal;
-  margin-right: 2px;
+  margin-right: 1px;
 }
 
-.route-meta {
-  margin-top: 8px;
-  color: var(--color-text-placeholder);
-  font-size: 12px;
+.field :deep(.el-input),
+.field :deep(.el-input-number),
+.field :deep(.el-select) {
+  flex: 1;
+  min-width: 0;
 }
 
-.dot {
-  margin: 0 6px;
+.field :deep(.el-input__wrapper),
+.field :deep(.el-select__wrapper) {
+  min-height: 28px;
+  padding: 1px 8px;
 }
 
-.party-grid {
-  align-items: start;
-}
-
-.party {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 4px;
+.ro-value {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  line-height: 26px;
+  padding: 0 8px;
   border: 1px solid var(--color-border-light);
-}
-
-.party-title {
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.region-selects {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.region-readonly {
-  min-height: 30px;
-  padding: 5px 10px;
   border-radius: 4px;
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 只读态：标签 + 文本，不用表单控件撑行高 */
+.is-readonly .field,
+.is-readonly .fee-cell {
+  height: 26px;
+}
+
+.is-readonly .ro-value {
+  height: 24px;
+  line-height: 24px;
+  padding: 0 6px;
+  border-color: transparent;
+  border-radius: 3px;
+  background: var(--color-bg-subtle);
+}
+
+.ro-value.num {
+  text-align: right;
+  font-family: var(--font-family-number);
+  font-variant-numeric: tabular-nums;
+}
+
+.route-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin-top: 4px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.route-label {
+  flex: none;
+  color: var(--color-text-placeholder);
+}
+
+.route-strip b {
+  color: var(--color-primary-dark-1, var(--color-primary));
+  font-weight: 600;
+}
+
+.route-arrow {
+  color: var(--color-text-placeholder);
+}
+
+.route-meta {
+  margin-left: auto;
+  color: var(--color-text-placeholder);
+}
+
+/* 改单页保留路由类型徽标；详情页（只读）不渲染 */
+.route-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.route-type-label {
+  color: var(--color-text-placeholder);
+}
+
+.route-badge {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--color-primary-light-5);
+  border-radius: 3px;
+  color: var(--color-primary);
+  line-height: 16px;
+}
+
+.party-grid {
+  align-items: stretch;
+}
+
+.party {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+}
+
+.party-title {
+  height: 18px;
+  line-height: 18px;
+  margin-bottom: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.party-inner {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.party-inner .field {
+  height: 28px;
+}
+
+.party-inner .lbl {
+  flex-basis: 56px;
+}
+
+.party-inner .span2 {
+  grid-column: span 2;
+}
+
+.region-selects {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.region-selects :deep(.el-select__wrapper) {
+  min-height: 28px;
+  padding: 1px 6px;
 }
 
 .goods-sum {
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-family: var(--font-family-number);
+}
+
+.goods-table :deep(.el-table__header th) {
+  height: 26px;
+  padding: 0;
+  background: var(--color-bg-subtle);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.goods-table :deep(.el-table__body td) {
+  padding: 1px 4px;
+}
+
+.goods-table :deep(.el-input__wrapper),
+.goods-table :deep(.el-select__wrapper) {
+  min-height: 24px;
+  padding: 0 6px;
 }
 
 .goods-table :deep(.el-input-number) {
   width: 100%;
+  min-width: 0;
+}
+
+.goods-table :deep(.el-select) {
+  width: 100%;
+}
+
+.cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.cell-num {
+  display: block;
+  text-align: right;
+  font-family: var(--font-family-number);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
 }
 
 .goods-add {
-  margin-top: 8px;
+  margin-top: 3px;
+}
+
+.fee-hint {
+  color: var(--color-text-placeholder);
+  font-size: 11px;
+}
+
+.fee-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fee-group {
+  min-width: 0;
+}
+
+.fee-group-title {
+  height: 16px;
+  line-height: 16px;
+  color: var(--color-text-placeholder);
+  font-size: 11px;
 }
 
 .fee-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 10px;
 }
 
 .fee-cell {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 28px;
 }
 
-.fee-cell.derived .derived-value {
-  min-height: 30px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  background: var(--color-bg-subtle);
-  font-family: var(--font-family-number);
+.fee-lbl {
+  flex: 0 0 54px;
   text-align: right;
-}
-
-.derived-value.strong {
-  color: var(--color-primary);
-  font-weight: var(--font-weight-medium);
-}
-
-.fee-hint {
-  margin-top: 8px;
-  color: var(--color-text-placeholder);
+  color: var(--color-text-regular);
   font-size: 12px;
+  white-space: nowrap;
+}
+
+.fee-cell :deep(.el-input-number) {
+  flex: 1;
+  min-width: 0;
+}
+
+.fee-cell :deep(.el-input__wrapper) {
+  min-height: 28px;
+  padding: 1px 6px;
+}
+
+.fee-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 26px;
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.fee-foot b {
+  color: var(--color-text-primary);
+  font-family: var(--font-family-number);
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-foot .strong b {
+  color: var(--color-primary);
 }
 
 .pay-amounts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 14px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--color-border-light);
+  margin-top: 4px;
+}
+
+.pay-amounts .lbl {
+  flex-basis: 40px;
+}
+
+.pay-extra {
+  margin-top: 4px;
+}
+
+.section-row {
+  align-items: stretch;
+}
+
+.section-row > .card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .pay-diff {
-  grid-column: span 4;
+  margin-top: 3px;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-family: var(--font-family-number);
 }
 
 .pay-diff.danger {
   color: var(--color-danger);
-}
-
-@media (max-width: 1280px) {
-  .grid.four,
-  .fee-grid,
-  .pay-amounts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .pay-diff {
-    grid-column: span 2;
-  }
 }
 </style>
