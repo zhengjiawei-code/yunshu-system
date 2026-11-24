@@ -26,7 +26,7 @@
         />
       </el-form-item>
 
-      <el-form-item label="到达网点" prop="destDeptId">
+      <el-form-item label="运达网点" prop="destDeptId">
         <el-tree-select
           v-model="form.destDeptId"
           :data="scopeTree"
@@ -35,7 +35,7 @@
           check-strictly
           filterable
           clearable
-          placeholder="请选择到达分拨中心/网点"
+          placeholder="请选择运达分拨中心/网点"
           class="full-width"
         />
       </el-form-item>
@@ -44,10 +44,10 @@
         <el-input
           v-model="form.routeName"
           maxlength="100"
-          placeholder="干线默认“到达网点名+线路”，可修改"
+          placeholder="干线默认“运达网点名+线路”，可修改"
           @input="nameTouched = true"
         />
-        <p class="form-hint">干线在到达网点变更且未手改名称时自动生成；留空保存时由服务端兜底生成</p>
+        <p class="form-hint">干线在运达网点变更且未手改名称时自动生成；留空保存时由服务端兜底生成</p>
       </el-form-item>
 
       <el-form-item label="库区" prop="warehouseArea">
@@ -199,7 +199,7 @@ function nonNegative(message: string) {
 const rules: FormRules = {
   routeCategory: [{ required: true, message: '请选择路由类型', trigger: 'change' }],
   originDeptId: [{ required: true, message: '请选择始发网点', trigger: 'change' }],
-  destDeptId: [{ required: true, message: '请选择到达网点', trigger: 'change' }],
+  destDeptId: [{ required: true, message: '请选择运达网点', trigger: 'change' }],
   mileage: [{ validator: nonNegative('里程不能为负'), trigger: 'change' }],
   transitHours: [{ validator: nonNegative('时效不能为负'), trigger: 'change' }],
   remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
@@ -234,7 +234,7 @@ function findNode(nodes: ManageScopeNode[], id?: number): ManageScopeNode | unde
   return undefined
 }
 
-/** 干线自动名称：到达网点名+线路；用户手改后不再覆盖 */
+/** 干线自动名称：运达网点名+线路；用户手改后不再覆盖 */
 function applyAutoName() {
   if (form.routeCategory !== 2 || nameTouched.value) return
   const dest = findNode(props.scopeTree, form.destDeptId)
@@ -298,7 +298,7 @@ async function handleSubmit() {
   if (!valid) return
   if (!form.originDeptId || !form.destDeptId) return
   if (form.originDeptId === form.destDeptId) {
-    ElMessage.error('始发网点与到达网点不能相同')
+    ElMessage.error('始发网点与运达网点不能相同')
     return
   }
   submitting.value = true

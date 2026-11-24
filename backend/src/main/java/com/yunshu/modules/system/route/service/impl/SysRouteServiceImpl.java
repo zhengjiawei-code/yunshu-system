@@ -192,9 +192,9 @@ public class SysRouteServiceImpl implements SysRouteService {
             throw new BizException("路由类型仅支持短驳或干线");
         }
         SysDept origin = requireRouteDept(request.getOriginDeptId(), "始发网点", scope);
-        SysDept dest = requireRouteDept(request.getDestDeptId(), "到达网点", scope);
+        SysDept dest = requireRouteDept(request.getDestDeptId(), "运达网点", scope);
         if (Objects.equals(origin.getId(), dest.getId())) {
-            throw new BizException("始发网点与到达网点不能相同");
+            throw new BizException("始发网点与运达网点不能相同");
         }
         validateOptionalFields(request);
 
@@ -258,9 +258,9 @@ public class SysRouteServiceImpl implements SysRouteService {
             throw new BizException("路由类型仅支持短驳或干线");
         }
         SysDept origin = requireRouteDept(request.getOriginDeptId(), "始发网点", scope);
-        SysDept dest = requireRouteDept(request.getDestDeptId(), "到达网点", scope);
+        SysDept dest = requireRouteDept(request.getDestDeptId(), "运达网点", scope);
         if (Objects.equals(origin.getId(), dest.getId())) {
-            throw new BizException("始发网点与到达网点不能相同");
+            throw new BizException("始发网点与运达网点不能相同");
         }
         validateOptionalFields(request);
         List<SysRoute> sameKey = routeMapper.selectList(Wrappers.<SysRoute>lambdaQuery()
@@ -269,7 +269,7 @@ public class SysRouteServiceImpl implements SysRouteService {
                 .eq(SysRoute::getDestDeptId, dest.getId())
                 .ne(SysRoute::getId, id));
         if (!sameKey.isEmpty()) {
-            throw new BizException("已存在相同路由（类型+始发+到达），不能重复");
+            throw new BizException("已存在相同路由（类型+始发+运达），不能重复");
         }
 
         routeMapper.update(null, Wrappers.<SysRoute>lambdaUpdate()
@@ -1630,7 +1630,7 @@ public class SysRouteServiceImpl implements SysRouteService {
         if (StringUtils.hasText(input)) {
             return input.trim();
         }
-        // 干线默认“到达网点名+线路”；短驳用始发-到达兜底，保证名称非空
+        // 干线默认“运达网点名+线路”；短驳用始发-运达兜底，保证名称非空
         return category == CATEGORY_TRUNK
                 ? dest.getDeptName() + "线路"
                 : origin.getDeptName() + "-" + dest.getDeptName();

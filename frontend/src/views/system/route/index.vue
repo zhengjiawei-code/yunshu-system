@@ -139,10 +139,10 @@
                   <template #default="{ row }">{{ row.originDeptName || '—' }}</template>
                 </el-table-column>
 
-                <el-table-column v-if="routeColumnState.destDeptName" prop="destDeptName" label="到达网点" min-width="170" sortable="custom">
+                <el-table-column v-if="routeColumnState.destDeptName" prop="destDeptName" label="运达网点" min-width="170" sortable="custom">
                   <template #header>
                     <div class="col-head">
-                      <span class="col-head__label">到达网点</span>
+                      <span class="col-head__label">运达网点</span>
                       <column-filter
                         v-if="routeCol('destDeptName').filterType !== 'none'"
                         v-model="routeFilters.destDeptId"
@@ -1248,7 +1248,7 @@ const routeSchema = reactive<ColumnDef[]>([
     ]
   },
   { key: 'originDeptName', label: '始发网点', prop: 'originDeptName', filterType: 'select', filterOptions: [] },
-  { key: 'destDeptName', label: '到达网点', prop: 'destDeptName', filterType: 'select', filterOptions: [] },
+  { key: 'destDeptName', label: '运达网点', prop: 'destDeptName', filterType: 'select', filterOptions: [] },
   { key: 'warehouseArea', label: '库区', prop: 'warehouseArea', filterType: 'text', filterMode: 'single' },
   { key: 'mileage', label: '里程', prop: 'mileage', filterType: 'numberrange', align: 'right' },
   { key: 'transitHours', label: '时效', prop: 'transitHours', filterType: 'numberrange', align: 'right' },

@@ -5,7 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
-/** 短驳/干线路由新增与编辑；仅路由类型/始发网点/到达网点必填，其余选填 */
+/** 短驳/干线路由新增与编辑；仅路由类型/始发网点/运达网点必填，其余选填 */
 @Data
 public class RouteSaveRequest {
 
@@ -15,7 +15,7 @@ public class RouteSaveRequest {
     @NotNull(message = "请选择始发网点")
     private Long originDeptId;
 
-    @NotNull(message = "请选择到达网点")
+    @NotNull(message = "请选择运达网点")
     private Long destDeptId;
 
     private String routeName;

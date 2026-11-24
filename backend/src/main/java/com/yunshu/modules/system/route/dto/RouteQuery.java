@@ -20,7 +20,7 @@ public class RouteQuery extends BaseListQuery {
     /** 始发网点；支持多选 */
     private List<Long> originDeptId;
 
-    /** 到达网点；支持多选 */
+    /** 运达网点；支持多选 */
     private List<Long> destDeptId;
 
     /** 状态；支持多选 */
