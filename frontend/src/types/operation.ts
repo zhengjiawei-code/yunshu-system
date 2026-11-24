@@ -46,6 +46,10 @@ export interface RouteCandidate {
   destHubName?: string
   /** 提供服务展示文案：自提 / 送货 / 自提+送货 */
   provideServices?: string
+  /** 该链路是否可自提 */
+  pickupEnabled?: boolean
+  /** 该链路是否可送货（含大车直送） */
+  deliveryEnabled?: boolean
   nodes: RouteNode[]
 }
 
@@ -106,6 +110,7 @@ export interface WaybillSavePayload {
   collectFee?: number
   monthlyFee?: number
   returnFee?: number
+  /** 1=送货，2=自提；3=大车直送已停用（历史兼容） */
   deliveryMethod?: number
   codAmount: number
   payeeName?: string

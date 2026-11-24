@@ -436,10 +436,10 @@
           <div class="pay-block" :class="{ 'is-empty': form.deliveryMethod == null }">
             <span class="lbl"><i class="star">*</i>送货方式</span>
             <el-radio-group v-model="form.deliveryMethod" class="seg">
-              <el-radio-button :value="2">自提</el-radio-button>
-              <el-radio-button :value="1">送货</el-radio-button>
-              <el-radio-button :value="3">大车直送</el-radio-button>
+              <el-radio-button :value="2" :disabled="!routePickupEnabled" :title="routePickupEnabled ? '' : '该线路不提供自提服务'">自提</el-radio-button>
+              <el-radio-button :value="1" :disabled="!routeDeliveryEnabled" :title="routeDeliveryEnabled ? '' : '该线路不提供送货服务'">送货</el-radio-button>
             </el-radio-group>
+            <span v-if="routeServiceHint" class="service-hint">{{ routeServiceHint }}</span>
           </div>
           <div class="grid two pay-extra">
             <div class="field"><span class="lbl">是否回单</span>
@@ -659,10 +659,32 @@ const selectedDeptName = computed(() => userStore.currentOrgName || '—')
 const originDeptName = selectedDeptName
 const originHubName = computed(() => selectedRoute.value?.nodes?.[0]?.fromDeptName)
 
-/** 送货(1)/大车直送(3) 时送货费必填；自提(2) 与未选不要求 */
-const deliveryFeeRequired = computed(
-  () => form.deliveryMethod === 1 || form.deliveryMethod === 3
-)
+/** 送货(1) 时送货费必填；自提(2) 与未选不要求；3 为历史码值，界面不提供 */
+const deliveryFeeRequired = computed(() => form.deliveryMethod === 1)
+
+/** 选中线路的服务能力；未选或字段缺省（兜底直达）视为都可选 */
+const routePickupEnabled = computed(() => selectedRoute.value?.pickupEnabled !== false)
+const routeDeliveryEnabled = computed(() => selectedRoute.value?.deliveryEnabled !== false)
+const routeServiceHint = computed(() => {
+  if (!selectedRoute.value) return ''
+  const parts: string[] = []
+  if (selectedRoute.value.pickupEnabled === false) parts.push('该线路不提供自提服务')
+  if (selectedRoute.value.deliveryEnabled === false) parts.push('该线路不提供送货服务')
+  return parts.join('；')
+})
+
+/** 切换线路后重算可用性；已选值不再可用时清空并提示，不能静默保留 */
+function applyRouteServiceLimits() {
+  if (!selectedRoute.value) return
+  const method = form.deliveryMethod
+  if (method === 2 && selectedRoute.value.pickupEnabled === false) {
+    form.deliveryMethod = undefined
+    ElMessage.warning('该线路不提供自提服务，请重新选择送货方式')
+  } else if ((method === 1 || method === 3) && selectedRoute.value.deliveryEnabled === false) {
+    form.deliveryMethod = undefined
+    ElMessage.warning('该线路不提供送货服务，请重新选择送货方式')
+  }
+}
 
 function resetRouteSelection() {
   selectedRoute.value = null
@@ -726,6 +748,7 @@ function pickDestination(item: RouteCandidate) {
   // 用户点选的就是最终线路，先落选中态，再补全“切换”列表，不能被推荐项覆盖
   selectedRoute.value = item
   routeOptions.value = [item]
+  applyRouteServiceLimits()
   loadRoutes(item.districtCode, item)
 }
 
@@ -766,6 +789,7 @@ function clearDestination() {
 function selectRoute(item: RouteCandidate) {
   selectedRoute.value = item
   routeOpen.value = false
+  applyRouteServiceLimits()
 }
 
 function isSameRoute(item: RouteCandidate) {
@@ -994,7 +1018,7 @@ function collectErrors(): string[] {
     errors.push('请选择送货方式')
   } else if (deliveryFeeRequired.value) {
     if (form.deliveryFee == null) {
-      errors.push('送货方式为送货或大车直送时，送货费不能为空')
+      errors.push('送货方式为送货时，送货费不能为空')
     } else if (form.deliveryFee < 0) {
       errors.push('送货费不能小于0')
     }
@@ -1829,6 +1853,12 @@ onBeforeUnmount(() => {
   background: #fdf7f5;
   border-left-color: #e2b3ab;
   box-shadow: 0 0 0 1px #f0d9d4;
+}
+
+.service-hint {
+  font-size: 11px;
+  color: var(--color-warning);
+  white-space: nowrap;
 }
 
 .pay-seg {

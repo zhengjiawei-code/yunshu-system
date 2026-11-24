@@ -166,7 +166,7 @@ public class BizWaybill {
 
     private BigDecimal validFreight;
 
-    /** 1送货 2自提 3大车直送 */
+    /** 1=送货，2=自提；3=大车直送已停用（历史兼容） */
     private Integer deliveryMethod;
 
     private BigDecimal codAmount;
