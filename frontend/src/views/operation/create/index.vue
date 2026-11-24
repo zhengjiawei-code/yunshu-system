@@ -171,6 +171,9 @@
                 </button>
               </div>
             </div>
+            <span class="route-extra">是否外转
+              <b>{{ selectedRoute ? (selectedRoute.endType === 2 ? '是' : '否') : '—' }}</b>
+            </span>
           </div>
         </div>
       </section>
@@ -1464,6 +1467,19 @@ onBeforeUnmount(() => {
 .route-meta {
   color: var(--color-text-secondary);
   white-space: nowrap;
+}
+
+.route-extra {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.route-extra b {
+  margin-left: 2px;
+  color: var(--color-text-regular);
+  font-weight: 600;
 }
 
 .route-placeholder {
