@@ -712,20 +712,34 @@ function pickDestination(item: RouteCandidate) {
   form.destDistrictCode = item.districtCode
   form.destText = `${item.cityName || ''}${item.districtName || ''}`
   destOpen.value = false
-  loadRoutes(item.districtCode)
+  // 用户点选的就是最终线路，先落选中态，再补全“切换”列表，不能被推荐项覆盖
+  selectedRoute.value = item
+  routeOptions.value = [item]
+  loadRoutes(item.districtCode, item)
 }
 
-async function loadRoutes(districtCode: string) {
+async function loadRoutes(districtCode: string, keep?: RouteCandidate) {
   try {
-    routeOptions.value = await getRouteCandidates({
+    const list = await getRouteCandidates({
       destDistrictCode: districtCode,
       originDeptId: form.originDeptId
     })
-    selectedRoute.value = routeOptions.value.find((item) => item.recommended) || routeOptions.value[0] || null
+    routeOptions.value = list
+    if (keep) {
+      const matched = list.find(
+        (item) => (item.routeKeys || []).join(',') === (keep.routeKeys || []).join(',')
+      )
+      selectedRoute.value = matched || keep
+      if (!matched) {
+        routeOptions.value = [keep, ...list]
+      }
+    } else {
+      selectedRoute.value = list.find((item) => item.recommended) || list[0] || null
+    }
     routeOpen.value = false
   } catch {
-    routeOptions.value = []
-    selectedRoute.value = null
+    routeOptions.value = keep ? [keep] : []
+    selectedRoute.value = keep || null
   }
 }
 
