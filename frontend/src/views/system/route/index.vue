@@ -635,19 +635,19 @@
                     <span class="pane-sub pane-sub--total">共 {{ transferTotal }} 条</span>
                   </div>
                   <div class="pane-actions">
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(1)">
+                    <el-button class="batch-action-btn" size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(1)">
                       切直达
                     </el-button>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(2)">
+                    <el-button class="batch-action-btn" size="small" :disabled="!selectedTransferRows.length" @click="handleSwitchType(2)">
                       切外转
                     </el-button>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="openCarrierBatch">
+                    <el-button class="batch-action-btn" size="small" :disabled="!selectedTransferRows.length" @click="openCarrierBatch">
                       挂承运商
                     </el-button>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(true)">
+                    <el-button class="batch-action-btn" size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(true)">
                       启用
                     </el-button>
-                    <el-button size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(false)">
+                    <el-button class="batch-action-btn" size="small" :disabled="!selectedTransferRows.length" @click="handleBatchStatus(false)">
                       停用
                     </el-button>
                     <el-tooltip
@@ -657,6 +657,7 @@
                     >
                       <span>
                         <el-button
+                          class="batch-action-btn"
                           size="small"
                           :disabled="!selectedTransferRows.length"
                           @click="openBatchGrant('transfer')"
@@ -3142,6 +3143,29 @@ onMounted(async () => {
 
 .pane-actions :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+
+/* 批量操作按钮：可用态=白底 + 主色边框/文字；禁用态=灰底灰字。两态一眼可分 */
+.pane-actions .batch-action-btn {
+  background-color: #fff;
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+
+.pane-actions .batch-action-btn:not(.is-disabled):hover,
+.pane-actions .batch-action-btn:not(.is-disabled):focus,
+.pane-actions .batch-action-btn:not(.is-disabled):active {
+  background-color: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+
+.pane-actions .batch-action-btn.is-disabled,
+.pane-actions .batch-action-btn.is-disabled:hover {
+  background-color: var(--el-fill-color-light);
+  border-color: var(--el-border-color-lighter);
+  color: var(--el-text-color-placeholder);
+  cursor: not-allowed;
 }
 
 .pane-actions :deep(.column-setting-trigger) {
