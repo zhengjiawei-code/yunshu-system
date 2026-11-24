@@ -76,7 +76,7 @@
           </div>
         </div>
         <div class="grid dest-row">
-          <label ref="destFieldRef" class="field dest-field">
+          <div ref="destFieldRef" class="field dest-field">
             <span class="lbl"><i class="star">*</i>目的地</span>
             <el-input
               v-model="form.destText"
@@ -121,7 +121,7 @@
                   <span class="cand-desc">
                     <template v-if="!item.noRoute">
                       <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
-                      <span class="cand-service" title="提供服务：自提/送货"><i class="svc-tag">提供服务</i><span class="svc-value">自提/送货</span></span>
+                      <span class="cand-service" :title="'提供服务：' + (item.provideServices || '—')"><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
                     </template>
                     <span v-else>—</span>
                   </span>
@@ -129,7 +129,7 @@
               </template>
               <div v-else class="pop-empty">未找到匹配的目的地</div>
             </div>
-          </label>
+          </div>
 
           <div ref="routeFieldRef" class="field route-field">
             <span class="lbl"><i class="star">*</i>线路</span>
@@ -177,7 +177,7 @@
                   </span>
                   <span class="cand-desc">
                     <span class="cand-meta">{{ item.totalHours ?? '—' }}h {{ item.totalMileage ?? '—' }}km</span>
-                    <span class="cand-service" title="提供服务：自提/送货"><i class="svc-tag">提供服务</i><span class="svc-value">自提/送货</span></span>
+                    <span class="cand-service" :title="'提供服务：' + (item.provideServices || '—')"><i class="svc-tag">提供服务</i><span class="svc-value">{{ item.provideServices || '—' }}</span></span>
                   </span>
                 </button>
               </div>
