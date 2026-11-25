@@ -164,13 +164,13 @@
             <span v-else class="cell-text">{{ text(row.goodsName) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="货物类型" width="88">
+        <el-table-column label="货物类型" width="96">
           <template #default="{ row }">
             <el-input v-if="!readonly" v-model="row.goodsType" size="small" placeholder="选填" />
             <span v-else class="cell-text">{{ text(row.goodsType) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="包装类型" width="100">
+        <el-table-column label="包装类型" width="124">
           <template #default="{ row }">
             <el-select v-if="!readonly" v-model="row.packageType" size="small" clearable>
               <el-option v-for="item in PACKAGE_TYPES" :key="item" :label="item" :value="item" />
@@ -178,7 +178,7 @@
             <span v-else class="cell-text">{{ text(row.packageType) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="件数" width="68" align="right">
+        <el-table-column label="件数" width="84" align="right">
           <template #default="{ row }">
             <el-input-number
               v-if="!readonly"
@@ -191,7 +191,7 @@
             <span v-else class="cell-num">{{ row.quantity ?? '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="体积(m³)" width="84" align="right">
+        <el-table-column label="体积(m³)" width="100" align="right">
           <template #default="{ row }">
             <el-input-number
               v-if="!readonly"
@@ -204,7 +204,7 @@
             <span v-else class="cell-num">{{ formatQuantity(row.volume) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="重量(kg)" width="84" align="right">
+        <el-table-column label="重量(kg)" width="108" align="right">
           <template #default="{ row }">
             <el-input-number
               v-if="!readonly"
@@ -223,7 +223,7 @@
             <span v-else class="cell-text" :title="row.goodsRemark">{{ text(row.goodsRemark) }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="!readonly" label="操作" width="56" align="center">
+        <el-table-column v-if="!readonly" label="操作" width="76" align="center">
           <template #default="{ $index }">
             <el-button link type="danger" size="small" :disabled="goods.length <= 1" @click="removeGoods($index)">
               删除
@@ -888,7 +888,12 @@ onMounted(async () => {
 }
 
 .goods-table :deep(.el-table__body td) {
-  padding: 1px 4px;
+  padding: 1px 2px;
+}
+
+/* 收紧单元格默认 8/22px 内边距，把宽度让给行内控件（覆盖全局 .el-table td>.cell 规范） */
+.goods-table :deep(td.el-table__cell > .cell) {
+  padding: 0 4px;
 }
 
 .goods-table :deep(.el-input__wrapper),
