@@ -74,6 +74,21 @@ public class BizWaybill {
 
     private String destHubName;
 
+    /** 当前库存网点ID（v1.3 配载定位） */
+    private Long currentHubId;
+
+    /** 当前库存网点名称快照 */
+    private String currentHubName;
+
+    /** 已完成路由节点段序号，0=仍在始发网点 */
+    private Integer currentNodeSeq;
+
+    /** 库存落入当前网点时间 */
+    private LocalDateTime inventoryTime;
+
+    /** 0待配载 1已配载 2已发车 3已到站 4已卸车 */
+    private Integer loadStatus;
+
     private String routeName;
 
     private Integer routeNodeCount;

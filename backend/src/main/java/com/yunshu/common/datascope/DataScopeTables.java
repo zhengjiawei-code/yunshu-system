@@ -32,6 +32,9 @@ public final class DataScopeTables {
             "sys_column_config",
             "biz_waybill_no_seq",
             "biz_pre_waybill_no_seq",
+            "biz_trip_no_seq",
+            "sys_fee_type",
+            "sys_config",
             "biz_export_task",
             "flyway_schema_history"
     );
