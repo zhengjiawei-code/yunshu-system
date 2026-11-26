@@ -41,6 +41,9 @@
             />
           </el-select>
           <span v-if="destLocked" class="form-hint">已有配载，始发网点不可修改</span>
+          <span v-else-if="mode === 'create' && !form.originDeptId" class="form-hint">
+            当前机构非分拨中心/网点时，需手动选择
+          </span>
         </el-form-item>
 
         <el-form-item label="计划发车时间" prop="planDepartTime">
@@ -203,11 +206,11 @@ function commonPlanArrive(dests: NonNullable<TripDetail['dests']>): string {
   return values.length ? values[0] : ''
 }
 
-/** 始发网点必须是分拨中心/网点：优先当前机构，其次取管理范围内第一个 */
+/** 始发网点必须显式选择：仅当前机构本身是分拨中心/网点时带出，否则留空强校验 */
 function ensureDefaultOrigin() {
   if (props.mode !== 'create' || form.originDeptId || !deptOptions.value.length) return
   const current = deptOptions.value.find((item) => item.id === userStore.currentOrgId)
-  form.originDeptId = current?.id ?? deptOptions.value[0].id
+  form.originDeptId = current?.id
 }
 
 function resetCreate() {
