@@ -143,6 +143,12 @@ public class WaybillService {
         waybill.setOriginHubName(firstNode.getFromDeptName());
         waybill.setDestHubId(route.getDestHubId());
         waybill.setDestHubName(route.getDestHubName());
+        // 干线配载初始库存：开单即落在始发网点，待配载、未走过路由节点
+        waybill.setCurrentHubId(firstNode.getFromDeptId());
+        waybill.setCurrentHubName(firstNode.getFromDeptName());
+        waybill.setCurrentNodeSeq(0);
+        waybill.setInventoryTime(LocalDateTime.now());
+        waybill.setLoadStatus(0);
         waybill.setRouteName(route.getChainText());
         waybill.setRouteNodeCount(route.getNodeCount());
         waybill.setRouteEndType(route.getEndType());

@@ -79,6 +79,13 @@
       <optional>true</optional>
     </dependency>
 
+    <!-- 异步导出 xlsx：SXSSF 流式写，避免大文件占满堆内存 -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.2.5</version>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
