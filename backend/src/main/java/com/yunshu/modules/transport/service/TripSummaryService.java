@@ -52,7 +52,8 @@ public class TripSummaryService {
         BigDecimal validFreight = sum(rows, BizTripWaybill::getValidFreight);
         BigDecimal allocated = sum(rows, BizTripWaybill::getAllocatedFee);
         BigDecimal profitCost = sum(rows, BizTripWaybill::getProfitCost);
-        BigDecimal gross = totalFreight.subtract(rebate).subtract(profitCost);
+        // 车次毛利 = Σ 票毛利（票毛利已按当前运单毛利公式计算，见 TripFeeService#rebuildAllocation）
+        BigDecimal gross = sum(rows, BizTripWaybill::getGrossProfit);
 
         UpdateWrapper<BizTrip> update = new UpdateWrapper<>();
         update.eq("id", tripId)

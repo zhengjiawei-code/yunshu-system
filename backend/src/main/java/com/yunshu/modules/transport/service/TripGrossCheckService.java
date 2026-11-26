@@ -36,7 +36,8 @@ public class TripGrossCheckService {
             sumTicketGross = sumTicketGross.add(nvl(row.getGrossProfit()));
         }
         BigDecimal tripGross = nvl(trip.getGrossProfit());
-        BigDecimal calcGross = income.subtract(rebate).subtract(cost);
+        // 对账口径：按当前运单毛利公式逐票计算后汇总，与车次毛利比较
+        BigDecimal calcGross = sumTicketGross;
         BigDecimal diff = tripGross.subtract(calcGross);
 
         GrossCheckVO vo = new GrossCheckVO();

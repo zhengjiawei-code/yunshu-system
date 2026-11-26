@@ -30,6 +30,7 @@ import com.yunshu.modules.transport.mapper.BizTripWaybillMapper;
 import com.yunshu.modules.transport.mapper.SysConfigMapper;
 import com.yunshu.modules.transport.mapper.SysFeeTypeMapper;
 import com.yunshu.modules.transport.vo.FeePreviewVO;
+import com.yunshu.modules.transport.vo.GrossFormulaVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,6 +88,7 @@ public class TripFeeService {
     private final UserOrgService userOrgService;
     private final TripSummaryService summaryService;
     private final TripLogService tripLogService;
+    private final GrossFormulaService grossFormulaService;
 
     /* ---------------- #12 预览 ---------------- */
 
@@ -240,6 +242,7 @@ public class TripFeeService {
         vo.setItems(itemTotals);
 
         List<FeePreviewVO.Unit> units = new ArrayList<>();
+        GrossFormulaVO formula = grossFormulaService.current();
         BigDecimal income = BigDecimal.ZERO;
         BigDecimal rebate = BigDecimal.ZERO;
         BigDecimal cost = BigDecimal.ZERO;
@@ -270,7 +273,8 @@ public class TripFeeService {
             income = income.add(ticketIncome);
             rebate = rebate.add(ticketRebate);
             cost = cost.add(ticketCost);
-            gross = gross.add(ticketIncome.subtract(ticketRebate).subtract(ticketCost));
+            // 单票毛利按当前运单毛利公式计算，车次毛利 = Σ票毛利
+            gross = gross.add(grossFormulaService.computeGross(row, feesByUnit.get(row.getId()), formula));
             units.add(unit);
         }
         vo.setUnits(units);
@@ -397,11 +401,18 @@ public class TripFeeService {
             tripWaybillFeeMapper.insert(row);
         }
 
-        // 4) 逐票成本与毛利
+        // 4) 逐票成本与毛利（毛利按当前运单毛利公式计算）
+        Map<Long, Map<String, BigDecimal>> feesByUnit = new HashMap<>();
+        for (BizTripWaybillFee feeRow : feeRows) {
+            feesByUnit.computeIfAbsent(feeRow.getTripWaybillId(), key -> new LinkedHashMap<>())
+                    .merge(feeRow.getFeeCode(), feeRow.getAmount(), BigDecimal::add);
+        }
+        GrossFormulaVO formula = grossFormulaService.current();
         for (BizTripWaybill row : rows) {
             BigDecimal allocated = allocatedByUnit.getOrDefault(row.getId(), BigDecimal.ZERO);
             BigDecimal profitCost = profitByUnit.getOrDefault(row.getId(), BigDecimal.ZERO);
-            BigDecimal gross = nvl(row.getTotalFee()).subtract(nvl(row.getRebateTotal())).subtract(profitCost);
+            BigDecimal gross = grossFormulaService.computeGross(row,
+                    feesByUnit.getOrDefault(row.getId(), Map.of()), formula);
             tripWaybillMapper.update(null, new UpdateWrapper<BizTripWaybill>()
                     .eq("id", row.getId())
                     .set("allocated_fee", allocated)
