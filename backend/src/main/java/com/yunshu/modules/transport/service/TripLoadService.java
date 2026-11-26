@@ -69,6 +69,7 @@ public class TripLoadService {
     private final BizWaybillRouteNodeMapper nodeMapper;
     private final TripSummaryService summaryService;
     private final TripFeeService tripFeeService;
+    private final GrossFormulaService grossFormulaService;
     private final TripLogService tripLogService;
     private final UserOrgService userOrgService;
     private final SysUserMapper userMapper;
@@ -518,7 +519,8 @@ public class TripLoadService {
         tw.setValidFreight(nvl(wb.getValidFreight()));
         tw.setAllocatedFee(BigDecimal.ZERO);
         tw.setProfitCost(BigDecimal.ZERO);
-        tw.setGrossProfit(nvl(wb.getTotalFee()).subtract(nvl(wb.getRebateTotal())));
+        // 初始快照按当前毛利公式（无分摊成本）计算，随后 rebuildAllocation 统一重算
+        tw.setGrossProfit(grossFormulaService.computeGross(tw, Map.of(), grossFormulaService.current()));
         tw.setStatusBeforeLoad(wb.getStatus());
         tw.setLoadStatus(TripEnums.LoadStatus.LOADED);
         tw.setLoadTime(LocalDateTime.now());

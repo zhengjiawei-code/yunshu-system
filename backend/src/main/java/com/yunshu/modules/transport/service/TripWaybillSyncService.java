@@ -95,12 +95,13 @@ public class TripWaybillSyncService {
                     .set("receiver_name", after.getReceiverName())
                     .set("receiver_phone", after.getReceiverPhone())
                     .set("dest_name", after.getDestName())
-                    .set("goods_name", after.getGoodsName())
-                    .set("gross_profit", nvl(after.getTotalFee())
-                            .subtract(nvl(after.getRebateTotal())).subtract(nvl(tw.getProfitCost())));
+                    .set("goods_name", after.getGoodsName());
             tripWaybillMapper.update(null, update);
         }
         refreshTrips(rows, 13, "运单改单刷新");
+        // 快照变化后重算分摊与票毛利（票毛利按当前运单毛利公式），保证车次毛利=Σ票毛利
+        rows.stream().map(BizTripWaybill::getTripId).distinct()
+                .forEach(tripFeeService::reallocateIfConfigured);
     }
 
     /** 作废后解除配载、恢复运单待配载标记并重算车次 */

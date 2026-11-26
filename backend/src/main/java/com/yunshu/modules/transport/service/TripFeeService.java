@@ -302,10 +302,18 @@ public class TripFeeService {
             row.setDeptId(trip.getDeptId());
             tripWaybillFeeMapper.insert(row);
         }
+        Map<Long, Map<String, BigDecimal>> feesByUnit = new HashMap<>();
+        for (BizTripWaybillFee feeRow : built.feeRows()) {
+            feesByUnit.computeIfAbsent(feeRow.getTripWaybillId(), key -> new LinkedHashMap<>())
+                    .merge(feeRow.getFeeCode(), feeRow.getAmount(), BigDecimal::add);
+        }
+        GrossFormulaVO formula = grossFormulaService.current();
         for (BizTripWaybill row : rows) {
             BigDecimal allocated = built.allocatedByUnit().getOrDefault(row.getId(), BigDecimal.ZERO);
             BigDecimal profitCost = built.profitByUnit().getOrDefault(row.getId(), BigDecimal.ZERO);
-            BigDecimal gross = nvl(row.getTotalFee()).subtract(nvl(row.getRebateTotal())).subtract(profitCost);
+            // 与汇总口径同源：票毛利按当前运单毛利公式计算
+            BigDecimal gross = grossFormulaService.computeGross(row,
+                    feesByUnit.getOrDefault(row.getId(), Map.of()), formula);
             tripWaybillMapper.update(null, new UpdateWrapper<BizTripWaybill>()
                     .eq("id", row.getId())
                     .set("allocated_fee", allocated)

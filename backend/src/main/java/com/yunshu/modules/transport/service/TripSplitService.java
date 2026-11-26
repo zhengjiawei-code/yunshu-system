@@ -56,6 +56,7 @@ public class TripSplitService {
     private final BizWaybillLogMapper waybillLogMapper;
     private final TripSummaryService summaryService;
     private final TripFeeService tripFeeService;
+    private final GrossFormulaService grossFormulaService;
     private final TripLogService tripLogService;
     private final UserOrgService userOrgService;
     private final SysUserMapper userMapper;
@@ -366,7 +367,8 @@ public class TripSplitService {
         tw.setValidFreight(nvl(child.getValidFreight()));
         tw.setAllocatedFee(BigDecimal.ZERO);
         tw.setProfitCost(BigDecimal.ZERO);
-        tw.setGrossProfit(nvl(child.getTotalFee()).subtract(nvl(child.getRebateTotal())));
+        // 初始快照按当前毛利公式（无分摊成本）计算，随后 rebuildAllocation 统一重算
+        tw.setGrossProfit(grossFormulaService.computeGross(tw, Map.of(), grossFormulaService.current()));
         tw.setStatusBeforeLoad(statusBeforeLoad);
         tw.setLoadStatus(TripEnums.LoadStatus.LOADED);
         tw.setLoadTime(LocalDateTime.now());
