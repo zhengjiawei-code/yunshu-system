@@ -452,7 +452,7 @@ public class TripService {
 
     /* ---------------- 内部实现 ---------------- */
 
-    private BizTrip requireVisible(Long id) {
+    BizTrip requireVisible(Long id) {
         BizTrip trip = id == null ? null : tripMapper.selectById(id);
         if (trip == null || !userOrgService.manageDeptIds().contains(trip.getDeptId())) {
             throw new BizException(403, "无权访问该车次");

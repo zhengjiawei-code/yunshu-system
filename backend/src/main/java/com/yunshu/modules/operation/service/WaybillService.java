@@ -36,6 +36,7 @@ import com.yunshu.modules.system.region.entity.SysRegion;
 import com.yunshu.modules.system.region.mapper.SysRegionMapper;
 import com.yunshu.modules.system.user.entity.SysUser;
 import com.yunshu.modules.system.user.mapper.SysUserMapper;
+import com.yunshu.modules.transport.service.TripWaybillSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,6 +76,7 @@ public class WaybillService {
     private final RouteCandidateService routeCandidateService;
     private final WaybillAmountCalculator amountCalculator;
     private final WaybillNoGenerator noGenerator;
+    private final TripWaybillSyncService tripWaybillSyncService;
     private final ObjectMapper objectMapper;
 
     /** 改单可写白名单：payload 里只有这些键会被接受 */
@@ -300,12 +302,14 @@ public class WaybillService {
                 .eq("update_time", version)
                 .set("status", WaybillEnums.Status.VOIDED.getCode())
                 .set("update_by", requireUserId(context));
+        tripWaybillSyncService.assertVoidAllowed(waybill);
         int rows = waybillMapper.update(null, update);
         if (rows == 0) {
             throw new BizException(409, "运单已被他人修改，请刷新后重试");
         }
         BizWaybill updated = waybillMapper.selectById(waybill.getId());
         writeLog(waybill, WaybillEnums.LogAction.VOID, reason, before, snapshot(updated), context);
+        tripWaybillSyncService.onVoid(updated);
 
         WaybillVoidVO vo = new WaybillVoidVO();
         vo.setId(updated.getId());
@@ -354,6 +358,7 @@ public class WaybillService {
             throw new BizException("未检测到任何修改");
         }
         validateAmend(request, fields);
+        tripWaybillSyncService.assertAmendAllowed(waybill, fields);
 
         ReceiverRegion region = fields.stream().anyMatch(REGION_FIELDS::contains)
                 ? resolveReceiverRegion(request) : null;
@@ -390,6 +395,7 @@ public class WaybillService {
         Map<String, Object> after = snapshot(updated);
         after.put("changes", changes);
         writeLog(waybill, WaybillEnums.LogAction.AMEND, reason, before, after, context);
+        tripWaybillSyncService.onAmend(updated, fields);
 
         WaybillAmendVO vo = new WaybillAmendVO();
         vo.setWaybill(updated);
