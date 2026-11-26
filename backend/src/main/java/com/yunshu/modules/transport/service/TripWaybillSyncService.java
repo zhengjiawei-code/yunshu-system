@@ -40,6 +40,7 @@ public class TripWaybillSyncService {
     private final BizTripMapper tripMapper;
     private final BizWaybillMapper waybillMapper;
     private final TripSummaryService summaryService;
+    private final TripFeeService tripFeeService;
     private final TripLogService tripLogService;
     private final UserOrgService userOrgService;
 
@@ -118,6 +119,8 @@ public class TripWaybillSyncService {
                     .set("update_by", userOrgService.current().userId()));
         }
         refreshTrips(rows, 14, "运单作废解除配载");
+        rows.stream().map(BizTripWaybill::getTripId).distinct()
+                .forEach(tripFeeService::reallocateIfConfigured);
     }
 
     private void refreshTrips(List<BizTripWaybill> rows, int action, String reason) {

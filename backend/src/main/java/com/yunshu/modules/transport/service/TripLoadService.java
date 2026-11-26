@@ -68,6 +68,7 @@ public class TripLoadService {
     private final BizWaybillMapper waybillMapper;
     private final BizWaybillRouteNodeMapper nodeMapper;
     private final TripSummaryService summaryService;
+    private final TripFeeService tripFeeService;
     private final TripLogService tripLogService;
     private final UserOrgService userOrgService;
     private final SysUserMapper userMapper;
@@ -346,6 +347,7 @@ public class TripLoadService {
         }
         if (result.getSuccessCount() > 0) {
             summaryService.recalc(tripId);
+            tripFeeService.reallocateIfConfigured(tripId);
             BizTrip after = tripMapper.selectById(tripId);
             tripLogService.record(tripId, trip.getTripNo(), 3, null, trip.getDeptId(),
                     userOrgService.current().userId(), operatorName(), null,
@@ -381,6 +383,7 @@ public class TripLoadService {
         }
         if (result.getSuccessCount() > 0) {
             summaryService.recalc(tripId);
+            tripFeeService.reallocateIfConfigured(tripId);
             long remain = tripWaybillMapper.selectCount(Wrappers.<BizTripWaybill>lambdaQuery()
                     .eq(BizTripWaybill::getTripId, tripId));
             if (remain == 0 && Objects.equals(trip.getTripStatus(), TripEnums.TripStatus.LOADING)) {

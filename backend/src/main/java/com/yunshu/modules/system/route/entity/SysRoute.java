@@ -42,6 +42,9 @@ public class SysRoute {
 
     private String servicePhone;
 
+    /** 线路重泡比(kg/m³)：为空或0时回落 sys_config.fee.volume_weight_ratio 全局值 */
+    private BigDecimal volumeWeightRatio;
+
     /** 创建公司：总部或分公司 */
     private Long ownerCompanyId;
 

@@ -55,6 +55,7 @@ public class TripSplitService {
     private final BizWaybillRouteNodeMapper nodeMapper;
     private final BizWaybillLogMapper waybillLogMapper;
     private final TripSummaryService summaryService;
+    private final TripFeeService tripFeeService;
     private final TripLogService tripLogService;
     private final UserOrgService userOrgService;
     private final SysUserMapper userMapper;
@@ -109,6 +110,7 @@ public class TripSplitService {
                     .set("trip_status", TripEnums.TripStatus.LOADING));
         }
         summaryService.recalc(tripId);
+        tripFeeService.reallocateIfConfigured(tripId);
 
         writeWaybillLog(parent, child, q, agg.remainingQuantity - q);
         tripLogService.record(tripId, trip.getTripNo(), 3, null, trip.getDeptId(),
