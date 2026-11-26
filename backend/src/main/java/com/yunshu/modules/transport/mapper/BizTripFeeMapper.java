@@ -39,4 +39,33 @@ public interface BizTripFeeMapper extends BaseMapper<BizTripFee> {
                         @Param("sortOrder") Integer sortOrder,
                         @Param("deptId") Long deptId,
                         @Param("operatorId") Long operatorId);
+
+    /** 子车次级费用 upsert（到站卸车费/到站其他费），唯一键含 trip_dest_id */
+    @Insert("""
+            INSERT INTO biz_trip_fee
+            (trip_id, trip_dest_id, fee_code, fee_name, fee_category, amount, profit_enabled, profit_direction,
+             fee_status, invalid_reason, sort_order, dept_id, create_by, update_by, deleted)
+            VALUES (#{tripId}, #{tripDestId}, #{feeCode}, #{feeName}, 2, #{amount}, #{profitEnabled}, #{profitDirection},
+                    1, NULL, #{sortOrder}, #{deptId}, #{operatorId}, #{operatorId}, 0)
+            ON DUPLICATE KEY UPDATE
+              fee_name = VALUES(fee_name),
+              amount = VALUES(amount),
+              profit_enabled = VALUES(profit_enabled),
+              profit_direction = VALUES(profit_direction),
+              fee_status = 1,
+              invalid_reason = NULL,
+              sort_order = VALUES(sort_order),
+              update_by = VALUES(update_by),
+              deleted = 0
+            """)
+    int upsertDestLevel(@Param("tripId") Long tripId,
+                        @Param("tripDestId") Long tripDestId,
+                        @Param("feeCode") String feeCode,
+                        @Param("feeName") String feeName,
+                        @Param("amount") BigDecimal amount,
+                        @Param("profitEnabled") Boolean profitEnabled,
+                        @Param("profitDirection") Integer profitDirection,
+                        @Param("sortOrder") Integer sortOrder,
+                        @Param("deptId") Long deptId,
+                        @Param("operatorId") Long operatorId);
 }
