@@ -43,10 +43,9 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '运单详情', parents: ['运营管理'] }
       },
       {
-        // 车次配载页（F2 实现，当前挂占位页，保证创建车次后跳转可用）
         path: 'transport/loading/detail',
         name: 'TransportLoadingDetail',
-        component: () => import('@/views/_placeholder/index.vue'),
+        component: () => import('@/views/transport/loading/detail.vue'),
         meta: { title: '车次配载', parents: ['运输管理'] }
       }
     ]

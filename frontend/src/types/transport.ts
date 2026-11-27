@@ -147,3 +147,311 @@ export interface TripActionDone {
   id: number
   tripNo?: string
 }
+
+/* ------------------------------ 待配载池（左栏） ------------------------------ */
+
+export interface PoolRow {
+  waybillId: number
+  waybillNo: string
+  /** 1=整票 2=已拆母单余额 3=子单 */
+  unitType: number
+  parentNo?: string
+  childCount?: number
+  splitRatio?: number
+  status?: number
+  customerName?: string
+  receiverName?: string
+  receiverPhone?: string
+  goodsName?: string
+  destName?: string
+  nextDeptId?: number
+  nextDeptName?: string
+  originalQuantity?: number
+  originalWeight?: number
+  originalVolume?: number
+  remainingQuantity?: number
+  remainingWeight?: number
+  remainingVolume?: number
+  totalFee?: number
+  rebateTotal?: number
+  validFreight?: number
+  inventoryTime?: string
+  createTime?: string
+}
+
+export interface PoolSummary {
+  unitCount: number
+  quantity: number
+  weight: number
+  volume: number
+}
+
+export interface PoolPage {
+  records: PoolRow[]
+  total: number
+  page: number
+  pageSize: number
+  summary: PoolSummary
+}
+
+/* ------------------------------ 已配载（右栏） ------------------------------ */
+
+export interface LoadedRow {
+  tripWaybillId: number
+  tripDestId?: number
+  subTripNo?: string
+  destDeptId?: number
+  destDeptName?: string
+  waybillId: number
+  waybillNo: string
+  parentNo?: string
+  isChild?: number
+  unitType?: number
+  splitRatio?: number
+  status?: number
+  loadStatus?: number
+  customerName?: string
+  receiverName?: string
+  destName?: string
+  goodsName?: string
+  quantity?: number
+  weight?: number
+  volume?: number
+  prepaidFee?: number
+  collectFee?: number
+  returnFee?: number
+  monthlyFee?: number
+  totalFee?: number
+  rebateTotal?: number
+  validFreight?: number
+  allocatedFee?: number
+  profitCost?: number
+  grossProfit?: number
+  loadTime?: string
+}
+
+export interface LoadedSummary {
+  unitCount: number
+  quantity: number
+  weight: number
+  volume: number
+  totalFee: number
+  rebateTotal: number
+  grossProfit: number
+}
+
+export interface LoadedPage {
+  records: LoadedRow[]
+  total: number
+  page: number
+  pageSize: number
+  summary: LoadedSummary
+}
+
+/* ------------------------------ 配载/移出结果 ------------------------------ */
+
+export interface LoadFailure {
+  waybillId: number
+  waybillNo?: string
+  reason: string
+}
+
+export interface LoadResult {
+  successCount: number
+  failures: LoadFailure[]
+  warnings: string[]
+}
+
+/* ------------------------------ 拆单预览/拆单装车 ------------------------------ */
+
+export interface SplitAmounts {
+  quantity: number
+  weight: number
+  volume: number
+  prepaidFee: number
+  collectFee: number
+  returnFee: number
+  monthlyFee: number
+  deliveryFee: number
+  totalFee: number
+  cashBack: number
+  oweBack: number
+  rebateTotal: number
+  validFreight: number
+}
+
+export interface SplitResult {
+  parentWaybillId: number
+  parentWaybillNo: string
+  originalQuantity: number
+  originalWeight: number
+  originalVolume: number
+  remainingQuantityBefore: number
+  remainingWeightBefore: number
+  remainingVolumeBefore: number
+  splitQuantity: number
+  splitRatio: number
+  child: SplitAmounts
+  parentRemaining: SplitAmounts
+  childWaybillId?: number
+  childWaybillNo?: string
+  childSeq?: number
+  childStatus?: number
+  routeNodeCount?: number
+}
+
+/* ------------------------------ 费用分摊 ------------------------------ */
+
+export interface FeeItemTotal {
+  feeCode: string
+  feeName: string
+  amount: number
+  profitEnabled?: boolean
+}
+
+export interface FeeUnit {
+  tripWaybillId: number
+  waybillId: number
+  waybillNo: string
+  parentNo?: string
+  isChild?: number
+  quantity?: number
+  weight?: number
+  volume?: number
+  chargeWeight?: number
+  volumeWeightRatio?: number
+  basis: number
+  ratio: number
+  fees: Record<string, number>
+  allocatedFee: number
+  profitCost: number
+}
+
+export interface FeeSummary {
+  unitCount: number
+  incomeTotal: number
+  rebateTotal: number
+  costTotal: number
+  grossProfit: number
+}
+
+export interface FeePreview {
+  tripId: number
+  allocMethod: number
+  allocMethodName?: string
+  basisTotal: number
+  items: FeeItemTotal[]
+  units: FeeUnit[]
+  summary: FeeSummary
+}
+
+export interface FeeTypeRow {
+  id?: number
+  feeCode: string
+  feeName: string
+  feeCategory?: number
+  enabled?: boolean
+  profitEnabled?: boolean
+  profitDirection?: number
+  sourceField?: string
+  sortOrder?: number
+  readonly?: boolean
+}
+
+export interface FeeTypePage {
+  rows: FeeTypeRow[]
+  total: number
+  page: number
+  pageSize: number
+  counts?: Record<string, number>
+}
+
+/* ------------------------------ 车辆/费用/日志/打印 ------------------------------ */
+
+export interface TripVehiclePayload {
+  vehicleId?: number | null
+  plateNo?: string
+  vehicleType?: string
+  vehicleLoad?: number | null
+  vehicleVolume?: number | null
+  driverId?: number | null
+  driverName?: string
+  driverPhone?: string
+}
+
+export interface TripFeeItemPayload {
+  feeCode: string
+  amount: number
+}
+
+export interface TripFeeSavePayload {
+  allocMethod: number
+  items: TripFeeItemPayload[]
+}
+
+export interface TripLog {
+  id: number
+  actionType: number
+  actionName?: string
+  destId?: number
+  reason?: string
+  operatorName?: string
+  beforeSnapshot?: string
+  afterSnapshot?: string
+  createTime?: string
+}
+
+export interface TripPrintRow {
+  tripWaybillId: number
+  waybillNo: string
+  parentNo?: string
+  isChild?: number
+  subTripNo?: string
+  destHubName?: string
+  destName?: string
+  customerName?: string
+  receiverName?: string
+  receiverPhone?: string
+  goodsName?: string
+  quantity?: number
+  weight?: number
+  volume?: number
+  prepaidFee?: number
+  collectFee?: number
+  returnFee?: number
+  monthlyFee?: number
+  totalFee?: number
+  rebateTotal?: number
+  validFreight?: number
+}
+
+export interface TripPrintData {
+  header: {
+    tripId: number
+    tripNo: string
+    tripName?: string
+    tripStatus?: number
+    originDeptName?: string
+    destNames?: string
+    plateNo?: string
+    vehicleType?: string
+    vehicleLoad?: number
+    vehicleVolume?: number
+    driverName?: string
+    driverPhone?: string
+    planDepartTime?: string
+    departTime?: string
+    planArriveTime?: string
+    allocMethodName?: string
+  }
+  rows: TripPrintRow[]
+  totals: {
+    unitCount?: number
+    quantity?: number
+    weight?: number
+    volume?: number
+    totalFee?: number
+    rebateTotal?: number
+    validFreight?: number
+  }
+}
