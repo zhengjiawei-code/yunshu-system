@@ -1488,11 +1488,6 @@ async function doLoad(ids: number[]) {
 async function moveSelectedRight() {
   if (!canOperate.value) return
   const ids = poolSelected.value.map((row) => row.waybillId)
-  const balance = poolSelected.value.filter((row) => row.unitType === 2)
-  if (balance.length) {
-    ElMessage.warning('已拆母单余额不允许直接右移，请用「拆单」装载本次份额')
-    return
-  }
   if (!ids.length) return
   if (!(await confirmOverLimit(poolSelected.value))) return
   await doLoad(ids)
@@ -1508,7 +1503,8 @@ async function fetchAllPoolIds(): Promise<number[]> {
     const params = { ...buildPoolParams(), page, pageSize: size }
     const result = await getTripPool(tripId, params)
     ;(result.records || []).forEach((row) => {
-      if (row.unitType !== 2) ids.push(row.waybillId)
+      // 母单余额同样可直接右移：后端按剩余件数生成子单并与本车同母单子单合并
+      ids.push(row.waybillId)
     })
     total = result.total || 0
     page += 1
@@ -1526,7 +1522,7 @@ async function moveAllRight() {
     return
   }
   if (!ids.length) {
-    ElMessage.warning('当前筛选结果没有可直接配载的单元（母单余额请用拆单）')
+    ElMessage.warning('当前筛选结果没有可配载的单元')
     return
   }
   try {

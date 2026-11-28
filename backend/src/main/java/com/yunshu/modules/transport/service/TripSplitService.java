@@ -119,7 +119,12 @@ public class TripSplitService {
         // 同一子车次下同母单的多个子单自动合并，保留最早子单号
         MergeResult merged = mergeSameDestChildren(trip, parent, next.dest, child, tw);
         BizWaybill resultChild = merged.waybill;
-        BizTripWaybill resultTw = merged.tripWaybill;
+
+        // 合并后本车已装齐整单：整体更新为母单，作废并取消子单
+        BizWaybill whole = promoteToWholeOrder(trip, parent, next.dest, next.node);
+        if (whole != null) {
+            resultChild = whole;
+        }
 
         if (Objects.equals(trip.getTripStatus(), TripEnums.TripStatus.PLAN)) {
             tripMapper.update(null, new UpdateWrapper<BizTrip>().eq("id", tripId)
@@ -129,11 +134,21 @@ public class TripSplitService {
         tripFeeService.reallocateIfConfigured(tripId);
 
         int remaining = Math.max(agg.remainingQuantity - q, 0);
-        writeWaybillLog(parent, resultChild, q, remaining);
-        tripLogService.record(tripId, trip.getTripNo(), 3, null, trip.getDeptId(),
-                userOrgService.current().userId(), operatorName(), null,
-                Map.of("parentNo", parent.getWaybillNo(), "childNo", resultChild.getWaybillNo(),
-                        "splitQuantity", q, "remainingQuantity", remaining), "拆单装车");
+        boolean promoted = Objects.equals(resultChild.getId(), parent.getId());
+        if (promoted) {
+            // 整单已回母单：日志按整单口径记录，不写成子单拆分
+            writeWaybillLog(parent, parent, nvl(parent.getQuantity()), 0, "整单装车");
+            tripLogService.record(tripId, trip.getTripNo(), 3, null, trip.getDeptId(),
+                    userOrgService.current().userId(), operatorName(), null,
+                    Map.of("parentNo", parent.getWaybillNo(), "splitQuantity", q,
+                            "convertedToWhole", true), "拆单装车·整单回母单");
+        } else {
+            writeWaybillLog(parent, resultChild, q, remaining, "装车拆单");
+            tripLogService.record(tripId, trip.getTripNo(), 3, null, trip.getDeptId(),
+                    userOrgService.current().userId(), operatorName(), null,
+                    Map.of("parentNo", parent.getWaybillNo(), "childNo", resultChild.getWaybillNo(),
+                            "splitQuantity", q, "remainingQuantity", remaining), "拆单装车");
+        }
 
         vo.setChildWaybillId(resultChild.getId());
         vo.setChildWaybillNo(resultChild.getWaybillNo());
@@ -238,6 +253,89 @@ public class TripSplitService {
                         "mergedChildNos", String.join(",", mergedNos),
                         "mergedQuantity", nvl(keeper.getQuantity())), "同一子车次子单自动合并");
         return new MergeResult(keeper, keeperTw);
+    }
+
+    /**
+     * 本车已装齐整单时整体回母单：作废并取消该母单在本车的全部子单，母单按整单直接配载。
+     * 判定口径：有效子单件数/重量/体积合计与母单一致，且全部子单都配载在本车同一目的站；
+     * 任一子单在其他车次则不做回母单，保持子单不变。
+     */
+    private BizWaybill promoteToWholeOrder(BizTrip trip, BizWaybill parent, BizTripDest dest,
+                                           BizWaybillRouteNode node) {
+        List<BizWaybill> children = waybillMapper.selectList(Wrappers.<BizWaybill>lambdaQuery()
+                .eq(BizWaybill::getParentId, parent.getId())
+                .eq(BizWaybill::getIsChild, 1)
+                .ne(BizWaybill::getStatus, VOIDED)
+                .in(BizWaybill::getLoadStatus, 1, 2, 3));
+        if (children.isEmpty()) {
+            return null;
+        }
+        int quantity = 0;
+        BigDecimal weight = BigDecimal.ZERO;
+        BigDecimal volume = BigDecimal.ZERO;
+        List<String> childNos = new ArrayList<>();
+        for (BizWaybill child : children) {
+            quantity += nvl(child.getQuantity());
+            weight = weight.add(nvl(child.getWeight()));
+            volume = volume.add(nvl(child.getVolume()));
+            childNos.add(child.getWaybillNo());
+        }
+        if (quantity != nvl(parent.getQuantity())
+                || weight.compareTo(nvl(parent.getWeight())) != 0
+                || volume.compareTo(nvl(parent.getVolume())) != 0) {
+            return null;
+        }
+
+        List<BizTripWaybill> loadedTw = tripWaybillMapper.selectList(Wrappers.<BizTripWaybill>lambdaQuery()
+                .in(BizTripWaybill::getWaybillId, children.stream().map(BizWaybill::getId).toList())
+                .in(BizTripWaybill::getLoadStatus, 1, 2, 3));
+        if (loadedTw.size() != children.size()
+                || loadedTw.stream().anyMatch(item -> !Objects.equals(item.getTripId(), trip.getId()))
+                || loadedTw.stream().anyMatch(item -> !Objects.equals(item.getTripDestId(), dest.getId()))) {
+            // 有子单不在本车本目的站，不能合并成整单
+            return null;
+        }
+        long motherLoaded = tripWaybillMapper.selectCount(Wrappers.<BizTripWaybill>lambdaQuery()
+                .eq(BizTripWaybill::getWaybillId, parent.getId())
+                .in(BizTripWaybill::getLoadStatus, 1, 2, 3));
+        if (motherLoaded > 0) {
+            return null;
+        }
+
+        Long operator = userOrgService.current().userId();
+        for (BizWaybill child : children) {
+            waybillMapper.update(null, new UpdateWrapper<BizWaybill>()
+                    .eq("id", child.getId())
+                    .set("status", VOIDED)
+                    .set("load_status", TripEnums.LoadStatus.PENDING)
+                    // 释放子单号占位，运单号后缀保留不重写
+                    .set("child_seq", null)
+                    .set("update_by", operator));
+        }
+        for (BizTripWaybill item : loadedTw) {
+            tripWaybillMapper.update(null, new UpdateWrapper<BizTripWaybill>()
+                    .eq("id", item.getId())
+                    .set("deleted", 1)
+                    .set("update_by", operator));
+        }
+        BizTripWaybill wholeTw = buildWholeTripWaybill(parent, trip, dest, node);
+        tripWaybillMapper.insert(wholeTw);
+        int rows = waybillMapper.update(null, new UpdateWrapper<BizWaybill>()
+                .eq("id", parent.getId())
+                .eq("load_status", TripEnums.LoadStatus.PENDING)
+                .in("status", 20, 60)
+                .set("status", 70)
+                .set("load_status", TripEnums.LoadStatus.LOADED)
+                .set("update_by", operator));
+        if (rows == 0) {
+            throw new BizException(409, "运单状态已变化，请刷新");
+        }
+        tripLogService.record(trip.getId(), trip.getTripNo(), 3, null, trip.getDeptId(),
+                operator, operatorName(), null,
+                Map.of("parentNo", parent.getWaybillNo(),
+                        "convertedChildNos", String.join(",", childNos),
+                        "quantity", quantity), "整单合并回母单");
+        return parent;
     }
 
     /* ---------------- 校验与计算 ---------------- */
@@ -516,6 +614,50 @@ public class TripSplitService {
         return tw;
     }
 
+    /** 整单回母单时的配载快照：件重体与金额取母单原值，分摊比例 1 */
+    private BizTripWaybill buildWholeTripWaybill(BizWaybill parent, BizTrip trip, BizTripDest dest,
+                                                 BizWaybillRouteNode node) {
+        BizTripWaybill tw = new BizTripWaybill();
+        tw.setTripId(trip.getId());
+        tw.setTripDestId(dest.getId());
+        tw.setSubTripNo(dest.getSubTripNo());
+        tw.setWaybillId(parent.getId());
+        tw.setWaybillNo(parent.getWaybillNo());
+        tw.setParentNo(null);
+        tw.setIsChild(0);
+        tw.setSplitRatio(BigDecimal.ONE);
+        tw.setRouteNodeSeq(node.getSeq());
+        tw.setDestHubId(node.getToDeptId());
+        tw.setDestHubName(node.getToDeptName());
+        tw.setDestName(parent.getDestName());
+        tw.setCustomerName(parent.getCustomerName());
+        tw.setReceiverName(parent.getReceiverName());
+        tw.setReceiverPhone(parent.getReceiverPhone());
+        tw.setGoodsName(parent.getGoodsName());
+        tw.setQuantity(parent.getQuantity());
+        tw.setWeight(nvl(parent.getWeight()));
+        tw.setVolume(nvl(parent.getVolume()));
+        tw.setPrepaidFee(nvl(parent.getPrepaidFee()));
+        tw.setCollectFee(nvl(parent.getCollectFee()));
+        tw.setReturnFee(nvl(parent.getReturnFee()));
+        tw.setMonthlyFee(nvl(parent.getMonthlyFee()));
+        tw.setTotalFee(nvl(parent.getTotalFee()));
+        tw.setRebateTotal(nvl(parent.getRebateTotal()));
+        tw.setValidFreight(nvl(parent.getValidFreight()));
+        tw.setAllocatedFee(BigDecimal.ZERO);
+        tw.setProfitCost(BigDecimal.ZERO);
+        tw.setGrossProfit(grossFormulaService.computeGross(tw, Map.of(), grossFormulaService.current()));
+        tw.setStatusBeforeLoad(parent.getStatus());
+        tw.setLoadStatus(TripEnums.LoadStatus.LOADED);
+        tw.setLoadTime(LocalDateTime.now());
+        tw.setLoadBy(userOrgService.current().userId());
+        tw.setLoadByName(operatorName());
+        tw.setDeptId(trip.getDeptId());
+        tw.setCreateBy(userOrgService.current().userId());
+        tw.setUpdateBy(userOrgService.current().userId());
+        return tw;
+    }
+
     private NextDest resolveNext(BizTrip trip, BizWaybill parent) {
         List<BizWaybillRouteNode> nodes = nodeMapper.selectList(Wrappers.<BizWaybillRouteNode>lambdaQuery()
                 .eq(BizWaybillRouteNode::getWaybillId, parent.getId())
@@ -534,7 +676,7 @@ public class TripSplitService {
         return dest == null ? null : new NextDest(dest, node);
     }
 
-    private void writeWaybillLog(BizWaybill parent, BizWaybill child, int q, int remaining) {
+    private void writeWaybillLog(BizWaybill parent, BizWaybill child, int q, int remaining, String reason) {
         try {
             Map<String, Object> before = new LinkedHashMap<>();
             before.put("waybillNo", parent.getWaybillNo());
@@ -550,7 +692,7 @@ public class TripSplitService {
             log.setActionType(1);
             log.setBeforeSnapshot(objectMapper.writeValueAsString(before));
             log.setAfterSnapshot(objectMapper.writeValueAsString(after));
-            log.setReason("装车拆单");
+            log.setReason(reason);
             log.setAuditStatus(0);
             log.setOperatorId(userOrgService.current().userId());
             log.setOperatorName(operatorName());
