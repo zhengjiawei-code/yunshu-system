@@ -447,18 +447,6 @@
               </div>
             </div>
             <div class="form-item">
-              <label>车型</label>
-              <el-input v-model="vehicle.vehicleType" size="small" :disabled="!editable" placeholder="如：9.6 米厢车" />
-            </div>
-            <div class="form-item">
-              <label>核定载重(kg)</label>
-              <el-input-number v-model="vehicle.vehicleLoad" :min="0" :controls="false" size="small" class="w-full" :disabled="!editable" />
-            </div>
-            <div class="form-item">
-              <label>核定容积(m³)</label>
-              <el-input-number v-model="vehicle.vehicleVolume" :min="0" :controls="false" size="small" class="w-full" :disabled="!editable" />
-            </div>
-            <div class="form-item">
               <label>司机姓名<span class="req">*</span></label>
               <div class="input-with-add">
                 <el-select
@@ -480,6 +468,18 @@
             <div class="form-item">
               <label>司机电话</label>
               <el-input v-model="vehicle.driverPhone" size="small" :disabled="!editable" placeholder="请输入" />
+            </div>
+            <div class="form-item">
+              <label>车型</label>
+              <el-input v-model="vehicle.vehicleType" size="small" :disabled="!editable" placeholder="如：9.6 米厢车" />
+            </div>
+            <div class="form-item">
+              <label>核定载重(kg)</label>
+              <el-input-number v-model="vehicle.vehicleLoad" :min="0" :controls="false" size="small" class="w-full" :disabled="!editable" />
+            </div>
+            <div class="form-item">
+              <label>核定容积(m³)</label>
+              <el-input-number v-model="vehicle.vehicleVolume" :min="0" :controls="false" size="small" class="w-full" :disabled="!editable" />
             </div>
           </div>
         </div>
@@ -563,6 +563,9 @@
               </span>
               <span class="fee-brief__item">
                 月结收入 <b>{{ moneyText(trip?.totalMonthlyFreight) }}</b>
+              </span>
+              <span class="fee-brief__item fee-brief__income">
+                收入合计 <b>{{ moneyText(incomeBriefTotal) }}</b>
               </span>
               <span class="fee-brief__item fee-brief__cost">
                 成本合计 <b>{{ moneyText(feePreview?.summary?.costTotal) }}</b>
@@ -1997,6 +2000,15 @@ const volumeRate = computed(() => {
   return capacity > 0 ? Number(trip.value?.totalVolume || 0) / capacity : 0
 })
 
+/** 收入合计 = 现付 + 到付 + 回付 + 月结（与上方四项口径一致） */
+const incomeBriefTotal = computed(
+  () =>
+    Number(trip.value?.totalPrepaidFreight || 0) +
+    Number(trip.value?.totalCollectFreight || 0) +
+    Number(trip.value?.totalReturnFreight || 0) +
+    Number(trip.value?.totalMonthlyFreight || 0)
+)
+
 function initFeeAmounts(value: TripRecord) {
   if (!costFeeTypes.value.length) {
     feeInitialized.value = true
@@ -2813,6 +2825,10 @@ watch(
 
 .fee-brief__cost b {
   color: var(--color-warning);
+}
+
+.fee-brief__income b {
+  color: var(--color-primary);
 }
 
 .fee-brief__profit b {
