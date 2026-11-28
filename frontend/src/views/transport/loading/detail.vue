@@ -471,7 +471,19 @@
             </div>
             <div class="form-item">
               <label>车型</label>
-              <el-input v-model="vehicle.vehicleType" size="small" :disabled="!editable" placeholder="如：9.6 米厢车" />
+              <el-select
+                v-model="vehicle.vehicleType"
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                size="small"
+                class="w-full"
+                :disabled="!editable"
+                placeholder="选择或输入车型"
+              >
+                <el-option v-for="item in vehicleTypeOptions" :key="item.name" :label="item.name" :value="item.name" />
+              </el-select>
             </div>
             <div class="form-item">
               <label>核定载重(kg)</label>
@@ -2040,7 +2052,7 @@ function initFeeAmounts(value: TripRecord) {
 }
 
 async function ensureSendData() {
-  await Promise.all([loadVehicleOptions(), loadDriverOptions()])
+  await Promise.all([loadVehicleOptions(), loadDriverOptions(), loadVehicleTypeOptions()])
   if (!feeTypesLoaded) {
     try {
       const page = await getFeeTypePage({ feeCategory: 2, enabled: true, page: 1, pageSize: 200 })
