@@ -10,7 +10,7 @@
       <el-descriptions-item label="运单号">
         <span class="mono">{{ row.waybillNo }}</span>
       </el-descriptions-item>
-      <el-descriptions-item label="单元类型">{{ unitTypeText }}</el-descriptions-item>
+      <el-descriptions-item label="运单类型">{{ unitTypeText }}</el-descriptions-item>
       <el-descriptions-item label="母单号">
         <span class="mono">{{ row.parentNo || '—' }}</span>
       </el-descriptions-item>
