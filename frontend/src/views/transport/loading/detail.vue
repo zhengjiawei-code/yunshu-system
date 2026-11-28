@@ -211,7 +211,7 @@
                     type="primary"
                     size="small"
                     class="mono"
-                    @click="openWaybill(row, 'pool')"
+                    @click="openWaybill(row)"
                   >
                     {{ row.waybillNo }}
                   </el-button>
@@ -358,7 +358,7 @@
                       type="primary"
                       size="small"
                       class="mono"
-                      @click="openWaybill(row, 'loaded')"
+                      @click="openWaybill(row)"
                     >
                       {{ row.waybillNo }}
                     </el-button>
@@ -610,7 +610,6 @@
       :row="splitRow"
       @done="onSplitDone"
     />
-    <waybill-readonly-dialog v-model="waybillVisible" :row="waybillRow" :source="waybillSource" />
     <trip-dest-drawer v-model="destVisible" :trip="trip" :dests="dests" @refresh="onDestRefresh" />
     <trip-log-drawer v-model="logVisible" :trip-id="tripId" :trip-no="trip?.tripNo" />
     <trip-print-dialog v-model="printVisible" :trip-id="tripId" />
@@ -675,7 +674,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SmartTable from '@/components/base/SmartTable.vue'
 import StatusTag from '@/components/base/StatusTag.vue'
@@ -732,7 +731,6 @@ import {
   WAYBILL_STATUS_OPTIONS
 } from '@/utils/operationDict'
 import SplitLoadDialog from './components/SplitLoadDialog.vue'
-import WaybillReadonlyDialog from './components/WaybillReadonlyDialog.vue'
 import TripDestDrawer from './components/TripDestDrawer.vue'
 import TripLogDrawer from './components/TripLogDrawer.vue'
 import TripPrintDialog from './components/TripPrintDialog.vue'
@@ -761,6 +759,7 @@ interface GroupRow {
 type LoadedDisplayRow = LoadedRow & { __seq?: number } | GroupRow
 
 const route = useRoute()
+const router = useRouter()
 const tripId = Number(route.query.id)
 
 /* ------------------------------ 基础数据 ------------------------------ */
@@ -1621,16 +1620,12 @@ async function onSplitDone() {
   await refreshAfterChange()
 }
 
-/* ------------------------------ 只读运单详情 ------------------------------ */
+/* ------------------------------ 打开运单详情 ------------------------------ */
 
-const waybillVisible = ref(false)
-const waybillRow = ref<PoolRow | LoadedRow | null>(null)
-const waybillSource = ref<'pool' | 'loaded'>('pool')
-
-function openWaybill(row: PoolRow | LoadedRow, source: 'pool' | 'loaded') {
-  waybillRow.value = row
-  waybillSource.value = source
-  waybillVisible.value = true
+/** 单号点击统一跳运单详情页，不在此页另写只读弹窗 */
+async function openWaybill(row: PoolRow | LoadedRow) {
+  if (!(await saveBasicIfDirty())) return
+  router.push(`/operation/waybill/${row.waybillId}`)
 }
 
 /* ------------------------------ 顶部保存/切换 ------------------------------ */
