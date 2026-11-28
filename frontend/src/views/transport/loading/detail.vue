@@ -505,7 +505,7 @@
             <div class="fee-block">
               <h4>
                 费用录入
-                <span class="subtle">按「费用项 × 归属」逐格录入：车次费用填车次行，到站付运输费填各末端网点行</span>
+                <span class="subtle">按「费用项 × 归属」逐格录入：发站行填车次费用，到站行只填到站付运输费</span>
               </h4>
               <el-table
                 v-if="feeMatrixTypes.length"
@@ -515,13 +515,23 @@
                 class="fee-matrix"
                 empty-text="本车次暂无费用项"
               >
-                <el-table-column prop="rowName" label="费用归属" min-width="150" fixed />
+                <el-table-column prop="rowName" label="费用归属" min-width="180" fixed>
+                  <template #default="{ row }">
+                    <span class="fee-owner">
+                      <span class="fee-owner__name">{{ row.rowName }}</span>
+                      <el-tag
+                        size="small"
+                        effect="plain"
+                        :type="row.role === '发站' ? 'warning' : 'success'"
+                      >{{ row.role }}</el-tag>
+                    </span>
+                  </template>
+                </el-table-column>
                 <el-table-column
                   v-for="type in feeMatrixTypes"
                   :key="type.feeCode"
                   :label="type.feeName"
                   :min-width="type.arrival ? 156 : 132"
-                  :fixed="type.arrival ? 'right' : undefined"
                   align="right"
                 >
                   <template #default="{ row }">
@@ -1926,24 +1936,32 @@ const destFeeRows = computed(() =>
 
 type FeeMatrixType = FeeTypeRow & { arrival: boolean }
 type FeeMatrixRow =
-  | { key: string; kind: 'trip'; rowName: string }
-  | { key: string; kind: 'dest'; rowName: string; tripDestId: number }
+  | { key: string; kind: 'trip'; rowName: string; role: '发站' }
+  | { key: string; kind: 'dest'; rowName: string; role: '到站'; tripDestId: number }
 
-/** 费用矩阵：列=费用项，行=费用归属（车次行 / 各目的网点行） */
+/** 费用矩阵：列=费用项，行=费用归属（发站行 / 各到站网点行） */
 const feeMatrixTypes = computed<FeeMatrixType[]>(() => {
   const list: FeeMatrixType[] = costFeeTypes.value.map((type) => ({ ...type, arrival: false }))
-  if (arrivalTransportType.value) {
-    list.push({ ...arrivalTransportType.value, arrival: true })
+  const arrival = arrivalTransportType.value
+  if (!arrival) {
+    return list
   }
+  // 到站付运输费紧跟回付运输费
+  const returnIndex = list.findIndex((type) => type.sourceField === 'biz_trip.return_transport_fee')
+  list.splice(returnIndex >= 0 ? returnIndex + 1 : Math.min(2, list.length), 0, {
+    ...arrival,
+    arrival: true
+  })
   return list
 })
 
 const feeMatrixRows = computed<FeeMatrixRow[]>(() => [
-  { key: 'trip', kind: 'trip', rowName: '车次 / 全车' },
+  { key: 'trip', kind: 'trip', rowName: trip.value?.originDeptName || '始发站', role: '发站' },
   ...dests.value.map((dest) => ({
     key: `dest-${dest.id}`,
     kind: 'dest' as const,
     rowName: dest.destDeptName,
+    role: '到站' as const,
     tripDestId: dest.id
   }))
 ])
@@ -2751,6 +2769,18 @@ watch(
 
 .fee-matrix :deep(.el-table__cell) {
   padding: 5px 0;
+}
+
+.fee-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fee-owner__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fee-matrix :deep(.el-input-number) {
