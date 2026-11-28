@@ -385,7 +385,7 @@ const schema = reactive<TripColumn[]>([
   { key: 'totalQuantity', label: '总数量', prop: 'totalQuantity', minWidth: 80, kind: 'quantity', align: 'right', filterType: 'none', sortable: false, summaryKey: 'quantity' },
   { key: 'totalWeight', label: '总重量(kg)', prop: 'totalWeight', minWidth: 100, kind: 'quantity', align: 'right', filterType: 'none', sortable: false, summaryKey: 'weight' },
   { key: 'totalVolume', label: '总体积(m³)', prop: 'totalVolume', minWidth: 100, kind: 'quantity', align: 'right', filterType: 'none', sortable: false, summaryKey: 'volume' },
-  { key: 'loadRate', label: '装载率', prop: 'loadRateWeight', minWidth: 130, kind: 'loadRate', align: 'right', filterType: 'none', sortable: false },
+  { key: 'loadRate', label: '重量装载率', prop: 'loadRateWeight', minWidth: 130, kind: 'loadRate', align: 'right', filterType: 'none', sortable: false },
   { key: 'totalFreight', label: '总运费', prop: 'totalFreight', minWidth: 110, kind: 'money', align: 'right', filterType: 'none', summaryKey: 'totalFreight' },
   { key: 'totalValidFreight', label: '总有效运费', prop: 'totalValidFreight', minWidth: 120, kind: 'money', align: 'right', filterType: 'none', sortable: false, summaryKey: 'totalValidFreight' },
   { key: 'grossProfit', label: '毛利', prop: 'grossProfit', minWidth: 110, kind: 'money', align: 'right', filterType: 'none', summaryKey: 'grossProfit' },
