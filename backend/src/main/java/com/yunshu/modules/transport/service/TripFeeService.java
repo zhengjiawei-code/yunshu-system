@@ -848,10 +848,10 @@ public class TripFeeService {
         return chargeWeight(row, ratio);
     }
 
+    /** 费用可改口径：发车后仍可修改，仅车次关闭或对应费用已发起核销时禁止（核销模块后续接入） */
     private void requireEditable(BizTrip trip) {
-        if (!Objects.equals(trip.getTripStatus(), TripEnums.TripStatus.PLAN)
-                && !Objects.equals(trip.getTripStatus(), TripEnums.TripStatus.LOADING)) {
-            throw new BizException(400, "发车后费用已锁定，不能修改");
+        if (Objects.equals(trip.getTripStatus(), TripEnums.TripStatus.CLOSED)) {
+            throw new BizException(400, "车次已关闭，费用不能再修改");
         }
     }
 

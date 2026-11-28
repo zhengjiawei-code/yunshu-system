@@ -490,7 +490,7 @@
             <div class="fee-head-tools">
               <div class="alloc-select">
                 <span>全车分摊方式</span>
-                <el-select v-model="allocMethod" size="small" class="alloc-select__input" :disabled="!editable" @change="onFeeChanged">
+                <el-select v-model="allocMethod" size="small" class="alloc-select__input" :disabled="!feeEditable" @change="onFeeChanged">
                   <el-option v-for="item in ALLOC_METHOD_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                 </el-select>
               </div>
@@ -541,7 +541,7 @@
                       :min="0"
                       :controls="false"
                       size="small"
-                      :disabled="!editable"
+                      :disabled="!feeEditable"
                       @update:model-value="(value: number | undefined) => setCellValue(row, type, value)"
                     />
                     <span v-else class="fee-disabled">—</span>
@@ -623,7 +623,7 @@
         <div class="detail-foot">
           <div class="acts">
             <el-button @click="activeTab = 'load'">返回装车配载</el-button>
-            <el-button :disabled="!editable" :loading="feeSaving" @click="saveFees">保存费用</el-button>
+            <el-button :disabled="!feeEditable" :loading="feeSaving" @click="saveFees">保存费用</el-button>
             <el-button v-if="editable" type="primary" :loading="departSaving" @click="openDepart">发车</el-button>
             <el-button v-else type="danger" plain @click="cancelDepart">取消发车</el-button>
           </div>
@@ -810,6 +810,11 @@ const editable = computed(() => {
   return status === 10 || status === 20
 })
 const canOperate = computed(() => editable.value)
+/** 费用可改：发车后仍可修改，仅车次关闭（及后续核销）后锁定 */
+const feeEditable = computed(() => {
+  const status = trip.value?.tripStatus
+  return status !== undefined && status !== 90
+})
 
 const activeTab = ref<'load' | 'send'>('load')
 
@@ -2113,7 +2118,7 @@ async function requestFeePreview() {
 }
 
 async function saveFees(): Promise<boolean> {
-  if (!editable.value) return false
+  if (!feeEditable.value) return false
   if (!costFeeTypes.value.length) {
     ElMessage.warning('未加载到车次级成本项，无法保存费用')
     return false
