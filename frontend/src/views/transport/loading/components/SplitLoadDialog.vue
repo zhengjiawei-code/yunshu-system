@@ -28,7 +28,7 @@
         <el-form-item label="可装剩余">
           <span>{{ row.remainingQuantity ?? 0 }} 件</span>
         </el-form-item>
-        <el-form-item label="本车装载件数" required>
+        <el-form-item label="本车件数" required>
           <div class="qty-line">
             <el-input-number
               v-model="qty"
@@ -38,12 +38,9 @@
               size="small"
               class="qty-input"
             />
-            <span class="qty-hint">可输入 1 ~ {{ maxQty }} 件</span>
+            <span class="qty-hint">可输入 1 ~ {{ maxQty }} 件 · 剩余 {{ Math.max(maxQty - (qty || 0), 0) }} 件</span>
             <el-button link type="primary" size="small" @click="qty = maxQty">全部余额装车</el-button>
           </div>
-        </el-form-item>
-        <el-form-item label="剩余件数">
-          <span>{{ Math.max(maxQty - (qty || 0), 0) }} 件</span>
         </el-form-item>
       </el-form>
 
