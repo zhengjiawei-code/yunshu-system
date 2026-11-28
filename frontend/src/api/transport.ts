@@ -178,7 +178,11 @@ export function previewTripFees(tripId: number, data: TripFeeSavePayload) {
   return request<FeePreview>({
     url: `/v1/transport/trip/${tripId}/fees/preview`,
     method: 'get',
-    params: { allocMethod: data.allocMethod, items: JSON.stringify(data.items) }
+    params: {
+      allocMethod: data.allocMethod,
+      items: JSON.stringify(data.items),
+      destItems: JSON.stringify(data.destItems || [])
+    }
   })
 }
 

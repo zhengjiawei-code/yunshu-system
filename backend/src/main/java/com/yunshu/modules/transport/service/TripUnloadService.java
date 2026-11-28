@@ -227,7 +227,8 @@ public class TripUnloadService {
         vo.setOtherFeeValid(!Boolean.FALSE.equals(dest.getArrivalOtherFeeValid()));
         vo.setArrivalUnloadFee(nvl(dest.getArrivalUnloadFee()));
         vo.setArrivalOtherFee(nvl(dest.getArrivalOtherFee()));
-        vo.setArrivalTransportFee(nvl(trip.getArrivalTransportFee()));
+        // 到站付运输费按目的网点展示（V36 起按网点录入）
+        vo.setArrivalTransportFee(feeService.arrivalTransportFeeOf(trip.getId(), dest.getId()));
         vo.setAllocMethod(trip.getAllocMethod());
         vo.setAllocMethodName(allocMethodName(trip.getAllocMethod()));
         vo.setCanCancelArrive(canCancelArrive);

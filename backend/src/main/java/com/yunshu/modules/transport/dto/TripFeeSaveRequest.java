@@ -23,8 +23,26 @@ public class TripFeeSaveRequest {
     @Valid
     private List<Item> items;
 
+    /** 子车次级费用（到站付运输费）：按目的网点分别录入 */
+    @Valid
+    private List<DestItem> destItems;
+
     @Data
     public static class Item {
+
+        @NotBlank(message = "费用编码不能为空")
+        private String feeCode;
+
+        @NotNull(message = "费用金额不能为空")
+        @DecimalMin(value = "0", message = "费用金额不能为负数")
+        private BigDecimal amount;
+    }
+
+    @Data
+    public static class DestItem {
+
+        @NotNull(message = "目的网点不能为空")
+        private Long tripDestId;
 
         @NotBlank(message = "费用编码不能为空")
         private String feeCode;

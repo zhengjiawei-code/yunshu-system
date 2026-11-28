@@ -486,89 +486,119 @@
 
         <div class="card mt12">
           <div class="card-head">
-            <div class="pane-title">费用信息</div>
-            <div class="alloc-select">
-              <span>全车分摊方式</span>
-              <el-select v-model="allocMethod" size="small" class="alloc-select__input" :disabled="!editable" @change="onFeeChanged">
-                <el-option v-for="item in ALLOC_METHOD_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-              </el-select>
-              <span class="subtle">唯一修改入口；切换即重算分摊、合计与毛利</span>
+            <div class="pane-title">费用信息 <span class="subtle">录入车次成本费用</span></div>
+            <div class="fee-head-tools">
+              <div class="alloc-select">
+                <span>全车分摊方式</span>
+                <el-select v-model="allocMethod" size="small" class="alloc-select__input" :disabled="!editable" @change="onFeeChanged">
+                  <el-option v-for="item in ALLOC_METHOD_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+              </div>
+              <el-button link type="primary" class="fee-preview-entry" @click="feePreviewVisible = true">
+                分摊预览
+                <span class="fee-preview-entry__count">{{ feePreview?.units?.length || 0 }} 个单元</span>
+              </el-button>
             </div>
           </div>
 
-          <div class="fee-split">
-            <div class="fee-col">
-              <div class="fee-block">
-                <h4>成本项（参与分摊与毛利）</h4>
-                <div v-if="costFeeTypes.length" class="fee-lines">
-                  <div v-for="type in costFeeTypes" :key="type.feeCode" class="fee-line">
-                    <span class="fee-name">{{ type.feeName }}</span>
-                    <el-input-number
-                      v-model="feeAmounts[type.feeCode]"
-                      :min="0"
-                      :controls="false"
-                      size="small"
-                      class="fee-input"
-                      :disabled="!editable"
-                      @change="onFeeChanged"
-                    />
-                  </div>
+          <div class="fee-main">
+            <div class="fee-block">
+              <h4>车次成本费用 <span class="subtle">参与分摊与毛利</span></h4>
+              <div v-if="costFeeTypes.length" class="cost-grid">
+                <div v-for="type in costFeeTypes" :key="type.feeCode" class="cost-item">
+                  <span class="cost-name">{{ type.feeName }}</span>
+                  <el-input-number
+                    v-model="feeAmounts[type.feeCode]"
+                    :min="0"
+                    :controls="false"
+                    size="small"
+                    class="cost-input"
+                    :disabled="!editable"
+                    @change="onFeeChanged"
+                  />
                 </div>
-                <div v-else class="fee-empty">未配置车次级成本项（系统设置 → 财务配置）</div>
               </div>
-
-              <div class="fee-block mt12">
-                <h4>收入项（运单自动汇总，只读）</h4>
-                <div class="fee-line"><span class="fee-name">现付运费收入</span><span class="fee-value">{{ moneyText(trip?.totalPrepaidFreight) }}</span></div>
-                <div class="fee-line"><span class="fee-name">到付运费收入</span><span class="fee-value">{{ moneyText(trip?.totalCollectFreight) }}</span></div>
-                <div class="fee-line"><span class="fee-name">回付运费收入</span><span class="fee-value">{{ moneyText(trip?.totalReturnFreight) }}</span></div>
-                <div class="fee-line"><span class="fee-name">月结运费收入</span><span class="fee-value">{{ moneyText(trip?.totalMonthlyFreight) }}</span></div>
-                <div class="fee-line"><span class="fee-name">总返款</span><span class="fee-value">{{ moneyText(trip?.totalRebate) }}</span></div>
-              </div>
+              <div v-else class="fee-empty">未配置车次级成本项（系统设置 → 财务配置）</div>
             </div>
 
-            <div class="fee-col">
-              <div class="fee-block">
-                <h4>逐单元分摊预览 <span class="subtle">{{ feePreview?.units?.length || 0 }} 个单元</span></h4>
-                <el-table
-                  v-loading="feePreviewLoading"
-                  :data="feePreview?.units || []"
-                  size="small"
-                  border
-                  max-height="240"
-                  :empty-text="feePreviewLoading ? '计算中…' : '暂无可分摊单元'"
-                >
-                  <el-table-column prop="waybillNo" label="运单号" min-width="150" class-name="mono" />
-                  <el-table-column label="基数" width="104" align="right">
-                    <template #default="{ row }">{{ qtyText(row.basis) }}</template>
-                  </el-table-column>
-                  <el-table-column label="占比" width="104" align="right">
-                    <template #default="{ row }">{{ formatPercent(row.ratio) }}</template>
-                  </el-table-column>
-                  <el-table-column label="分摊金额" width="110" align="right">
-                    <template #default="{ row }">{{ moneyText(row.allocatedFee) }}</template>
-                  </el-table-column>
-                </el-table>
+            <div class="fee-block mt12">
+              <h4>
+                到站付运输费
+                <span class="subtle">按目的网点分别录入，只分摊到本网点运单</span>
+              </h4>
+              <div v-if="destFeeRows.length" class="cost-grid">
+                <div v-for="row in destFeeRows" :key="row.tripDestId" class="cost-item">
+                  <span class="cost-name">{{ row.destDeptName }}</span>
+                  <el-input-number
+                    v-model="destFeeAmounts[row.tripDestId]"
+                    :min="0"
+                    :controls="false"
+                    size="small"
+                    class="cost-input"
+                    :disabled="!editable || !row.feeCode"
+                    @change="onFeeChanged"
+                  />
+                </div>
               </div>
+              <div v-else class="fee-empty">本车次暂无目的网点，请先添加送达网点后再录入</div>
+            </div>
 
-              <div class="fee-block mt12">
-                <h4>汇总</h4>
-                <div class="fee-line"><span class="fee-name">运费收入合计</span><span class="fee-value">{{ moneyText(feePreview?.summary?.incomeTotal) }}</span></div>
-                <div class="fee-line"><span class="fee-name">总返款</span><span class="fee-value">{{ moneyText(feePreview?.summary?.rebateTotal) }}</span></div>
-                <div class="fee-line"><span class="fee-name">成本合计</span><span class="fee-value">{{ moneyText(feePreview?.summary?.costTotal) }}</span></div>
-                <div class="fee-line fee-total">
-                  <span class="fee-name">毛利</span>
-                  <span class="fee-value" :class="{ 'is-profit': (feePreview?.summary?.grossProfit || 0) >= 0 }">
-                    {{ moneyText(feePreview?.summary?.grossProfit) }}
-                  </span>
-                </div>
-                <div class="fee-hint">
-                  分摊基数合计 {{ qtyText(feePreview?.basisTotal) }}；为 0 时阻断保存，请先补充运单重量/体积。
-                </div>
-              </div>
+            <div class="fee-brief">
+              <span class="fee-brief__item">
+                现付收入 <b>{{ moneyText(trip?.totalPrepaidFreight) }}</b>
+              </span>
+              <span class="fee-brief__item">
+                到付收入 <b>{{ moneyText(trip?.totalCollectFreight) }}</b>
+              </span>
+              <span class="fee-brief__item">
+                回付收入 <b>{{ moneyText(trip?.totalReturnFreight) }}</b>
+              </span>
+              <span class="fee-brief__item">
+                月结收入 <b>{{ moneyText(trip?.totalMonthlyFreight) }}</b>
+              </span>
+              <span class="fee-brief__item fee-brief__cost">
+                成本合计 <b>{{ moneyText(feePreview?.summary?.costTotal) }}</b>
+              </span>
+              <span
+                class="fee-brief__item"
+                :class="(feePreview?.summary?.grossProfit || 0) >= 0 ? 'fee-brief__profit' : 'fee-brief__loss'"
+              >
+                实时毛利 <b>{{ moneyText(feePreview?.summary?.grossProfit) }}</b>
+              </span>
             </div>
           </div>
         </div>
+
+        <el-drawer v-model="feePreviewVisible" title="费用分摊预览" size="560px">
+          <div v-loading="feePreviewLoading" class="fee-preview-body">
+            <div class="fee-preview-sum">
+              <span>运费收入合计 <b>{{ moneyText(feePreview?.summary?.incomeTotal) }}</b></span>
+              <span>总返款 <b>{{ moneyText(feePreview?.summary?.rebateTotal) }}</b></span>
+              <span>成本合计 <b>{{ moneyText(feePreview?.summary?.costTotal) }}</b></span>
+              <span>
+                毛利
+                <b :class="(feePreview?.summary?.grossProfit || 0) >= 0 ? 'is-profit' : 'is-loss'">
+                  {{ moneyText(feePreview?.summary?.grossProfit) }}
+                </b>
+              </span>
+            </div>
+            <el-table :data="feePreview?.units || []" size="small" border max-height="420" empty-text="暂无可分摊单元">
+              <el-table-column prop="waybillNo" label="运单号" min-width="150" class-name="mono" />
+              <el-table-column label="基数" width="96" align="right">
+                <template #default="{ row }">{{ qtyText(row.basis) }}</template>
+              </el-table-column>
+              <el-table-column label="占比" width="110" align="right">
+                <template #default="{ row }">{{ formatPercent(row.ratio) }}</template>
+              </el-table-column>
+              <el-table-column label="分摊金额" width="120" align="right">
+                <template #default="{ row }">{{ moneyText(row.allocatedFee) }}</template>
+              </el-table-column>
+            </el-table>
+            <div class="fee-hint">
+              分摊基数合计 {{ qtyText(feePreview?.basisTotal) }}；为 0 时阻断保存，请先补充运单重量/体积。
+            </div>
+          </div>
+        </el-drawer>
 
         <div class="card mt12">
           <div class="card-head">
@@ -1874,11 +1904,27 @@ const feeAmounts = reactive<Record<string, number>>({})
 const allocMethod = ref(3)
 const feePreview = ref<FeePreview | null>(null)
 const feePreviewLoading = ref(false)
+const feePreviewVisible = ref(false)
 const feeSaving = ref(false)
 const feeInitialized = ref(false)
+/** 到站付运输费：按目的网点录入的金额 */
+const arrivalTransportType = ref<FeeTypeRow | null>(null)
+const destFeeAmounts = reactive<Record<number, number>>({})
 let feeTypesLoaded = false
+let destFeeInitialized = false
 let feePreviewTimer: number | undefined
 let feePreviewToken = 0
+
+const destFeeRows = computed(() =>
+  dests.value.map((dest) => {
+    const saved = feePreview.value?.destTransportFees?.find((item) => item.tripDestId === dest.id)
+    return {
+      tripDestId: dest.id,
+      destDeptName: dest.destDeptName,
+      feeCode: arrivalTransportType.value?.feeCode || saved?.feeCode || ''
+    }
+  })
+)
 
 const weightRate = computed(() => {
   const capacity = Number(trip.value?.vehicleLoad || 0)
@@ -1907,9 +1953,11 @@ async function ensureSendData() {
   if (!feeTypesLoaded) {
     try {
       const page = await getFeeTypePage({ feeCategory: 2, enabled: true, page: 1, pageSize: 200 })
-      costFeeTypes.value = (page.rows || []).filter(
-        (row) => row.enabled !== false && row.feeCategory === 2 && (row.sourceField || '').startsWith('biz_trip.')
-      )
+      const enabledTypes = (page.rows || []).filter((row) => row.enabled !== false && row.feeCategory === 2)
+      // 到站付运输费为子车次级：按目的网点单独录入，不进车次级成本列表
+      arrivalTransportType.value =
+        enabledTypes.find((row) => row.sourceField === 'biz_trip_dest.arrival_transport_fee') || null
+      costFeeTypes.value = enabledTypes.filter((row) => (row.sourceField || '').startsWith('biz_trip.'))
       feeTypesLoaded = true
       if (trip.value) {
         allocMethod.value = trip.value.allocMethod || 3
@@ -1922,13 +1970,33 @@ async function ensureSendData() {
   scheduleFeePreview()
 }
 
+function initDestFeeAmounts(preview: FeePreview | null) {
+  if (destFeeInitialized) return
+  const rows = preview?.destTransportFees || []
+  if (!rows.length) return
+  rows.forEach((item) => {
+    destFeeAmounts[item.tripDestId] = Number(item.amount || 0)
+  })
+  destFeeInitialized = true
+}
+
 function feePayload() {
+  const arrival = arrivalTransportType.value
+  // 首次预览先不带网点金额，由服务端回填已保存值，避免用空值覆盖历史录入
+  const destItems = arrival && destFeeInitialized
+    ? destFeeRows.value.map((row) => ({
+        tripDestId: row.tripDestId,
+        feeCode: arrival.feeCode,
+        amount: Number(destFeeAmounts[row.tripDestId] || 0)
+      }))
+    : []
   return {
     allocMethod: allocMethod.value,
     items: costFeeTypes.value.map((type) => ({
       feeCode: type.feeCode,
       amount: Number(feeAmounts[type.feeCode] || 0)
-    }))
+    })),
+    destItems
   }
 }
 
@@ -1949,6 +2017,7 @@ async function requestFeePreview() {
     const result = await previewTripFees(tripId, feePayload())
     if (token !== feePreviewToken) return
     feePreview.value = result
+    initDestFeeAmounts(result)
   } catch {
     if (token !== feePreviewToken) return
     feePreview.value = null
@@ -1967,6 +2036,7 @@ async function saveFees(): Promise<boolean> {
   try {
     const result = await saveTripFees(tripId, feePayload())
     feePreview.value = result
+    initDestFeeAmounts(result)
     ElMessage.success('费用已保存，分摊与毛利已重算')
     await loadTripDetail()
     return true
@@ -2610,10 +2680,22 @@ watch(
   width: 140px;
 }
 
-.fee-split {
-  display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+.fee-head-tools {
+  display: flex;
+  align-items: center;
   gap: 16px;
+}
+
+.fee-preview-entry {
+  font-size: var(--font-size-extra-small);
+}
+
+.fee-preview-entry__count {
+  margin-left: 4px;
+  color: var(--color-text-placeholder);
+}
+
+.fee-main {
   padding: 12px 14px;
 }
 
@@ -2623,45 +2705,94 @@ watch(
   font-weight: 600;
 }
 
-.fee-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.cost-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px 18px;
 }
 
-.fee-line {
+.cost-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 26px;
-  font-size: var(--font-size-extra-small);
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-container);
 }
 
-.fee-name {
+.cost-name {
+  overflow: hidden;
   color: var(--color-text-secondary);
+  font-size: var(--font-size-extra-small);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.fee-input {
-  width: 140px;
+.cost-input {
+  width: 118px;
 }
 
-.fee-value {
+.cost-input :deep(.el-input__inner) {
+  font-family: var(--font-family-number);
+  font-weight: 600;
+  text-align: right;
+}
+
+.fee-brief {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border-light);
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-extra-small);
+}
+
+.fee-brief__item b {
+  margin-left: 4px;
+  font-family: var(--font-family-number);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.fee-brief__cost b {
+  color: var(--color-warning);
+}
+
+.fee-brief__profit b {
+  color: var(--color-success);
+}
+
+.fee-brief__loss b,
+.is-loss {
+  color: var(--color-danger);
+}
+
+.fee-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fee-preview-sum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-extra-small);
+}
+
+.fee-preview-sum b {
   font-family: var(--font-family-number);
   color: var(--color-text-primary);
 }
 
-.fee-total .fee-name {
-  color: var(--color-text-primary);
-  font-weight: 600;
-}
-
-.fee-total .fee-value {
-  font-weight: 600;
-}
-
-.fee-total .is-profit {
+.fee-preview-sum .is-profit {
   color: var(--color-success);
 }
 
@@ -2704,7 +2835,7 @@ watch(
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .fee-split {
+  .cost-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

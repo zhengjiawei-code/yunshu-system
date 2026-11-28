@@ -63,17 +63,23 @@ public class TransportTripOpsController {
         return ApiResult.ok(feeService.save(id, request));
     }
 
-    @Operation(summary = "费用分摊预览（items 为 JSON 数组字符串，省略则用已保存费用）")
+    @Operation(summary = "费用分摊预览（items/destItems 为 JSON 数组字符串，省略则用已保存费用）")
     @GetMapping("/trip/{id}/fees/preview")
     public ApiResult<FeePreviewVO> previewFees(@PathVariable Long id,
                                                @RequestParam(required = false) Integer allocMethod,
-                                               @RequestParam(required = false) String items) throws Exception {
+                                               @RequestParam(required = false) String items,
+                                               @RequestParam(required = false) String destItems) throws Exception {
         List<TripFeeSaveRequest.Item> list = null;
         if (StringUtils.hasText(items)) {
             list = objectMapper.readValue(items, new TypeReference<List<TripFeeSaveRequest.Item>>() {
             });
         }
-        return ApiResult.ok(feeService.preview(id, allocMethod, list));
+        List<TripFeeSaveRequest.DestItem> destList = null;
+        if (StringUtils.hasText(destItems)) {
+            destList = objectMapper.readValue(destItems, new TypeReference<List<TripFeeSaveRequest.DestItem>>() {
+            });
+        }
+        return ApiResult.ok(feeService.preview(id, allocMethod, list, destList));
     }
 
     @Operation(summary = "发车：20→30、运单 70→80、子车次 10→20")

@@ -58,6 +58,9 @@ public class TripFeeService {
     private static final String GLOBAL_RATIO_KEY = "fee.volume_weight_ratio";
     private static final BigDecimal DEFAULT_RATIO = new BigDecimal("333");
 
+    /** 到站付运输费：针对末端网点，按子车次（目的网点）分别录入，只分摊到本网点运单 */
+    private static final String ARRIVAL_TRANSPORT_SOURCE = "biz_trip_dest.arrival_transport_fee";
+
     /** 车次级成本项取数列白名单：source_field → biz_trip 列名 */
     private static final Map<String, String> TRIP_COLUMNS = Map.ofEntries(
             Map.entry("biz_trip.prepaid_transport_fee", "prepaid_transport_fee"),
@@ -93,13 +96,16 @@ public class TripFeeService {
     /* ---------------- #12 预览 ---------------- */
 
     @DS("master")
-    public FeePreviewVO preview(Long tripId, Integer allocMethod, List<TripFeeSaveRequest.Item> items) {
+    public FeePreviewVO preview(Long tripId, Integer allocMethod, List<TripFeeSaveRequest.Item> items,
+                                List<TripFeeSaveRequest.DestItem> destItems) {
         BizTrip trip = tripService.requireVisible(tripId);
         int method = allocMethod == null ? validMethod(trip.getAllocMethod()) : validMethod(allocMethod);
         Map<String, BigDecimal> amounts = items == null || items.isEmpty()
                 ? savedAmounts(tripId)
                 : requestAmounts(items);
-        return build(trip, method, amounts, rows(tripId)).vo();
+        Map<Long, Map<String, BigDecimal>> destAmounts = savedDestAmountsByDest(tripId);
+        mergeDestAmounts(trip, destAmounts, destItems);
+        return build(trip, method, amounts, destAmounts, rows(tripId)).vo();
     }
 
     /* ---------------- #11 保存 ---------------- */
@@ -138,9 +144,28 @@ public class TripFeeService {
                     trip.getDeptId(), operatorId);
         }
 
+        // 到站付运输费：按目的网点落子车次级费用行
+        Map<Long, Map<String, BigDecimal>> destAmounts = savedDestAmountsByDest(tripId);
+        mergeDestAmounts(trip, destAmounts, request.getDestItems());
+        Map<String, SysFeeType> destTypes = destLevelTypes();
+        if (request.getDestItems() != null) {
+            for (TripFeeSaveRequest.DestItem item : request.getDestItems()) {
+                SysFeeType type = destTypes.get(item.getFeeCode().trim());
+                if (type == null) {
+                    continue;
+                }
+                tripFeeMapper.upsertDestLevel(tripId, item.getTripDestId(), type.getFeeCode(),
+                        type.getFeeName(), item.getAmount().setScale(2, RoundingMode.HALF_UP),
+                        type.getProfitEnabled(), type.getProfitDirection(), type.getSortOrder(),
+                        trip.getDeptId(), operatorId);
+            }
+        }
+        BigDecimal arrivalTotal = arrivalTransportTotal(destAmounts);
+
         UpdateWrapper<BizTrip> tripUpdate = new UpdateWrapper<>();
         tripUpdate.eq("id", tripId)
                 .set("alloc_method", method)
+                .set("arrival_transport_fee", arrivalTotal)
                 .set("update_by", operatorId)
                 .set("update_by_name", operatorName);
         for (Map.Entry<String, BigDecimal> entry : amounts.entrySet()) {
@@ -153,7 +178,7 @@ public class TripFeeService {
         tripMapper.update(null, tripUpdate);
 
         List<BizTripWaybill> rows = rows(tripId);
-        Built built = build(trip, method, amounts, rows);
+        Built built = build(trip, method, amounts, destAmounts, rows);
         rebuildAllocation(tripId);
 
         tripLogService.record(tripId, trip.getTripNo(), 12, null, trip.getDeptId(),
@@ -167,7 +192,8 @@ public class TripFeeService {
                          Map<Long, BigDecimal> allocatedByUnit, Map<Long, BigDecimal> profitByUnit) {
     }
 
-    private Built build(BizTrip trip, int method, Map<String, BigDecimal> amounts, List<BizTripWaybill> rows) {
+    private Built build(BizTrip trip, int method, Map<String, BigDecimal> amounts,
+                        Map<Long, Map<String, BigDecimal>> destAmounts, List<BizTripWaybill> rows) {
         Map<String, SysFeeType> types = tripLevelTypes();
         Map<Long, BigDecimal> ratioByWaybill = chargeRatios(rows);
 
@@ -234,6 +260,51 @@ public class TripFeeService {
             }
         }
 
+        // 子车次级：到站付运输费按目的网点分摊，只摊本网点运单，排除大车直送
+        Map<Long, BizWaybill> waybillById = waybillMap(rows);
+        Map<Long, List<FeeAllocator.Unit>> unitsByDest = new HashMap<>();
+        for (BizTripWaybill row : rows) {
+            BizWaybill waybill = waybillById.get(row.getWaybillId());
+            if (waybill != null && Objects.equals(waybill.getDeliveryMethod(), 3)) {
+                continue;
+            }
+            unitsByDest.computeIfAbsent(row.getTripDestId(), key -> new ArrayList<>())
+                    .add(new FeeAllocator.Unit(row.getId(), nvl(row.getWeight()), nvl(row.getVolume()),
+                            chargeWeights.getOrDefault(row.getId(), BigDecimal.ZERO)));
+        }
+        Map<String, SysFeeType> destTypes = destLevelTypes();
+        for (Map.Entry<Long, Map<String, BigDecimal>> destEntry : destAmounts.entrySet()) {
+            List<FeeAllocator.Unit> scope = unitsByDest.getOrDefault(destEntry.getKey(), List.of());
+            if (scope.isEmpty()) {
+                continue;
+            }
+            for (Map.Entry<String, BigDecimal> entry : destEntry.getValue().entrySet()) {
+                SysFeeType type = destTypes.get(entry.getKey());
+                if (type == null) {
+                    continue;
+                }
+                for (FeeAllocator.Result result : FeeAllocator.allocate(entry.getValue(), scope, method)) {
+                    feesByUnit.get(result.unitId()).put(type.getFeeCode(), result.amount());
+                    allocatedByUnit.merge(result.unitId(), result.amount(), BigDecimal::add);
+                    if (Boolean.TRUE.equals(type.getProfitEnabled())) {
+                        profitByUnit.merge(result.unitId(), result.amount(), BigDecimal::add);
+                    }
+                    BizTripWaybillFee row = new BizTripWaybillFee();
+                    row.setTripId(trip.getId());
+                    row.setTripWaybillId(result.unitId());
+                    row.setFeeCode(type.getFeeCode());
+                    row.setFeeName(type.getFeeName());
+                    row.setAllocMethod(method);
+                    row.setBasisValue(result.basis());
+                    row.setBasisTotal(result.basisTotal());
+                    row.setAllocRatio(result.ratio());
+                    row.setAmount(result.amount());
+                    row.setDeptId(trip.getDeptId());
+                    feeRows.add(row);
+                }
+            }
+        }
+
         FeePreviewVO vo = new FeePreviewVO();
         vo.setTripId(trip.getId());
         vo.setAllocMethod(method);
@@ -286,6 +357,7 @@ public class TripFeeService {
         summary.setCostTotal(cost);
         summary.setGrossProfit(gross);
         vo.setSummary(summary);
+        vo.setDestTransportFees(destTransportFees(trip.getId(), destAmounts));
         return new Built(vo, feeRows, allocatedByUnit, profitByUnit);
     }
 
@@ -529,13 +601,116 @@ public class TripFeeService {
         return amounts;
     }
 
+    /** 已保存的子车次级费用：目的网点 → (费用编码 → 金额) */
+    private Map<Long, Map<String, BigDecimal>> savedDestAmountsByDest(Long tripId) {
+        List<BizTripFee> saved = tripFeeMapper.selectList(Wrappers.<BizTripFee>lambdaQuery()
+                .eq(BizTripFee::getTripId, tripId)
+                .gt(BizTripFee::getTripDestId, 0L)
+                .eq(BizTripFee::getFeeStatus, 1));
+        Map<Long, Map<String, BigDecimal>> result = new LinkedHashMap<>();
+        for (BizTripFee fee : saved) {
+            result.computeIfAbsent(fee.getTripDestId(), key -> new LinkedHashMap<>())
+                    .put(fee.getFeeCode(), nvl(fee.getAmount()));
+        }
+        return result;
+    }
+
+    /** 合并本次提交的按网点费用；越权网点、非法科目、负数一律拒绝 */
+    private void mergeDestAmounts(BizTrip trip, Map<Long, Map<String, BigDecimal>> destAmounts,
+                                  List<TripFeeSaveRequest.DestItem> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        Map<String, SysFeeType> destTypes = destLevelTypes();
+        Set<Long> tripDestIds = new LinkedHashSet<>();
+        for (BizTripDest dest : destMapper.selectList(Wrappers.<BizTripDest>lambdaQuery()
+                .eq(BizTripDest::getTripId, trip.getId()))) {
+            tripDestIds.add(dest.getId());
+        }
+        for (TripFeeSaveRequest.DestItem item : items) {
+            String code = item.getFeeCode() == null ? null : item.getFeeCode().trim();
+            if (code == null || !destTypes.containsKey(code)) {
+                throw new BizException(400, "费用项不存在或未启用：" + item.getFeeCode());
+            }
+            if (item.getTripDestId() == null || !tripDestIds.contains(item.getTripDestId())) {
+                throw new BizException(400, "目的网点不属于本车次");
+            }
+            if (item.getAmount() == null || item.getAmount().signum() < 0) {
+                throw new BizException(400, "费用金额不能为负数：" + code);
+            }
+            destAmounts.computeIfAbsent(item.getTripDestId(), key -> new LinkedHashMap<>())
+                    .put(code, item.getAmount().setScale(2, RoundingMode.HALF_UP));
+        }
+    }
+
+    /** 到站付运输费车次级合计 = Σ 各目的网点金额（镜像到 biz_trip 供卸车页/列表展示） */
+    private BigDecimal arrivalTransportTotal(Map<Long, Map<String, BigDecimal>> destAmounts) {
+        SysFeeType type = arrivalTransportType();
+        if (type == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (Map<String, BigDecimal> amounts : destAmounts.values()) {
+            total = total.add(nvl(amounts.get(type.getFeeCode())));
+        }
+        return total;
+    }
+
+    /** 到站付运输费的费用类型（取数来源 biz_trip_dest.arrival_transport_fee） */
+    private SysFeeType arrivalTransportType() {
+        for (SysFeeType type : destLevelTypes().values()) {
+            if (ARRIVAL_TRANSPORT_SOURCE.equals(type.getSourceField())) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    /** 指定目的网点的到站付运输费；未录入为 0（卸车页按网点只读展示） */
+    public BigDecimal arrivalTransportFeeOf(Long tripId, Long destId) {
+        SysFeeType type = arrivalTransportType();
+        if (type == null || destId == null) {
+            return BigDecimal.ZERO;
+        }
+        BizTripFee fee = tripFeeMapper.selectOne(Wrappers.<BizTripFee>lambdaQuery()
+                .eq(BizTripFee::getTripId, tripId)
+                .eq(BizTripFee::getTripDestId, destId)
+                .eq(BizTripFee::getFeeCode, type.getFeeCode())
+                .eq(BizTripFee::getFeeStatus, 1)
+                .last("LIMIT 1"));
+        return fee == null ? BigDecimal.ZERO : nvl(fee.getAmount());
+    }
+
+    /** 按目的网点回显到站付运输费（未录入显示 0） */
+    private List<FeePreviewVO.DestTransportFee> destTransportFees(
+            Long tripId, Map<Long, Map<String, BigDecimal>> destAmounts) {
+        SysFeeType arrivalType = arrivalTransportType();
+        List<FeePreviewVO.DestTransportFee> list = new ArrayList<>();
+        List<BizTripDest> dests = destMapper.selectList(Wrappers.<BizTripDest>lambdaQuery()
+                .eq(BizTripDest::getTripId, tripId)
+                .orderByAsc(BizTripDest::getSeq));
+        for (BizTripDest dest : dests) {
+            FeePreviewVO.DestTransportFee row = new FeePreviewVO.DestTransportFee();
+            row.setTripDestId(dest.getId());
+            row.setDestDeptName(dest.getDestDeptName());
+            row.setFeeCode(arrivalType == null ? null : arrivalType.getFeeCode());
+            row.setFeeName(arrivalType == null ? "到站付运输费" : arrivalType.getFeeName());
+            Map<String, BigDecimal> amounts = destAmounts.get(dest.getId());
+            row.setAmount(amounts == null || arrivalType == null
+                    ? BigDecimal.ZERO
+                    : nvl(amounts.get(arrivalType.getFeeCode())));
+            list.add(row);
+        }
+        return list;
+    }
+
     /* ---------------- 供发车校验复用 ---------------- */
 
     /** 发车前置：校验费用已保存且 D14 基数合计 > 0（存在正金额成本项时） */
     public void assertReadyForDepart(BizTrip trip, List<BizTripWaybill> rows) {
+        // 车次级与子车次级（到站付运输费等）都算已录入
         List<BizTripFee> saved = tripFeeMapper.selectList(Wrappers.<BizTripFee>lambdaQuery()
                 .eq(BizTripFee::getTripId, trip.getId())
-                .eq(BizTripFee::getTripDestId, 0L)
                 .eq(BizTripFee::getFeeStatus, 1));
         if (saved.isEmpty()) {
             throw new BizException(400, "请先保存费用信息后再发车");

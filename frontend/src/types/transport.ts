@@ -353,6 +353,16 @@ export interface FeePreview {
   items: FeeItemTotal[]
   units: FeeUnit[]
   summary: FeeSummary
+  /** 到站付运输费：按目的网点的录入明细 */
+  destTransportFees?: FeeDestTransport[]
+}
+
+export interface FeeDestTransport {
+  tripDestId: number
+  destDeptName: string
+  feeCode?: string | null
+  feeName?: string
+  amount: number
 }
 
 export interface FeeTypeRow {
@@ -397,6 +407,14 @@ export interface TripFeeItemPayload {
 export interface TripFeeSavePayload {
   allocMethod: number
   items: TripFeeItemPayload[]
+  /** 到站付运输费：按目的网点录入 */
+  destItems: TripFeeDestItemPayload[]
+}
+
+export interface TripFeeDestItemPayload {
+  tripDestId: number
+  feeCode: string
+  amount: number
 }
 
 export interface TripLog {

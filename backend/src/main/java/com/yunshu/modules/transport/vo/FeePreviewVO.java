@@ -28,6 +28,18 @@ public class FeePreviewVO {
 
     private Summary summary;
 
+    /** 到站付运输费：按目的网点的录入明细 */
+    private List<DestTransportFee> destTransportFees;
+
+    @Data
+    public static class DestTransportFee {
+        private Long tripDestId;
+        private String destDeptName;
+        private String feeCode;
+        private String feeName;
+        private BigDecimal amount;
+    }
+
     @Data
     public static class ItemTotal {
         private String feeCode;
