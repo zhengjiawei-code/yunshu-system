@@ -107,6 +107,8 @@ public class WaybillQueryService {
         }
         List<BizWaybill> children = waybillMapper.selectList(new QueryWrapper<BizWaybill>()
                 .eq("parent_id", parent.getId())
+                // 子单号会回收复用，作废墓碑行不得出现在详情/子单清单
+                .ne("status", 900)
                 .orderByAsc("child_seq")
                 .orderByAsc("id"));
         int quantity = 0;
@@ -254,6 +256,8 @@ public class WaybillQueryService {
         QueryWrapper<BizWaybill> wrapper = new QueryWrapper<>();
         wrapper.select("parent_id AS parentId", "COUNT(*) AS cnt")
                 .in("parent_id", parentIds)
+                // 子单号会回收复用，作废墓碑行不计入子单数
+                .ne("status", 900)
                 .groupBy("parent_id");
         Map<Long, Integer> counts = new LinkedHashMap<>();
         for (Map<String, Object> row : waybillMapper.selectMaps(wrapper)) {

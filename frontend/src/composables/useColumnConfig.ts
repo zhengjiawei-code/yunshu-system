@@ -85,10 +85,18 @@ export type RuntimeTextModes = Partial<Record<string, TextMatchMode>>
  * 1 允许用户改筛选类型；
  * 2 控件类型只跟随 schema，用户只能关闭筛选；
  * 3 一次性迁移：历史配置的「是否启用筛选」重置为默认全开（保留顺序/显隐/匹配模式/默认值），
- *   同时为 defaultHidden 的新列落一次默认隐藏。
+ *   同时为 defaultHidden 的新列落一次默认隐藏；
+ * 4 页面声明 migrationHiddenKeys 的列，对存量配置做一次默认隐藏迁移（只改显隐，不动顺序/列宽/筛选）。
  */
-const CONFIG_VERSION = 3
+const CONFIG_VERSION = 4
 const DATE_TYPES: FilterType[] = ['date', 'daterange']
+
+/** 一次性迁移上下文：resetFilters 仅用于 v3 之前的存量配置 */
+interface MigrationContext {
+  resetFilters: boolean
+  applyDefaultHidden: boolean
+  hideKeys: Set<string>
+}
 
 function isDateType(type: FilterType): boolean {
   return DATE_TYPES.includes(type)
@@ -126,12 +134,12 @@ function modeValueOf(value: unknown): unknown {
 function normalizeState(
   def: ColumnDef,
   saved?: Partial<ColumnItemState> | null,
-  migrate = false
+  migration?: MigrationContext
 ): ColumnItemState {
   const targetType = schemaTypeOf(def)
   const savedType = saved?.filterType
   let filterType: FilterType = targetType
-  if (migrate) {
+  if (migration?.resetFilters) {
     // 历史配置迁移：所有可筛列统一回到默认全开
     filterType = targetType
   } else if (savedType === 'none') {
@@ -198,7 +206,10 @@ function normalizeState(
 
   return {
     key: def.key,
-    visible: migrate && def.defaultHidden ? false : saved?.visible !== false,
+    visible: migration
+      && (migration.hideKeys.has(def.key) || (migration.applyDefaultHidden && def.defaultHidden))
+      ? false
+      : saved?.visible !== false,
     sortable: saved?.sortable !== false,
     filterType,
     filterMode,
@@ -207,25 +218,39 @@ function normalizeState(
   }
 }
 
-function defaultState(def: ColumnDef): ColumnItemState {
-  return normalizeState(def, null, true)
+function defaultState(def: ColumnDef, hideKeys = new Set<string>()): ColumnItemState {
+  return normalizeState(def, null, {
+    resetFilters: true,
+    applyDefaultHidden: true,
+    hideKeys
+  })
 }
 
 /**
  * 统一列设置：所有列表页共用同一协议。
  * 后端按「用户 + 页面标识」持久化，本地只保留列宽（SmartTable persistKey）。
+ *
+ * migrationHiddenKeys：v3 → v4 一次性迁移时强制隐藏的列（仅改显隐，不动顺序/列宽/筛选）。
+ * 只应由需要该迁移的页面显式声明，其他页面传空即可保持原状。
  */
 export function useColumnConfig(
   pageKey: string,
   schema: ColumnDef[],
-  options: { leadingKeys?: string[]; moveAfter?: Record<string, string> } = {}
+  options: {
+    leadingKeys?: string[]
+    moveAfter?: Record<string, string>
+    migrationHiddenKeys?: string[]
+  } = {}
 ) {
   const configurable = computed(() => schema.filter((item) => !item.ignored))
   /** 页面指定的前置列：存量配置与默认配置都需保证这些列排在最前，顺序以数组为准 */
   const leadingKeys = options.leadingKeys ?? []
   /** 页面指定的相对位置：key 需要紧跟在 anchor 列之后（存量配置同样生效） */
   const moveAfter = options.moveAfter ?? {}
-  const states = ref<ColumnItemState[]>(configurable.value.map(defaultState))
+  const migrationHiddenKeys = new Set(options.migrationHiddenKeys ?? [])
+  const states = ref<ColumnItemState[]>(
+    configurable.value.map((def) => defaultState(def, migrationHiddenKeys))
+  )
   const loading = ref(false)
   const saving = ref(false)
   const customized = ref(false)
@@ -234,17 +259,23 @@ export function useColumnConfig(
     const defs = new Map(configurable.value.map((def) => [def.key, def]))
     const result: ColumnItemState[] = []
     const seen = new Set<string>()
-    // 旧版本配置一次性迁移：筛选重置全开、defaultHidden 列落为隐藏
-    const migrate = !saved || (saved.version ?? 0) < CONFIG_VERSION
+    const savedVersion = saved?.version ?? 0
+    // v3 之前：筛选重置全开；v4 之前：页面声明的迁移列强制隐藏。
+    // 只改对应项，顺序/列宽/其他显隐保持不变。
+    const migration: MigrationContext = {
+      resetFilters: !saved || savedVersion < 3,
+      applyDefaultHidden: !saved || savedVersion < 4,
+      hideKeys: savedVersion < 4 ? migrationHiddenKeys : new Set<string>()
+    }
     // 先按用户保存的顺序还原；页面新增的列再追加到末尾，保证顺序配置真实生效
     for (const item of saved?.columns || []) {
       const def = defs.get(item.key)
       if (!def || seen.has(item.key)) continue
       seen.add(item.key)
-      result.push(normalizeState(def, item, migrate))
+      result.push(normalizeState(def, item, migration))
     }
     for (const def of configurable.value) {
-      if (!seen.has(def.key)) result.push(defaultState(def))
+      if (!seen.has(def.key)) result.push(defaultState(def, migrationHiddenKeys))
     }
     return applyMoveAfter(applyLeadingOrder(result))
   }

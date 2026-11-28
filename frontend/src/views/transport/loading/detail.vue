@@ -973,8 +973,8 @@ const loadedSchema = reactive<PaneColumn[]>([
   { key: 'volume', label: '装车体积(m³)', prop: 'volume', minWidth: 116, align: 'right', kind: 'quantity', filterType: 'numberrange', sortable: false },
   { key: 'loadFee', label: '装车运费', prop: 'loadFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
   { key: 'loadRebate', label: '装车返款', prop: 'loadRebate', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
-  { key: 'totalFee', label: '运费合计', prop: 'totalFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
-  { key: 'rebateTotal', label: '返款合计', prop: 'rebateTotal', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
+  { key: 'totalFee', label: '运费合计', prop: 'totalFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false, defaultHidden: true },
+  { key: 'rebateTotal', label: '返款合计', prop: 'rebateTotal', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false, defaultHidden: true },
   { key: 'loadTime', label: '配载时间', prop: 'loadTime', minWidth: 156, kind: 'datetime', filterType: 'daterange' }
 ])
 
@@ -1006,7 +1006,10 @@ const {
   reset: resetLoadedColumnConfig,
   filterModesParam: loadedFilterModesParam,
   defaultFiltersRaw: loadedDefaultFiltersRaw
-} = useColumnConfig('transport.loading.loaded', loadedSchema)
+} = useColumnConfig('transport.loading.loaded', loadedSchema, {
+  // v3 → v4 一次性迁移：存量配置仅隐藏这两列，其他顺序/显隐/列宽不动
+  migrationHiddenKeys: ['totalFee', 'rebateTotal']
+})
 
 const poolDataColumns = computed(() => poolSchema.filter((item) => item.key !== 'operation' && isPoolVisible(item.key)))
 const loadedDataColumns = computed(() => loadedSchema.filter((item) => isLoadedVisible(item.key)))
@@ -2441,6 +2444,7 @@ watch(
 .transfer-btn {
   width: 40px;
   height: 30px;
+  margin: 0;
   padding: 0;
   font-size: 16px;
   line-height: 1;

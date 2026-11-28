@@ -26,6 +26,7 @@ import com.yunshu.modules.transport.vo.SplitVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -39,6 +40,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 拆单装车：未配载整票按件数拆出子单并直接装本车，母单余额回池。
@@ -72,13 +75,19 @@ public class TripSplitService {
         BizWaybill parent = waybillMapper.selectById(parentWaybillId);
         ChildAgg agg = validateAndAggregate(trip, parent, quantity);
         SplitVO vo = buildPreview(parent, quantity, agg);
+        vo.setChildSeq(nextChildSeq(parent.getId()));
         NextDest next = resolveNext(trip, parent);
         vo.setChildStatus(70);
         vo.setRouteNodeCount(next == null ? 0 : 1);
         return vo;
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * READ COMMITTED：母单行锁等待期间，默认 REPEATABLE READ 的快照已在 requireVisible 时定格，
+     * 等锁后读到的子单仍是旧值，并发拆单合并会互相覆盖导致丢量。
+     * 读已提交保证拿到母单锁之后的读取都是最新已提交数据。
+     */
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     @DS("master")
     public SplitVO splitLoad(Long tripId, SplitRequest request) {
         BizTrip trip = tripService.requireVisible(tripId);
@@ -96,12 +105,10 @@ public class TripSplitService {
         if (active > 0) {
             throw new BizException(409, "母单已被其他车次配载");
         }
-        int childSeq = waybillMapper.selectMaxChildSeq(parent.getId()) + 1;
-        if (childSeq > 99) {
-            throw new BizException("子单序号已达上限99，不能再拆");
-        }
+        int childSeq = nextChildSeq(parent.getId());
 
         SplitVO vo = buildPreview(parent, q, agg);
+        vo.setChildSeq(childSeq);
         BizWaybill child = buildChild(parent, vo.getChild(), childSeq, q);
         waybillMapper.insert(child);
         copyRouteNodes(parent.getId(), child.getId());
@@ -194,6 +201,8 @@ public class TripSplitService {
                     .eq("id", otherWb.getId())
                     .set("status", VOIDED)
                     .set("load_status", TripEnums.LoadStatus.PENDING)
+                    // 释放子单号占位，运单号后缀保留不重写
+                    .set("child_seq", null)
                     .set("update_by", userOrgService.current().userId()));
             tripWaybillMapper.update(null, new UpdateWrapper<BizTripWaybill>()
                     .eq("id", other.getId())
@@ -384,6 +393,27 @@ public class TripSplitService {
     }
 
     /* ---------------- 落库 ---------------- */
+
+    /**
+     * 子单号取号：当前有效子单（未作废、未逻辑删除）中最小未占用序号。
+     * 调用方已对母单行 FOR UPDATE，同一母单串行取号，避免并发重号；
+     * 作废子单仅释放内部占位（child_seq 置空），运单号后缀保留不重写。
+     */
+    private int nextChildSeq(Long parentId) {
+        Set<Integer> used = waybillMapper.selectList(Wrappers.<BizWaybill>lambdaQuery()
+                        .select(BizWaybill::getChildSeq)
+                        .eq(BizWaybill::getParentId, parentId)
+                        .eq(BizWaybill::getIsChild, 1)
+                        .ne(BizWaybill::getStatus, VOIDED))
+                .stream().map(BizWaybill::getChildSeq).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (int seq = 1; seq <= 99; seq++) {
+            if (!used.contains(seq)) {
+                return seq;
+            }
+        }
+        throw new BizException("子单序号已达上限99，不能再拆");
+    }
 
     private BizWaybill buildChild(BizWaybill parent, SplitVO.Amounts a, int childSeq, int q) {
         BizWaybill child = new BizWaybill();

@@ -666,6 +666,8 @@ public class TripLoadService {
                     .eq("load_status", TripEnums.LoadStatus.LOADED)
                     .set("status", VOIDED)
                     .set("load_status", TripEnums.LoadStatus.PENDING)
+                    // 释放子单号占位，运单号后缀保留不重写
+                    .set("child_seq", null)
                     .set("update_by", userOrgService.current().userId()));
         } else {
             restored = waybillMapper.update(null, new UpdateWrapper<BizWaybill>()

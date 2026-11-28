@@ -242,7 +242,9 @@ public class WaybillService {
                 .toList();
         List<WaybillAmendLogVO> amendRecords = amendLogs.stream().map(this::toAmendLogVO).toList();
         int childCount = isChild(waybill) ? 0 : Math.toIntExact(waybillMapper.selectCount(
-                Wrappers.<BizWaybill>lambdaQuery().eq(BizWaybill::getParentId, waybill.getId())));
+                Wrappers.<BizWaybill>lambdaQuery().eq(BizWaybill::getParentId, waybill.getId())
+                        // 子单号会回收复用，作废墓碑行不计入子单数
+                        .ne(BizWaybill::getStatus, 900)));
 
         WaybillDetailVO vo = new WaybillDetailVO();
         vo.setWaybill(waybill);

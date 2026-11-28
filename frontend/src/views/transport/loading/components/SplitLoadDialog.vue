@@ -37,6 +37,7 @@
               :controls="false"
               size="small"
               class="qty-input"
+              placeholder="请输入"
             />
             <span class="qty-hint">可输入 1 ~ {{ maxQty }} 件 · 剩余 {{ Math.max(maxQty - (qty || 0), 0) }} 件</span>
             <el-button link type="primary" size="small" @click="qty = maxQty">全部余额装车</el-button>
@@ -55,8 +56,10 @@
       </div>
 
       <div class="split-hint">
-        确认后生成子单号 <b class="mono">{{ row.waybillNo }}-{{ nextSeqText }}</b>（递增，实际序号由服务端分配）并配入本车次；
-        母单剩余件数留在待配载池，金额按件数比例拆分、尾差归母单。
+        确认后生成子单号
+        <b v-if="preview?.childSeq" class="mono">{{ row.waybillNo }}-{{ String(preview.childSeq).padStart(2, '0') }}</b>
+        <span v-else>（取当前最小可用号）</span>
+        ，并配入本车次；母单剩余件数留在待配载池，金额按件数比例拆分、尾差归母单。
       </div>
     </div>
 
@@ -87,7 +90,7 @@ const emit = defineEmits<{
   done: [result: SplitResult]
 }>()
 
-const qty = ref(1)
+const qty = ref<number | undefined>(undefined)
 const loading = ref(false)
 const previewLoading = ref(false)
 const submitting = ref(false)
@@ -98,13 +101,9 @@ let previewToken = 0
 const maxQty = computed(() => Math.max(props.row?.remainingQuantity ?? 0, 1))
 const canSubmit = computed(() => {
   const value = qty.value
-  return !!preview.value && value >= 1 && value <= maxQty.value && !previewLoading.value && !submitting.value
+  return !!preview.value && typeof value === 'number' && value >= 1 && value <= maxQty.value
+    && !previewLoading.value && !submitting.value
 })
-const nextSeqText = computed(() => {
-  const childCount = props.row?.childCount ?? 0
-  return String(Math.min(childCount + 1, 99)).padStart(2, '0')
-})
-
 const previewRows = computed(() => {
   const result = preview.value
   if (!result) return []
@@ -157,10 +156,9 @@ const previewRows = computed(() => {
 })
 
 function reset() {
-  const remaining = props.row?.remainingQuantity ?? 0
-  qty.value = Math.max(1, Math.min(Math.floor(remaining / 2) || 1, remaining || 1))
+  // 本车件数不预填，首次打开保持为空
+  qty.value = undefined
   preview.value = null
-  schedulePreview()
 }
 
 function schedulePreview() {
@@ -168,7 +166,7 @@ function schedulePreview() {
   preview.value = null
   const row = props.row
   const value = qty.value
-  if (!row || !props.tripId || !value || value < 1 || value > maxQty.value) return
+  if (!row || !props.tripId || typeof value !== 'number' || value < 1 || value > maxQty.value) return
   const token = ++previewToken
   previewLoading.value = true
   previewTimer = window.setTimeout(async () => {
@@ -186,7 +184,12 @@ function schedulePreview() {
 }
 
 async function submit() {
-  if (!props.row || !canSubmit.value) return
+  if (!props.row) return
+  if (typeof qty.value !== 'number' || qty.value < 1) {
+    ElMessage.warning('请输入本车件数')
+    return
+  }
+  if (!canSubmit.value) return
   submitting.value = true
   try {
     const result = await splitLoadTripWaybill(props.tripId, props.row.waybillId, qty.value)
