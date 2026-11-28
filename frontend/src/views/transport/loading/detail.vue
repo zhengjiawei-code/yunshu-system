@@ -32,17 +32,6 @@
             />
           </span>
 
-          <div class="info-actions">
-            <el-button size="small" :disabled="!editable || !basicDirty" :loading="basicSaving" @click="saveBasic">
-              保存
-            </el-button>
-            <el-button size="small" @click="destVisible = true">子车次</el-button>
-            <el-button size="small" @click="logVisible = true">操作日志</el-button>
-            <el-button size="small" @click="printVisible = true">打印装车单</el-button>
-          </div>
-        </div>
-
-        <div class="info-row2">
           <span class="info-kv">
             计划发车
             <el-date-picker
@@ -57,6 +46,18 @@
               placeholder="请选择"
             />
           </span>
+
+          <div class="info-actions">
+            <el-button size="small" :disabled="!editable || !basicDirty" :loading="basicSaving" @click="saveBasic">
+              保存
+            </el-button>
+            <el-button size="small" @click="destVisible = true">子车次</el-button>
+            <el-button size="small" @click="logVisible = true">操作日志</el-button>
+            <el-button size="small" @click="printVisible = true">打印装车单</el-button>
+          </div>
+        </div>
+
+        <div class="info-row2">
           <div class="route-chip">
             <b>{{ trip?.originDeptName || '—' }}</b>
             <span class="route-arrow">→</span>
@@ -89,6 +90,7 @@
                   @click="startDestEdit(dest)"
                 >
                   <span class="dest-chip__name">{{ dest.destDeptName }}</span>
+                  <i v-if="editable" class="dest-chip__caret" aria-hidden="true"></i>
                   <button
                     v-if="editable"
                     type="button"
@@ -2253,16 +2255,17 @@ watch(
 .dest-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   max-width: 180px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px dashed var(--color-border-base);
-  border-radius: 12px;
-  background: var(--color-bg-subtle);
+  height: 28px;
+  padding: 0 8px 0 10px;
+  /* 实线边框 + 白底 + 下拉箭头：与 el-input/el-select 同视觉，一眼可编辑 */
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-container);
   color: var(--color-text-primary);
   font-size: var(--font-size-extra-small);
-  line-height: 22px;
+  line-height: 26px;
 }
 
 .dest-chip.is-editable {
@@ -2272,6 +2275,20 @@ watch(
 .dest-chip.is-editable:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+.dest-chip__caret {
+  flex: none;
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--color-text-placeholder);
+}
+
+.dest-chip.is-editable:hover .dest-chip__caret {
+  border-top-color: var(--color-primary);
 }
 
 .dest-chip__name {
@@ -2299,15 +2316,15 @@ watch(
 }
 
 .dest-add {
-  height: 24px;
+  height: 28px;
   padding: 0 10px;
   border: 1px dashed var(--color-border-base);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
   font-size: var(--font-size-extra-small);
-  line-height: 22px;
+  line-height: 26px;
 }
 
 .dest-add:hover {
