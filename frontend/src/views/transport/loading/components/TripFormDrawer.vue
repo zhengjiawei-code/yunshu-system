@@ -46,6 +46,28 @@
           </span>
         </el-form-item>
 
+        <el-form-item label="目的网点" prop="destDeptIds">
+          <el-select
+            v-model="form.destDeptIds"
+            multiple
+            filterable
+            clearable
+            collapse-tags
+            collapse-tags-tooltip
+            :disabled="destLocked"
+            placeholder="至少选择 1 个目的网点"
+            class="form-control"
+          >
+            <el-option
+              v-for="item in deptOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+          <span class="form-hint">可多个，保存后按目的网点自动生成子车次</span>
+        </el-form-item>
+
         <el-form-item label="计划发车时间" prop="planDepartTime">
           <el-date-picker
             v-model="form.planDepartTime"
@@ -69,28 +91,6 @@
             class="form-control"
           />
           <span v-if="destLocked" class="form-hint">已有配载运单，计划到站时间不可修改</span>
-        </el-form-item>
-
-        <el-form-item label="目的网点" prop="destDeptIds">
-          <el-select
-            v-model="form.destDeptIds"
-            multiple
-            filterable
-            clearable
-            collapse-tags
-            collapse-tags-tooltip
-            :disabled="destLocked"
-            placeholder="至少选择 1 个目的网点"
-            class="form-control"
-          >
-            <el-option
-              v-for="item in deptOptions"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
-          </el-select>
-          <span class="form-hint">可多个，保存后按目的网点自动生成子车次</span>
         </el-form-item>
 
         <el-form-item label="备注">
