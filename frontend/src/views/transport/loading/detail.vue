@@ -503,44 +503,42 @@
 
           <div class="fee-main">
             <div class="fee-block">
-              <h4>车次成本费用 <span class="subtle">参与分摊与毛利</span></h4>
-              <div v-if="costFeeTypes.length" class="cost-grid">
-                <div v-for="type in costFeeTypes" :key="type.feeCode" class="cost-item">
-                  <span class="cost-name">{{ type.feeName }}</span>
-                  <el-input-number
-                    v-model="feeAmounts[type.feeCode]"
-                    :min="0"
-                    :controls="false"
-                    size="small"
-                    class="cost-input"
-                    :disabled="!editable"
-                    @change="onFeeChanged"
-                  />
-                </div>
-              </div>
-              <div v-else class="fee-empty">未配置车次级成本项（系统设置 → 财务配置）</div>
-            </div>
-
-            <div class="fee-block mt12">
               <h4>
-                到站付运输费
-                <span class="subtle">按目的网点分别录入，只分摊到本网点运单</span>
+                费用录入
+                <span class="subtle">按「费用项 × 归属」逐格录入：车次费用填车次行，到站付运输费填各末端网点行</span>
               </h4>
-              <div v-if="destFeeRows.length" class="cost-grid">
-                <div v-for="row in destFeeRows" :key="row.tripDestId" class="cost-item">
-                  <span class="cost-name">{{ row.destDeptName }}</span>
-                  <el-input-number
-                    v-model="destFeeAmounts[row.tripDestId]"
-                    :min="0"
-                    :controls="false"
-                    size="small"
-                    class="cost-input"
-                    :disabled="!editable || !row.feeCode"
-                    @change="onFeeChanged"
-                  />
-                </div>
-              </div>
-              <div v-else class="fee-empty">本车次暂无目的网点，请先添加送达网点后再录入</div>
+              <el-table
+                v-if="feeMatrixTypes.length"
+                :data="feeMatrixRows"
+                size="small"
+                border
+                class="fee-matrix"
+                empty-text="本车次暂无费用项"
+              >
+                <el-table-column prop="rowName" label="费用归属" min-width="150" fixed />
+                <el-table-column
+                  v-for="type in feeMatrixTypes"
+                  :key="type.feeCode"
+                  :label="type.feeName"
+                  :min-width="type.arrival ? 156 : 132"
+                  :fixed="type.arrival ? 'right' : undefined"
+                  align="right"
+                >
+                  <template #default="{ row }">
+                    <el-input-number
+                      v-if="cellEditable(row, type)"
+                      :model-value="cellValue(row, type)"
+                      :min="0"
+                      :controls="false"
+                      size="small"
+                      :disabled="!editable"
+                      @update:model-value="(value: number | undefined) => setCellValue(row, type, value)"
+                    />
+                    <span v-else class="fee-disabled">—</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-else class="fee-empty">未配置车次级成本项（系统设置 → 财务配置）</div>
             </div>
 
             <div class="fee-brief">
@@ -1926,6 +1924,52 @@ const destFeeRows = computed(() =>
   })
 )
 
+type FeeMatrixType = FeeTypeRow & { arrival: boolean }
+type FeeMatrixRow =
+  | { key: string; kind: 'trip'; rowName: string }
+  | { key: string; kind: 'dest'; rowName: string; tripDestId: number }
+
+/** 费用矩阵：列=费用项，行=费用归属（车次行 / 各目的网点行） */
+const feeMatrixTypes = computed<FeeMatrixType[]>(() => {
+  const list: FeeMatrixType[] = costFeeTypes.value.map((type) => ({ ...type, arrival: false }))
+  if (arrivalTransportType.value) {
+    list.push({ ...arrivalTransportType.value, arrival: true })
+  }
+  return list
+})
+
+const feeMatrixRows = computed<FeeMatrixRow[]>(() => [
+  { key: 'trip', kind: 'trip', rowName: '车次 / 全车' },
+  ...dests.value.map((dest) => ({
+    key: `dest-${dest.id}`,
+    kind: 'dest' as const,
+    rowName: dest.destDeptName,
+    tripDestId: dest.id
+  }))
+])
+
+/** 车次行只录车次费用；网点行只录到站付运输费 */
+function cellEditable(row: FeeMatrixRow, type: FeeMatrixType): boolean {
+  return row.kind === 'trip' ? !type.arrival : type.arrival && !!type.feeCode
+}
+
+function cellValue(row: FeeMatrixRow, type: FeeMatrixType): number {
+  if (row.kind === 'trip') {
+    return Number(feeAmounts[type.feeCode] || 0)
+  }
+  return Number(destFeeAmounts[row.tripDestId] || 0)
+}
+
+function setCellValue(row: FeeMatrixRow, type: FeeMatrixType, value: number | undefined) {
+  const amount = Number(value || 0)
+  if (row.kind === 'trip') {
+    feeAmounts[type.feeCode] = amount
+  } else {
+    destFeeAmounts[row.tripDestId] = amount
+  }
+  onFeeChanged()
+}
+
 const weightRate = computed(() => {
   const capacity = Number(trip.value?.vehicleLoad || 0)
   return capacity > 0 ? Number(trip.value?.totalWeight || 0) / capacity : 0
@@ -2705,40 +2749,17 @@ watch(
   font-weight: 600;
 }
 
-.cost-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 8px 18px;
+.fee-matrix :deep(.el-table__cell) {
+  padding: 5px 0;
 }
 
-.cost-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-container);
-}
-
-.cost-name {
-  overflow: hidden;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-extra-small);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cost-input {
+.fee-matrix :deep(.el-input-number) {
   width: 118px;
 }
 
-.cost-input :deep(.el-input__inner) {
-  font-family: var(--font-family-number);
-  font-weight: 600;
-  text-align: right;
+.fee-disabled {
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-extra-small);
 }
 
 .fee-brief {
@@ -2833,10 +2854,6 @@ watch(
 @media (max-width: 1180px) {
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .cost-grid {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>
