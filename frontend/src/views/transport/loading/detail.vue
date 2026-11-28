@@ -550,33 +550,6 @@
               </el-table>
               <div v-else class="fee-empty">未配置车次级成本项（系统设置 → 财务配置）</div>
             </div>
-
-            <div class="fee-brief">
-              <span class="fee-brief__item">
-                现付收入 <b>{{ moneyText(trip?.totalPrepaidFreight) }}</b>
-              </span>
-              <span class="fee-brief__item">
-                到付收入 <b>{{ moneyText(trip?.totalCollectFreight) }}</b>
-              </span>
-              <span class="fee-brief__item">
-                回付收入 <b>{{ moneyText(trip?.totalReturnFreight) }}</b>
-              </span>
-              <span class="fee-brief__item">
-                月结收入 <b>{{ moneyText(trip?.totalMonthlyFreight) }}</b>
-              </span>
-              <span class="fee-brief__item fee-brief__income">
-                收入合计 <b>{{ moneyText(incomeBriefTotal) }}</b>
-              </span>
-              <span class="fee-brief__item fee-brief__cost">
-                成本合计 <b>{{ moneyText(feePreview?.summary?.costTotal) }}</b>
-              </span>
-              <span
-                class="fee-brief__item"
-                :class="(feePreview?.summary?.grossProfit || 0) >= 0 ? 'fee-brief__profit' : 'fee-brief__loss'"
-              >
-                实时毛利 <b>{{ moneyText(feePreview?.summary?.grossProfit) }}</b>
-              </span>
-            </div>
           </div>
         </div>
 
@@ -613,29 +586,43 @@
 
         <div class="card mt12">
           <div class="card-head">
-            <div class="pane-title">装载汇总</div>
+            <div class="pane-title">车次汇总</div>
             <span class="subtle">只读，实时刷新</span>
           </div>
-          <div class="load-summary">
-            <span>票数 <b>{{ loadedSummary.unitCount || 0 }}</b></span>
-            <span>件数 <b>{{ formatQuantity(loadedSummary.quantity) }}</b></span>
-            <span>重量 <b>{{ formatQuantity(loadedSummary.weight) }}</b> kg</span>
-            <span>体积 <b>{{ formatQuantity(loadedSummary.volume) }}</b> m³</span>
-            <span>重量装载率 <b>{{ formatPercent(weightRate) }}</b></span>
-            <span>体积装载率 <b>{{ formatPercent(volumeRate) }}</b></span>
-            <span v-if="overWeight" class="over-text">已超载 {{ formatQuantity(overWeightValue) }} kg</span>
-            <span v-if="overVolume" class="over-text">已超容 {{ formatQuantity(overVolumeValue) }} m³</span>
+          <div class="trip-summary">
+            <div class="summary-row">
+              <span class="summary-label">装载</span>
+              <span>票数 <b>{{ loadedSummary.unitCount || 0 }}</b></span>
+              <span>件数 <b>{{ formatQuantity(loadedSummary.quantity) }}</b></span>
+              <span>重量 <b>{{ formatQuantity(loadedSummary.weight) }}</b> kg</span>
+              <span>体积 <b>{{ formatQuantity(loadedSummary.volume) }}</b> m³</span>
+              <span>重量装载率 <b>{{ formatPercent(weightRate) }}</b></span>
+              <span>体积装载率 <b>{{ formatPercent(volumeRate) }}</b></span>
+              <span v-if="overWeight" class="over-text">已超载 {{ formatQuantity(overWeightValue) }} kg</span>
+              <span v-if="overVolume" class="over-text">已超容 {{ formatQuantity(overVolumeValue) }} m³</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">收入</span>
+              <span>现付 <b>{{ moneyText(trip?.totalPrepaidFreight) }}</b></span>
+              <span>到付 <b>{{ moneyText(trip?.totalCollectFreight) }}</b></span>
+              <span>回付 <b>{{ moneyText(trip?.totalReturnFreight) }}</b></span>
+              <span>月结 <b>{{ moneyText(trip?.totalMonthlyFreight) }}</b></span>
+              <span>收入合计 <b class="is-income">{{ moneyText(incomeBriefTotal) }}</b></span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">成本毛利</span>
+              <span>成本合计 <b class="is-cost">{{ moneyText(feePreview?.summary?.costTotal) }}</b></span>
+              <span>
+                实时毛利
+                <b :class="(feePreview?.summary?.grossProfit || 0) >= 0 ? 'is-profit' : 'is-loss'">
+                  {{ moneyText(feePreview?.summary?.grossProfit) }}
+                </b>
+              </span>
+            </div>
           </div>
         </div>
 
         <div class="detail-foot">
-          <div class="totals">
-            <span>合计 <b>{{ loadedSummary.unitCount || 0 }}</b> 个单元</span>
-            <span><b>{{ formatQuantity(loadedSummary.weight) }}</b> kg</span>
-            <span><b>{{ formatQuantity(loadedSummary.volume) }}</b> m³</span>
-            <span>成本 <b>{{ moneyText(feePreview?.summary?.costTotal) }}</b></span>
-            <span>毛利 <b>{{ moneyText(feePreview?.summary?.grossProfit) }}</b></span>
-          </div>
           <div class="acts">
             <el-button @click="activeTab = 'load'">返回装车配载</el-button>
             <el-button :disabled="!editable" :loading="feeSaving" @click="saveFees">保存费用</el-button>
@@ -2674,6 +2661,7 @@ watch(
 .acts {
   display: flex;
   gap: 8px;
+  margin-left: auto;
 }
 
 /* Tab2 */
@@ -2804,40 +2792,45 @@ watch(
   font-size: var(--font-size-extra-small);
 }
 
-.fee-brief {
+.trip-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.summary-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 18px;
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--color-border-light);
   color: var(--color-text-placeholder);
   font-size: var(--font-size-extra-small);
 }
 
-.fee-brief__item b {
+.summary-row b {
   margin-left: 4px;
   font-family: var(--font-family-number);
   font-weight: 600;
   color: var(--color-text-secondary);
 }
 
-.fee-brief__cost b {
-  color: var(--color-warning);
+.summary-label {
+  min-width: 56px;
+  color: var(--color-text-secondary);
+  font-weight: 600;
 }
 
-.fee-brief__income b {
+.summary-row .is-income {
   color: var(--color-primary);
 }
 
-.fee-brief__profit b {
-  color: var(--color-success);
+.summary-row .is-cost {
+  color: var(--color-warning);
 }
 
-.fee-brief__loss b,
-.is-loss {
-  color: var(--color-danger);
+.summary-row .is-profit {
+  color: var(--color-success);
 }
 
 .fee-preview-body {
@@ -2871,17 +2864,12 @@ watch(
   line-height: 1.6;
 }
 
-.load-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 20px;
-  padding: 10px 14px;
-  font-size: var(--font-size-extra-small);
+.is-profit {
+  color: var(--color-success);
 }
 
-.load-summary b {
-  color: var(--color-text-primary);
+.is-loss {
+  color: var(--color-danger);
 }
 
 .over-text {
