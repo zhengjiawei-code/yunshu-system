@@ -98,7 +98,7 @@ public class WaybillService {
 
     @Transactional(rollbackFor = Exception.class)
     public WaybillSaveVO create(WaybillSaveRequest request) {
-        DataScopeContext context = DataScopeContext.require("开单保存");
+        DataScopeContext context = requireLoginContext();
         validate(request);
         Long originDeptId = resolveOriginDept(request.getOriginDeptId(), context);
         SysDept originDept = deptMapper.selectById(originDeptId);
@@ -287,7 +287,7 @@ public class WaybillService {
      */
     @Transactional(rollbackFor = Exception.class)
     public WaybillVoidVO voidWaybill(Long id, WaybillVoidRequest request) {
-        DataScopeContext context = DataScopeContext.require("作废运单");
+        DataScopeContext context = requireLoginContext();
         if (request == null) {
             throw new BizException("作废原因不能为空");
         }
@@ -333,7 +333,7 @@ public class WaybillService {
      */
     @Transactional(rollbackFor = Exception.class)
     public WaybillAmendVO amend(Long id, WaybillAmendRequest request, Set<String> present) {
-        DataScopeContext context = DataScopeContext.require("运单改单");
+        DataScopeContext context = requireLoginContext();
         if (request == null || present == null || present.isEmpty()) {
             throw new BizException("改单内容不能为空");
         }
@@ -1151,6 +1151,18 @@ public class WaybillService {
         } catch (Exception ex) {
             throw new BizException(500, "操作快照序列化失败");
         }
+    }
+
+    /**
+     * 取数据权限上下文。拦截器只在登录态有效时写入，缺失即登录已失效（后端重启会清空内存会话），
+     * 对用户报「登录已失效」，而不是内部的「数据权限上下文缺失」。
+     */
+    private DataScopeContext requireLoginContext() {
+        DataScopeContext context = DataScopeContext.current();
+        if (context == null) {
+            throw new BizException(401, "登录已失效，请重新登录");
+        }
+        return context;
     }
 
     private Long requireUserId(DataScopeContext context) {
