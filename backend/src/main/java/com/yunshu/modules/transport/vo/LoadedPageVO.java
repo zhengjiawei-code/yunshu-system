@@ -30,8 +30,12 @@ public class LoadedPageVO {
         private Integer unitType;
         private BigDecimal splitRatio;
         private Integer status;
+        private Integer payMethod;
+        /** 结算状态：0=未结算 1=已结算 2=部分结算（按支付方式与现付金额派生） */
+        private Integer settleStatus;
         private Integer loadStatus;
         private String customerName;
+        private String senderName;
         private String receiverName;
         private String destName;
         private String goodsName;
@@ -44,6 +48,10 @@ public class LoadedPageVO {
         private BigDecimal monthlyFee;
         private BigDecimal totalFee;
         private BigDecimal rebateTotal;
+        /** 装车运费：配载时快照金额 */
+        private BigDecimal loadFee;
+        /** 装车返款：配载时快照返款 */
+        private BigDecimal loadRebate;
         private BigDecimal validFreight;
         private BigDecimal allocatedFee;
         private BigDecimal profitCost;

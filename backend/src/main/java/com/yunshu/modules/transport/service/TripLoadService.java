@@ -17,6 +17,7 @@ import com.yunshu.modules.transport.constant.TripEnums;
 import com.yunshu.modules.transport.dto.LoadRequest;
 import com.yunshu.modules.transport.dto.LoadedQuery;
 import com.yunshu.modules.transport.dto.PoolQuery;
+import com.yunshu.modules.transport.dto.SplitRequest;
 import com.yunshu.modules.transport.entity.BizTrip;
 import com.yunshu.modules.transport.entity.BizTripDest;
 import com.yunshu.modules.transport.entity.BizTripWaybill;
@@ -69,6 +70,7 @@ public class TripLoadService {
     private final BizWaybillRouteNodeMapper nodeMapper;
     private final TripSummaryService summaryService;
     private final TripFeeService tripFeeService;
+    private final TripSplitService splitService;
     private final GrossFormulaService grossFormulaService;
     private final TripLogService tripLogService;
     private final UserOrgService userOrgService;
@@ -89,6 +91,7 @@ public class TripLoadService {
         wrapper.eq("deleted", 0)
                 .eq("current_hub_id", trip.getOriginDeptId())
                 .eq("load_status", TripEnums.LoadStatus.PENDING)
+                .ne("is_child", 1)
                 .in("status", 20, 60);
         if (query.getStatus() != null && !query.getStatus().isEmpty()) {
             wrapper.in("status", query.getStatus());
@@ -181,6 +184,9 @@ public class TripLoadService {
             row.setRemainingWeight(remainingWeight);
             row.setRemainingVolume(remainingVolume);
             row.setTotalFee(nvl(wb.getTotalFee()));
+            row.setRemainFee(unitType == 2 && stat != null
+                    ? nvl(wb.getTotalFee()).subtract(stat.totalFee).max(BigDecimal.ZERO)
+                    : nvl(wb.getTotalFee()));
             row.setRebateTotal(nvl(wb.getRebateTotal()));
             row.setValidFreight(nvl(wb.getValidFreight()));
             row.setInventoryTime(wb.getInventoryTime());
@@ -229,101 +235,223 @@ public class TripLoadService {
         Map<Long, BizTripDest> destMap = dests.stream()
                 .collect(Collectors.toMap(BizTripDest::getId, Function.identity()));
 
-        List<BizTripWaybill> all = tripWaybillMapper.selectList(Wrappers.<BizTripWaybill>lambdaQuery()
-                .eq(BizTripWaybill::getTripId, tripId)
-                .orderByAsc(BizTripWaybill::getSubTripNo)
-                .orderByAsc(BizTripWaybill::getId));
-
-        if (all.isEmpty()) {
-            int pageNum = Math.max(query.getPage(), 1);
-            int pageSize = query.getPageSize() < 1 ? 50 : Math.min(query.getPageSize(), MAX_PAGE_SIZE);
-            LoadedPageVO empty = new LoadedPageVO();
-            empty.setRecords(List.of());
-            empty.setTotal(0);
-            empty.setPage(pageNum);
-            empty.setPageSize(pageSize);
-            empty.setSummary(new LoadedPageVO.Summary());
-            return empty;
-        }
-
-        Map<Long, BizWaybill> waybillMap = waybillMapper.selectBatchIds(
-                        all.stream().map(BizTripWaybill::getWaybillId).distinct().toList())
-                .stream().collect(Collectors.toMap(BizWaybill::getId, Function.identity()));
-
-        List<LoadedPageVO.Row> rows = new ArrayList<>();
-        for (BizTripWaybill tw : all) {
-            if (query.getTripDestId() != null && !query.getTripDestId().equals(tw.getTripDestId())) {
-                continue;
-            }
-            if (query.getLoadStatus() != null && query.getLoadStatus() > 0
-                    && !query.getLoadStatus().equals(tw.getLoadStatus())) {
-                continue;
-            }
-            if (!match(tw.getWaybillNo(), query.getWaybillNo())
-                    || !match(tw.getParentNo(), query.getParentNo())
-                    || !match(tw.getCustomerName(), query.getCustomerName())
-                    || !match(tw.getReceiverName(), query.getReceiverName())
-                    || !match(tw.getDestName(), query.getDestName())) {
-                continue;
-            }
-            BizWaybill wb = waybillMap.get(tw.getWaybillId());
-            BizTripDest dest = destMap.get(tw.getTripDestId());
-            LoadedPageVO.Row row = new LoadedPageVO.Row();
-            row.setTripWaybillId(tw.getId());
-            row.setTripDestId(tw.getTripDestId());
-            row.setSubTripNo(tw.getSubTripNo());
-            row.setDestDeptId(dest == null ? null : dest.getDestDeptId());
-            row.setDestDeptName(dest == null ? tw.getDestHubName() : dest.getDestDeptName());
-            row.setWaybillId(tw.getWaybillId());
-            row.setWaybillNo(tw.getWaybillNo());
-            row.setParentNo(tw.getParentNo());
-            row.setIsChild(tw.getIsChild());
-            row.setUnitType(Objects.equals(tw.getIsChild(), 1) ? 3 : 1);
-            row.setSplitRatio(tw.getSplitRatio());
-            row.setStatus(wb == null ? null : wb.getStatus());
-            row.setLoadStatus(tw.getLoadStatus());
-            row.setCustomerName(tw.getCustomerName());
-            row.setReceiverName(tw.getReceiverName());
-            row.setDestName(tw.getDestName());
-            row.setGoodsName(tw.getGoodsName());
-            row.setQuantity(tw.getQuantity());
-            row.setWeight(tw.getWeight());
-            row.setVolume(tw.getVolume());
-            row.setPrepaidFee(tw.getPrepaidFee());
-            row.setCollectFee(tw.getCollectFee());
-            row.setReturnFee(tw.getReturnFee());
-            row.setMonthlyFee(tw.getMonthlyFee());
-            row.setTotalFee(tw.getTotalFee());
-            row.setRebateTotal(tw.getRebateTotal());
-            row.setValidFreight(tw.getValidFreight());
-            row.setAllocatedFee(tw.getAllocatedFee());
-            row.setProfitCost(tw.getProfitCost());
-            row.setGrossProfit(tw.getGrossProfit());
-            row.setLoadTime(tw.getLoadTime());
-            rows.add(row);
-        }
-
-        LoadedPageVO.Summary summary = new LoadedPageVO.Summary();
-        summary.setUnitCount(rows.size());
-        summary.setQuantity(rows.stream().mapToLong(r -> nvl(r.getQuantity())).sum());
-        summary.setWeight(rows.stream().map(r -> nvl(r.getWeight())).reduce(BigDecimal.ZERO, BigDecimal::add));
-        summary.setVolume(rows.stream().map(r -> nvl(r.getVolume())).reduce(BigDecimal.ZERO, BigDecimal::add));
-        summary.setTotalFee(rows.stream().map(r -> nvl(r.getTotalFee())).reduce(BigDecimal.ZERO, BigDecimal::add));
-        summary.setRebateTotal(rows.stream().map(r -> nvl(r.getRebateTotal())).reduce(BigDecimal.ZERO, BigDecimal::add));
-        summary.setGrossProfit(rows.stream().map(r -> nvl(r.getGrossProfit())).reduce(BigDecimal.ZERO, BigDecimal::add));
-
         int pageNum = Math.max(query.getPage(), 1);
         int pageSize = query.getPageSize() < 1 ? 50 : Math.min(query.getPageSize(), MAX_PAGE_SIZE);
-        int from = Math.min((pageNum - 1) * pageSize, rows.size());
-        int to = Math.min(from + pageSize, rows.size());
+
+        List<Long> waybillFilterIds = waybillMatchedIds(tripId, query);
+        long total = tripWaybillMapper.selectCount(loadedFilter(tripId, query, dests, waybillFilterIds));
+        LoadedPageVO.Summary summary = loadedSummary(tripId, query, dests, waybillFilterIds);
+
+        List<LoadedPageVO.Row> rows = new ArrayList<>();
+        if (total > 0) {
+            QueryWrapper<BizTripWaybill> pageWrapper = loadedFilter(tripId, query, dests, waybillFilterIds);
+            pageWrapper.orderByAsc("sub_trip_no").orderByAsc("id");
+            pageWrapper.last("LIMIT " + ((long) (pageNum - 1) * pageSize) + "," + pageSize);
+            List<BizTripWaybill> pageRows = tripWaybillMapper.selectList(pageWrapper);
+            if (!pageRows.isEmpty()) {
+                Map<Long, BizWaybill> waybillMap = waybillMapper.selectBatchIds(
+                                pageRows.stream().map(BizTripWaybill::getWaybillId).distinct().toList())
+                        .stream().collect(Collectors.toMap(BizWaybill::getId, Function.identity()));
+                for (BizTripWaybill tw : pageRows) {
+                    BizWaybill wb = waybillMap.get(tw.getWaybillId());
+                    BizTripDest dest = destMap.get(tw.getTripDestId());
+                    LoadedPageVO.Row row = new LoadedPageVO.Row();
+                    row.setTripWaybillId(tw.getId());
+                    row.setTripDestId(tw.getTripDestId());
+                    row.setSubTripNo(tw.getSubTripNo());
+                    row.setDestDeptId(dest == null ? null : dest.getDestDeptId());
+                    row.setDestDeptName(dest == null ? tw.getDestHubName() : dest.getDestDeptName());
+                    row.setWaybillId(tw.getWaybillId());
+                    row.setWaybillNo(tw.getWaybillNo());
+                    row.setParentNo(tw.getParentNo());
+                    row.setIsChild(tw.getIsChild());
+                    row.setUnitType(Objects.equals(tw.getIsChild(), 1) ? 3 : 1);
+                    row.setSplitRatio(tw.getSplitRatio());
+                    row.setStatus(wb == null ? null : wb.getStatus());
+                    row.setPayMethod(wb == null ? null : wb.getPayMethod());
+                    row.setSettleStatus(wb == null ? 0 : settleStatus(wb.getPayMethod(), wb.getPrepaidFee()));
+                    row.setLoadStatus(tw.getLoadStatus());
+                    row.setCustomerName(tw.getCustomerName());
+                    row.setSenderName(wb == null ? null : wb.getSenderName());
+                    row.setReceiverName(tw.getReceiverName());
+                    row.setDestName(tw.getDestName());
+                    row.setGoodsName(tw.getGoodsName());
+                    row.setQuantity(tw.getQuantity());
+                    row.setWeight(tw.getWeight());
+                    row.setVolume(tw.getVolume());
+                    row.setPrepaidFee(tw.getPrepaidFee());
+                    row.setCollectFee(tw.getCollectFee());
+                    row.setReturnFee(tw.getReturnFee());
+                    row.setMonthlyFee(tw.getMonthlyFee());
+                    // 运费合计/返款合计取运单当前值；装车运费/装车返款取配载快照
+                    row.setTotalFee(wb == null ? nvl(tw.getTotalFee()) : nvl(wb.getTotalFee()));
+                    row.setRebateTotal(wb == null ? nvl(tw.getRebateTotal()) : nvl(wb.getRebateTotal()));
+                    row.setLoadFee(nvl(tw.getTotalFee()));
+                    row.setLoadRebate(nvl(tw.getRebateTotal()));
+                    row.setValidFreight(tw.getValidFreight());
+                    row.setAllocatedFee(tw.getAllocatedFee());
+                    row.setProfitCost(tw.getProfitCost());
+                    row.setGrossProfit(tw.getGrossProfit());
+                    row.setLoadTime(tw.getLoadTime());
+                    rows.add(row);
+                }
+            }
+        }
 
         LoadedPageVO vo = new LoadedPageVO();
-        vo.setRecords(rows.subList(from, to));
-        vo.setTotal(rows.size());
+        vo.setRecords(rows);
+        vo.setTotal(total);
         vo.setPage(pageNum);
         vo.setPageSize(pageSize);
         vo.setSummary(summary);
         return vo;
+    }
+
+    /** 已配载筛选：所有条件先落 SQL，再分页。 */
+    private QueryWrapper<BizTripWaybill> loadedFilter(Long tripId, LoadedQuery query,
+                                                      List<BizTripDest> dests, List<Long> waybillFilterIds) {
+        QueryWrapper<BizTripWaybill> wrapper = new QueryWrapper<>();
+        wrapper.eq("trip_id", tripId);
+        if (waybillFilterIds != null) {
+            if (waybillFilterIds.isEmpty()) {
+                wrapper.apply("1 = 0");
+            } else {
+                wrapper.in("waybill_id", waybillFilterIds);
+            }
+        }
+        if (query.getTripDestId() != null) {
+            wrapper.eq("trip_dest_id", query.getTripDestId());
+        } else if (query.getDestDeptId() != null) {
+            List<Long> destIds = dests.stream()
+                    .filter(item -> Objects.equals(item.getDestDeptId(), query.getDestDeptId()))
+                    .map(BizTripDest::getId)
+                    .toList();
+            if (destIds.isEmpty()) {
+                wrapper.apply("1 = 0");
+            } else {
+                wrapper.in("trip_dest_id", destIds);
+            }
+        }
+        if (query.getLoadStatus() != null && query.getLoadStatus() > 0) {
+            wrapper.eq("load_status", query.getLoadStatus());
+        }
+        if (query.getUnitType() != null && query.getUnitType() > 0) {
+            wrapper.eq("is_child", query.getUnitType() == 3 ? 1 : 0);
+        }
+        applyTwLike(wrapper, "waybill_no", query.getWaybillNo());
+        applyTwLike(wrapper, "parent_no", query.getParentNo());
+        applyTwLike(wrapper, "customer_name", query.getCustomerName());
+        applyTwLike(wrapper, "receiver_name", query.getReceiverName());
+        applyTwLike(wrapper, "dest_name", query.getDestName());
+        applyRange(wrapper, "quantity", query.getQuantityMin(), query.getQuantityMax());
+        applyRange(wrapper, "weight", query.getWeightMin(), query.getWeightMax());
+        applyRange(wrapper, "volume", query.getVolumeMin(), query.getVolumeMax());
+        applyRange(wrapper, "total_fee", query.getLoadFeeMin(), query.getLoadFeeMax());
+        applyRange(wrapper, "rebate_total", query.getLoadRebateMin(), query.getLoadRebateMax());
+        applyTimeRange(wrapper, "load_time", query.getLoadStart(), query.getLoadEnd());
+        return wrapper;
+    }
+
+    /** 运单级筛选先查 id，再以 IN 落 SQL；不使用子查询（数据权限拦截禁止 WHERE 子查询）。 */
+    private List<Long> waybillMatchedIds(Long tripId, LoadedQuery query) {
+        boolean hasWaybillFilter = (query.getStatus() != null && !query.getStatus().isEmpty())
+                || (query.getPayMethod() != null && !query.getPayMethod().isEmpty())
+                || (query.getSettleStatus() != null && query.getSettleStatus() >= 0)
+                || StringUtils.hasText(query.getSenderName())
+                || query.getTotalFeeMin() != null || query.getTotalFeeMax() != null
+                || query.getRebateTotalMin() != null || query.getRebateTotalMax() != null;
+        if (!hasWaybillFilter) {
+            return null;
+        }
+        List<Long> tripWaybillIds = tripWaybillMapper.selectList(Wrappers.<BizTripWaybill>lambdaQuery()
+                        .select(BizTripWaybill::getWaybillId)
+                        .eq(BizTripWaybill::getTripId, tripId))
+                .stream().map(BizTripWaybill::getWaybillId).distinct().toList();
+        if (tripWaybillIds.isEmpty()) {
+            return List.of();
+        }
+        QueryWrapper<BizWaybill> wrapper = new QueryWrapper<>();
+        wrapper.select("id").in("id", tripWaybillIds);
+        if (query.getStatus() != null && !query.getStatus().isEmpty()) {
+            wrapper.in("status", query.getStatus());
+        }
+        if (query.getPayMethod() != null && !query.getPayMethod().isEmpty()) {
+            wrapper.in("pay_method", query.getPayMethod());
+        }
+        if (query.getSettleStatus() != null && query.getSettleStatus() >= 0) {
+            switch (query.getSettleStatus()) {
+                case 1 -> wrapper.eq("pay_method", 1);
+                case 2 -> wrapper.eq("pay_method", 5).gt("prepaid_fee", BigDecimal.ZERO);
+                default -> wrapper.apply("(pay_method IS NULL OR pay_method IN (2, 3, 4)"
+                        + " OR (pay_method = 5 AND COALESCE(prepaid_fee, 0) = 0))");
+            }
+        }
+        if (StringUtils.hasText(query.getSenderName())) {
+            wrapper.like("sender_name", query.getSenderName().trim());
+        }
+        if (query.getTotalFeeMin() != null) {
+            wrapper.ge("total_fee", query.getTotalFeeMin());
+        }
+        if (query.getTotalFeeMax() != null) {
+            wrapper.le("total_fee", query.getTotalFeeMax());
+        }
+        if (query.getRebateTotalMin() != null) {
+            wrapper.ge("rebate_total", query.getRebateTotalMin());
+        }
+        if (query.getRebateTotalMax() != null) {
+            wrapper.le("rebate_total", query.getRebateTotalMax());
+        }
+        return waybillMapper.selectList(wrapper).stream().map(BizWaybill::getId).toList();
+    }
+
+    /** 汇总取筛选后的全量，不受分页影响。 */
+    private LoadedPageVO.Summary loadedSummary(Long tripId, LoadedQuery query, List<BizTripDest> dests,
+                                               List<Long> waybillFilterIds) {
+        QueryWrapper<BizTripWaybill> wrapper = loadedFilter(tripId, query, dests, waybillFilterIds);
+        wrapper.select(
+                "COUNT(*) AS unit_count",
+                "COALESCE(SUM(quantity), 0) AS total_quantity",
+                "COALESCE(SUM(weight), 0) AS total_weight",
+                "COALESCE(SUM(volume), 0) AS total_volume",
+                "COALESCE(SUM(total_fee), 0) AS total_fee",
+                "COALESCE(SUM(rebate_total), 0) AS total_rebate",
+                "COALESCE(SUM(gross_profit), 0) AS total_gross");
+        Map<String, Object> agg = tripWaybillMapper.selectMaps(wrapper).stream()
+                .findFirst().orElse(Map.of());
+        LoadedPageVO.Summary summary = new LoadedPageVO.Summary();
+        summary.setUnitCount(number(agg.get("unit_count")).longValue());
+        summary.setQuantity(number(agg.get("total_quantity")).longValue());
+        summary.setWeight(decimal(agg.get("total_weight")));
+        summary.setVolume(decimal(agg.get("total_volume")));
+        summary.setTotalFee(decimal(agg.get("total_fee")));
+        summary.setRebateTotal(decimal(agg.get("total_rebate")));
+        summary.setGrossProfit(decimal(agg.get("total_gross")));
+        return summary;
+    }
+
+    private int settleStatus(Integer payMethod, BigDecimal prepaidFee) {
+        if (payMethod == null) {
+            return 0;
+        }
+        return switch (payMethod) {
+            case 1 -> 1;
+            case 5 -> nvl(prepaidFee).compareTo(BigDecimal.ZERO) > 0 ? 2 : 0;
+            default -> 0;
+        };
+    }
+
+    private Number number(Object value) {
+        return value instanceof Number n ? n : 0;
+    }
+
+    private BigDecimal decimal(Object value) {
+        if (value instanceof BigDecimal b) {
+            return b;
+        }
+        if (value instanceof Number n) {
+            return BigDecimal.valueOf(n.doubleValue());
+        }
+        return BigDecimal.ZERO;
     }
 
     /* ---------------- 批量配载 / 移出 ---------------- */
@@ -331,14 +459,31 @@ public class TripLoadService {
     public LoadResultVO load(Long tripId, LoadRequest request) {
         BizTrip trip = tripService.requireVisible(tripId);
         requireLoadingStatus(trip);
-        assertNoMotherBalance(request.getWaybillIds());
 
         LoadResultVO result = new LoadResultVO();
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         for (Long id : request.getWaybillIds()) {
             try {
-                template.executeWithoutResult(status -> loadOne(trip, id));
+                BizWaybill wb = waybillMapper.selectById(id);
+                if (wb == null) {
+                    throw new BizException("运单不存在：" + id);
+                }
+                ChildStat stat = Objects.equals(wb.getIsChild(), 1)
+                        ? new ChildStat() : childStats(List.of(id)).getOrDefault(id, new ChildStat());
+                if (stat.childCount > 0) {
+                    // 母单余额直接配载：按剩余量自动生成子单，不再要求先拆单
+                    int remaining = nvl(wb.getQuantity()) - stat.quantity;
+                    if (remaining <= 0) {
+                        throw new BizException("该母单余额为 0，请刷新");
+                    }
+                    SplitRequest split = new SplitRequest();
+                    split.setParentWaybillId(id);
+                    split.setQuantity(remaining);
+                    splitService.splitLoad(tripId, split);
+                } else {
+                    template.executeWithoutResult(status -> loadOne(trip, id));
+                }
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } catch (BizException ex) {
                 result.getFailures().add(failure(id, ex.getMessage()));
@@ -479,12 +624,23 @@ public class TripLoadService {
         if (rows == 0) {
             throw new BizException(409, "配载明细已被他人修改，请刷新");
         }
-        int restored = waybillMapper.update(null, new UpdateWrapper<BizWaybill>()
-                .eq("id", waybillId)
-                .eq("load_status", TripEnums.LoadStatus.LOADED)
-                .set("status", tw.getStatusBeforeLoad())
-                .set("load_status", TripEnums.LoadStatus.PENDING)
-                .set("update_by", userOrgService.current().userId()));
+        int restored;
+        if (Objects.equals(tw.getIsChild(), 1)) {
+            // 撤销子单配载：作废子单，件数/金额自动回归母单余额
+            restored = waybillMapper.update(null, new UpdateWrapper<BizWaybill>()
+                    .eq("id", waybillId)
+                    .eq("load_status", TripEnums.LoadStatus.LOADED)
+                    .set("status", VOIDED)
+                    .set("load_status", TripEnums.LoadStatus.PENDING)
+                    .set("update_by", userOrgService.current().userId()));
+        } else {
+            restored = waybillMapper.update(null, new UpdateWrapper<BizWaybill>()
+                    .eq("id", waybillId)
+                    .eq("load_status", TripEnums.LoadStatus.LOADED)
+                    .set("status", tw.getStatusBeforeLoad())
+                    .set("load_status", TripEnums.LoadStatus.PENDING)
+                    .set("update_by", userOrgService.current().userId()));
+        }
         if (restored == 0) {
             throw new BizException(409, "运单状态已被他人修改，请刷新");
         }
@@ -541,19 +697,6 @@ public class TripLoadService {
         }
     }
 
-    private void assertNoMotherBalance(List<Long> waybillIds) {
-        for (Long id : waybillIds) {
-            BizWaybill wb = waybillMapper.selectById(id);
-            if (wb == null) {
-                throw new BizException("运单不存在：" + id);
-            }
-            if (!Objects.equals(wb.getIsChild(), 1)
-                    && childStats(List.of(id)).getOrDefault(id, new ChildStat()).childCount > 0) {
-                throw new BizException(400, "母单已拆单，剩余件数请使用拆单装车");
-            }
-        }
-    }
-
     private Map<Long, ChildStat> childStats(List<Long> parentIds) {
         Map<Long, ChildStat> result = new HashMap<>();
         if (parentIds.isEmpty()) {
@@ -562,13 +705,16 @@ public class TripLoadService {
         List<BizWaybill> children = waybillMapper.selectList(Wrappers.<BizWaybill>lambdaQuery()
                 .in(BizWaybill::getParentId, parentIds)
                 .eq(BizWaybill::getIsChild, 1)
-                .ne(BizWaybill::getStatus, VOIDED));
+                .ne(BizWaybill::getStatus, VOIDED)
+                // 仅统计仍在车上的子单；已撤销回池的子单不再占用母单余额
+                .ne(BizWaybill::getLoadStatus, TripEnums.LoadStatus.PENDING));
         for (BizWaybill child : children) {
             ChildStat stat = result.computeIfAbsent(child.getParentId(), key -> new ChildStat());
             stat.childCount++;
             stat.quantity += nvl(child.getQuantity());
             stat.weight = stat.weight.add(nvl(child.getWeight()));
             stat.volume = stat.volume.add(nvl(child.getVolume()));
+            stat.totalFee = stat.totalFee.add(nvl(child.getTotalFee()));
         }
         return result;
     }
@@ -634,6 +780,41 @@ public class TripLoadService {
         }
     }
 
+    private void applyTwLike(QueryWrapper<BizTripWaybill> wrapper, String column, String value) {
+        if (StringUtils.hasText(value)) {
+            wrapper.like(column, value.trim());
+        }
+    }
+
+    private void applyRange(QueryWrapper<BizTripWaybill> wrapper, String column, Integer min, Integer max) {
+        if (min != null && min > 0) {
+            wrapper.ge(column, min);
+        }
+        if (max != null && max > 0) {
+            wrapper.le(column, max);
+        }
+    }
+
+    private void applyRange(QueryWrapper<BizTripWaybill> wrapper, String column, BigDecimal min, BigDecimal max) {
+        if (min != null) {
+            wrapper.ge(column, min);
+        }
+        if (max != null) {
+            wrapper.le(column, max);
+        }
+    }
+
+    private void applyTimeRange(QueryWrapper<BizTripWaybill> wrapper, String column, String start, String end) {
+        LocalDateTime from = parse(start, false);
+        LocalDateTime to = parse(end, true);
+        if (from != null) {
+            wrapper.ge(column, from);
+        }
+        if (to != null) {
+            wrapper.le(column, to);
+        }
+    }
+
     private void applyRange(QueryWrapper<BizWaybill> wrapper, String column, String start, String end) {
         LocalDateTime from = parse(start, false);
         LocalDateTime to = parse(end, true);
@@ -682,10 +863,6 @@ public class TripLoadService {
         }
     }
 
-    private boolean match(String source, String keyword) {
-        return !StringUtils.hasText(keyword) || contains(source, keyword);
-    }
-
     private boolean contains(String source, String keyword) {
         return source != null && keyword != null
                 && source.toLowerCase().contains(keyword.trim().toLowerCase());
@@ -724,5 +901,6 @@ public class TripLoadService {
         private int quantity;
         private BigDecimal weight = BigDecimal.ZERO;
         private BigDecimal volume = BigDecimal.ZERO;
+        private BigDecimal totalFee = BigDecimal.ZERO;
     }
 }

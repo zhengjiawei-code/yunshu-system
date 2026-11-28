@@ -60,7 +60,67 @@
           <div class="route-chip">
             <b>{{ trip?.originDeptName || '—' }}</b>
             <span class="route-arrow">→</span>
-            <button class="route-link" type="button" @click="destVisible = true">{{ destSummaryText }}</button>
+            <div class="dest-chips">
+              <template v-for="dest in dests" :key="dest.id">
+                <el-select
+                  v-if="destEditId === dest.id"
+                  v-model="destEditDeptId"
+                  size="small"
+                  filterable
+                  class="dest-chip__select"
+                  :teleported="true"
+                  :disabled="destSaving"
+                  @change="commitDestEdit(dest)"
+                  @visible-change="(open: boolean) => onDestSelectVisible(open)"
+                >
+                  <el-option
+                    v-for="item in deptOptions"
+                    :key="item.id"
+                    :label="item.name"
+                    :value="item.id"
+                    :disabled="usedDestDeptIds.has(item.id) && item.id !== dest.destDeptId"
+                  />
+                </el-select>
+                <span
+                  v-else
+                  class="dest-chip"
+                  :class="{ 'is-editable': editable }"
+                  :title="dest.destDeptName"
+                  @click="startDestEdit(dest)"
+                >
+                  <span class="dest-chip__name">{{ dest.destDeptName }}</span>
+                  <button
+                    v-if="editable"
+                    type="button"
+                    class="dest-chip__x"
+                    title="移除此目的网点"
+                    @click.stop="removeDest(dest)"
+                  >×</button>
+                </span>
+              </template>
+              <el-select
+                v-if="destAdding"
+                v-model="destAddDeptId"
+                size="small"
+                filterable
+                class="dest-chip__select"
+                :teleported="true"
+                :disabled="destSaving"
+                @change="commitAddDest"
+                @visible-change="(open: boolean) => onAddSelectVisible(open)"
+              >
+                <el-option
+                  v-for="item in deptOptions"
+                  :key="item.id"
+                  :label="item.name"
+                  :value="item.id"
+                  :disabled="usedDestDeptIds.has(item.id)"
+                />
+              </el-select>
+              <button v-else-if="editable" class="dest-add" type="button" @click="startAddDest">
+                + 添加目的网点
+              </button>
+            </div>
           </div>
           <div class="alloc-readonly">
             分摊方式 <b>{{ allocMethodText(trip?.allocMethod) }}</b>
@@ -82,7 +142,6 @@
             </div>
             <div class="pane-tools">
               <span class="subtle">均已完成资格校验</span>
-              <el-button size="small" :disabled="!canSplitSelected" @click="openSplitSelected">拆单装车</el-button>
               <column-setting-trigger
                 :schema="poolSchema"
                 :states="poolStates"
@@ -203,18 +262,20 @@
         </div>
 
         <div class="transfer-col">
-          <el-tooltip content="全部右移：当前筛选的全部可配单元" placement="left">
-            <el-button class="transfer-btn" :disabled="!canOperate || !poolTotal" @click="moveAllRight">≫</el-button>
-          </el-tooltip>
-          <el-tooltip content="选中右移：加入勾选的待配载单元" placement="left">
-            <el-button class="transfer-btn" :disabled="!canOperate || !poolSelected.length" @click="moveSelectedRight">›</el-button>
-          </el-tooltip>
-          <el-tooltip content="全选左移：移除本车次全部配载" placement="left">
-            <el-button class="transfer-btn" :disabled="!canOperate || !loadedTotal" @click="moveAllLeft">≪</el-button>
-          </el-tooltip>
-          <el-tooltip content="选中左移：移除勾选的配载单元" placement="left">
-            <el-button class="transfer-btn" :disabled="!canOperate || !loadedSelected.length" @click="moveSelectedLeft">‹</el-button>
-          </el-tooltip>
+          <div class="transfer-group">
+            <el-tooltip content="全部右移：当前筛选的全部可配单元" placement="left">
+              <el-button class="transfer-btn" :disabled="!canOperate || !poolTotal" @click="moveAllRight">≫</el-button>
+            </el-tooltip>
+            <el-tooltip content="选中右移：加入勾选的待配载单元" placement="left">
+              <el-button class="transfer-btn" :disabled="!canOperate || !poolSelected.length" @click="moveSelectedRight">›</el-button>
+            </el-tooltip>
+            <el-tooltip content="全选左移：移除本车次全部配载" placement="left">
+              <el-button class="transfer-btn" :disabled="!canOperate || !loadedTotal" @click="moveAllLeft">≪</el-button>
+            </el-tooltip>
+            <el-tooltip content="选中左移：移除勾选的配载单元" placement="left">
+              <el-button class="transfer-btn" :disabled="!canOperate || !loadedSelected.length" @click="moveSelectedLeft">‹</el-button>
+            </el-tooltip>
+          </div>
         </div>
 
         <div class="pane">
@@ -312,6 +373,7 @@
                       :text="statusText(row.status)"
                     />
                     <span v-else-if="def.kind === 'tripDest'">{{ row.subTripNo }} / {{ row.destDeptName }}</span>
+                    <span v-else-if="def.kind === 'dict'">{{ dictText(def.filterOptions, loadedValue(row, def.prop)) }}</span>
                     <span v-else-if="def.kind === 'money'">{{ moneyText(loadedValue(row, def.prop)) }}</span>
                     <span v-else-if="def.kind === 'quantity'">{{ qtyText(loadedValue(row, def.prop)) }}</span>
                     <span v-else-if="def.kind === 'datetime'">{{ dtText(loadedValue(row, def.prop)) }}</span>
@@ -623,7 +685,9 @@ import type { ColumnDef, ColumnOption } from '@/composables/useColumnConfig'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import type { TextMatchMode } from '@/utils/textFilter'
 import {
+  addTripDest,
   cancelDepartTrip,
+  deleteTripDest,
   departTrip,
   getTripDetail,
   getTripLoaded,
@@ -636,6 +700,7 @@ import {
   saveTripFees,
   saveTripVehicle,
   updateTrip,
+  updateTripDest,
   previewTripFees
 } from '@/api/transport'
 import { getFeeTypePage } from '@/api/system/feeType'
@@ -645,6 +710,7 @@ import type {
   LoadedPage,
   LoadedRow,
   PoolRow,
+  TripDest,
   TripDetail,
   TripOption,
   TripRecord
@@ -660,8 +726,10 @@ import {
   formatDateTime,
   formatMoney,
   formatQuantity,
+  PAY_METHOD_OPTIONS,
   statusTagType,
-  statusText
+  statusText,
+  WAYBILL_STATUS_OPTIONS
 } from '@/utils/operationDict'
 import SplitLoadDialog from './components/SplitLoadDialog.vue'
 import WaybillReadonlyDialog from './components/WaybillReadonlyDialog.vue'
@@ -671,7 +739,7 @@ import TripPrintDialog from './components/TripPrintDialog.vue'
 
 defineOptions({ name: 'TransportLoadingDetail' })
 
-type CellKind = 'text' | 'link' | 'unitType' | 'quantity' | 'money' | 'datetime' | 'status' | 'tripDest'
+type CellKind = 'text' | 'link' | 'unitType' | 'quantity' | 'money' | 'datetime' | 'status' | 'tripDest' | 'dict'
 
 interface PaneColumn extends ColumnDef {
   kind?: CellKind
@@ -715,11 +783,114 @@ const basicDirty = computed(
   () => basic.tripName.trim() !== basicBaseline.tripName.trim() || basic.planDepartTime !== basicBaseline.planDepartTime
 )
 
-const destSummaryText = computed(() => {
-  if (!dests.value.length) return '—'
-  const first = dests.value[0].destDeptName
-  return dests.value.length > 1 ? `${first} 等 ${dests.value.length} 个` : first
-})
+/* 末端网点：全部平铺展示，点击chip直接改并自动保存，不弹窗 */
+const deptOptions = ref<Array<{ id: number; name: string }>>([])
+const destEditId = ref<number | null>(null)
+const destEditDeptId = ref<number | undefined>(undefined)
+const destAdding = ref(false)
+const destAddDeptId = ref<number | undefined>(undefined)
+const destSaving = ref(false)
+const usedDestDeptIds = computed(() => new Set(dests.value.map((item) => item.destDeptId)))
+
+async function loadDeptOptions() {
+  if (deptOptions.value.length) return
+  try {
+    const options = await getTripOptions('dept')
+    deptOptions.value = options
+      .filter((item) => !!item.name)
+      .map((item) => ({ id: item.id, name: item.name as string }))
+  } catch {
+    // 请求层已提示
+  }
+}
+
+async function refreshAfterDestChange() {
+  await loadTripDetail()
+  await loadLoaded()
+}
+
+function startDestEdit(dest: TripDest) {
+  if (!editable.value || destSaving.value) return
+  loadDeptOptions()
+  destAdding.value = false
+  destEditId.value = dest.id
+  destEditDeptId.value = dest.destDeptId
+}
+
+function onDestSelectVisible(open: boolean) {
+  if (!open) destEditId.value = null
+}
+
+async function commitDestEdit(dest: TripDest) {
+  if (destEditDeptId.value === undefined || destEditDeptId.value === dest.destDeptId) {
+    destEditId.value = null
+    return
+  }
+  destSaving.value = true
+  try {
+    await updateTripDest(tripId, dest.id, { destDeptId: destEditDeptId.value })
+    ElMessage.success('已保存')
+    destEditId.value = null
+    await refreshAfterDestChange()
+  } catch {
+    // 请求层已提示
+  } finally {
+    destSaving.value = false
+  }
+}
+
+function startAddDest() {
+  if (!editable.value) return
+  loadDeptOptions()
+  destEditId.value = null
+  destAdding.value = true
+  destAddDeptId.value = undefined
+}
+
+function onAddSelectVisible(open: boolean) {
+  if (!open) destAdding.value = false
+}
+
+async function commitAddDest() {
+  if (destAddDeptId.value === undefined) {
+    destAdding.value = false
+    return
+  }
+  destSaving.value = true
+  try {
+    await addTripDest(tripId, { destDeptId: destAddDeptId.value })
+    ElMessage.success('目的网点已新增')
+    destAdding.value = false
+    await refreshAfterDestChange()
+  } catch {
+    // 请求层已提示
+  } finally {
+    destSaving.value = false
+  }
+}
+
+async function removeDest(dest: TripDest) {
+  if (!editable.value || destSaving.value) return
+  try {
+    await ElMessageBox.confirm(`确认移除目的网点 ${dest.destDeptName}？`, '移除目的网点', {
+      type: 'warning',
+      confirmButtonText: '移除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  destSaving.value = true
+  try {
+    await deleteTripDest(tripId, dest.id)
+    ElMessage.success('目的网点已移除')
+    await refreshAfterDestChange()
+  } catch {
+    // 请求层已提示
+  } finally {
+    destSaving.value = false
+  }
+}
 
 const overWeight = computed(() => {
   const capacity = Number(trip.value?.vehicleLoad || 0)
@@ -749,12 +920,20 @@ const tip = computed(() => {
 
 const UNIT_TYPE_OPTIONS: ColumnOption[] = [
   { label: '整票', value: 1 },
-  { label: '母单余额', value: 2 },
-  { label: '子单', value: 3 }
+  { label: '母单余额', value: 2 }
 ]
 const POOL_STATUS_OPTIONS: ColumnOption[] = [
   { label: '已揽收', value: 20 },
   { label: '分拨卸车', value: 60 }
+]
+const LOADED_UNIT_TYPE_OPTIONS: ColumnOption[] = [
+  { label: '整票', value: 1 },
+  { label: '子单', value: 3 }
+]
+const SETTLE_STATUS_OPTIONS: ColumnOption[] = [
+  { label: '未结算', value: 0 },
+  { label: '已结算', value: 1 },
+  { label: '部分结算', value: 2 }
 ]
 
 const poolSchema = reactive<PaneColumn[]>([
@@ -768,7 +947,8 @@ const poolSchema = reactive<PaneColumn[]>([
   { key: 'remainingQuantity', label: '剩余件数', prop: 'remainingQuantity', minWidth: 90, align: 'right', kind: 'quantity', filterType: 'numberrange', sortable: false },
   { key: 'remainingWeight', label: '剩余重量(kg)', prop: 'remainingWeight', minWidth: 108, align: 'right', kind: 'quantity', filterType: 'numberrange', sortable: false },
   { key: 'remainingVolume', label: '剩余体积(m³)', prop: 'remainingVolume', minWidth: 108, align: 'right', kind: 'quantity', filterType: 'numberrange', sortable: false },
-  { key: 'totalFee', label: '运费合计', prop: 'totalFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'none' },
+  { key: 'remainFee', label: '运费余额', prop: 'remainFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'none' },
+  { key: 'totalFee', label: '运费合计', prop: 'totalFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'none', defaultHidden: true },
   { key: 'inventoryTime', label: '库存落入时间', prop: 'inventoryTime', minWidth: 156, kind: 'datetime', filterType: 'daterange' },
   { key: 'status', label: '状态', prop: 'status', minWidth: 90, kind: 'status', filterType: 'select', filterOptions: POOL_STATUS_OPTIONS },
   { key: 'operation', label: '操作', elKey: 'label:操作', minWidth: 96, filterType: 'none', sortable: false, locked: true },
@@ -780,17 +960,21 @@ const poolSchema = reactive<PaneColumn[]>([
 
 const loadedSchema = reactive<PaneColumn[]>([
   { key: 'waybillNo', label: '运单号', prop: 'waybillNo', minWidth: 170, kind: 'link', filterType: 'text', filterMode: 'multi', locked: true },
-  { key: 'parentNo', label: '母单号', prop: 'parentNo', minWidth: 150, kind: 'text', filterType: 'text' },
-  { key: 'unitType', label: '单元类型', prop: 'unitType', minWidth: 96, kind: 'unitType', filterType: 'none' },
-  { key: 'subTripNo', label: '子车次/目的网点', prop: 'subTripNo', minWidth: 180, kind: 'tripDest', filterType: 'select' },
-  { key: 'customerName', label: '客户名称', prop: 'customerName', minWidth: 150, kind: 'text', filterType: 'text', filterMode: 'multi' },
-  { key: 'receiverName', label: '收货人', prop: 'receiverName', minWidth: 100, kind: 'text', filterType: 'text' },
-  { key: 'quantity', label: '本单元件数', prop: 'quantity', minWidth: 96, align: 'right', kind: 'quantity', filterType: 'none', sortable: false },
-  { key: 'weight', label: '本单元重量(kg)', prop: 'weight', minWidth: 116, align: 'right', kind: 'quantity', filterType: 'none', sortable: false },
-  { key: 'volume', label: '本单元体积(m³)', prop: 'volume', minWidth: 116, align: 'right', kind: 'quantity', filterType: 'none', sortable: false },
-  { key: 'totalFee', label: '运费合计', prop: 'totalFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'none' },
-  { key: 'loadTime', label: '配载时间', prop: 'loadTime', minWidth: 156, kind: 'datetime', filterType: 'none' },
-  { key: 'status', label: '状态', prop: 'status', minWidth: 90, kind: 'status', filterType: 'none' }
+  { key: 'status', label: '运单状态', prop: 'status', minWidth: 100, kind: 'status', filterType: 'select', selectMultiple: true, filterOptions: WAYBILL_STATUS_OPTIONS },
+  { key: 'payMethod', label: '支付方式', prop: 'payMethod', minWidth: 100, kind: 'dict', filterType: 'select', selectMultiple: true, filterOptions: PAY_METHOD_OPTIONS },
+  { key: 'settleStatus', label: '结算状态', prop: 'settleStatus', minWidth: 100, kind: 'dict', filterType: 'select', filterOptions: SETTLE_STATUS_OPTIONS },
+  { key: 'unitType', label: '运单类型', prop: 'unitType', minWidth: 92, kind: 'unitType', filterType: 'select', filterOptions: LOADED_UNIT_TYPE_OPTIONS },
+  { key: 'destDeptName', label: '运达网点', prop: 'destDeptName', minWidth: 150, kind: 'text', filterType: 'select' },
+  { key: 'senderName', label: '发货人', prop: 'senderName', minWidth: 100, kind: 'text', filterType: 'text', filterMode: 'multi' },
+  { key: 'receiverName', label: '收货人', prop: 'receiverName', minWidth: 100, kind: 'text', filterType: 'text', filterMode: 'multi' },
+  { key: 'quantity', label: '装车件数', prop: 'quantity', minWidth: 96, align: 'right', kind: 'quantity', filterType: 'numberrange', sortable: false },
+  { key: 'weight', label: '装车重量(kg)', prop: 'weight', minWidth: 116, align: 'right', kind: 'quantity', filterType: 'numberrange', sortable: false },
+  { key: 'volume', label: '装车体积(m³)', prop: 'volume', minWidth: 116, align: 'right', kind: 'quantity', filterType: 'numberrange', sortable: false },
+  { key: 'loadFee', label: '装车运费', prop: 'loadFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
+  { key: 'loadRebate', label: '装车返款', prop: 'loadRebate', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
+  { key: 'totalFee', label: '运费合计', prop: 'totalFee', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
+  { key: 'rebateTotal', label: '返款合计', prop: 'rebateTotal', minWidth: 104, align: 'right', kind: 'money', filterType: 'numberrange', sortable: false },
+  { key: 'loadTime', label: '配载时间', prop: 'loadTime', minWidth: 156, kind: 'datetime', filterType: 'daterange' }
 ])
 
 const {
@@ -819,6 +1003,7 @@ const {
   load: loadLoadedColumnConfig,
   save: saveLoadedColumnConfig,
   reset: resetLoadedColumnConfig,
+  filterModesParam: loadedFilterModesParam,
   defaultFiltersRaw: loadedDefaultFiltersRaw
 } = useColumnConfig('transport.loading.loaded', loadedSchema)
 
@@ -864,6 +1049,10 @@ const destDeptOptions = computed<ColumnOption[]>(() =>
   dests.value.map((item) => ({ label: item.destDeptName, value: item.id }))
 )
 
+const destDeptFilterOptions = computed<ColumnOption[]>(() =>
+  dests.value.map((item) => ({ label: item.destDeptName, value: item.destDeptId }))
+)
+
 function initFilterState(schema: PaneColumn[], filters: Record<string, unknown>) {
   schema.forEach((item) => {
     if (item.key === 'operation') return
@@ -902,7 +1091,7 @@ function poolFilterOptions(def: PaneColumn): ColumnOption[] | undefined {
 }
 
 function loadedFilterOptions(def: PaneColumn): ColumnOption[] | undefined {
-  if (def.key === 'subTripNo') return destDeptOptions.value
+  if (def.key === 'destDeptName') return destDeptFilterOptions.value
   return def.filterOptions
 }
 
@@ -977,10 +1166,34 @@ function buildLoadedParams(): Record<string, unknown> {
     if (typeof value === 'string' && value.trim()) params[key] = value.trim()
   }
   text('waybillNo')
-  text('parentNo')
-  text('customerName')
+  text('senderName')
   text('receiverName')
-  if (loadedFilters.subTripNo) params.tripDestId = loadedFilters.subTripNo
+  if (loadedFilters.destDeptName) params.destDeptId = loadedFilters.destDeptName
+  if (loadedFilters.unitType) params.unitType = loadedFilters.unitType
+  if (loadedFilters.settleStatus !== undefined && loadedFilters.settleStatus !== null && loadedFilters.settleStatus !== '') {
+    params.settleStatus = loadedFilters.settleStatus
+  }
+  const status = loadedFilters.status
+  if (Array.isArray(status) && status.length) params.status = status.join(',')
+  else if (typeof status === 'string' && status) params.status = status
+  const payMethod = loadedFilters.payMethod
+  if (Array.isArray(payMethod) && payMethod.length) params.payMethod = payMethod.join(',')
+  else if (typeof payMethod === 'string' && payMethod) params.payMethod = payMethod
+
+  applyRange(params, 'quantity', loadedFilters.quantity)
+  applyRange(params, 'weight', loadedFilters.weight)
+  applyRange(params, 'volume', loadedFilters.volume)
+  applyRange(params, 'loadFee', loadedFilters.loadFee)
+  applyRange(params, 'loadRebate', loadedFilters.loadRebate)
+  applyRange(params, 'totalFee', loadedFilters.totalFee)
+  applyRange(params, 'rebateTotal', loadedFilters.rebateTotal)
+  applyRange(params, 'load', loadedFilters.loadTime)
+
+  const modes = loadedFilterModesParam(
+    { waybillNo: 'waybillNo', senderName: 'senderName', receiverName: 'receiverName' },
+    loadedTextModes
+  )
+  if (Object.keys(modes).length) params.filterModes = JSON.stringify(modes)
   return params
 }
 
@@ -1193,6 +1406,11 @@ function moneyText(value: unknown): string {
   return value === undefined || value === null || value === '' ? '—' : formatMoney(value as number)
 }
 
+function dictText(options: ColumnOption[] | undefined, value: unknown): string {
+  if (value === undefined || value === null || value === '') return '—'
+  return options?.find((item) => item.value === value)?.label ?? String(value)
+}
+
 function qtyText(value: unknown): string {
   return value === undefined || value === null || value === '' ? '—' : formatQuantity(value as number)
 }
@@ -1218,10 +1436,6 @@ function splitDisabledReason(row: PoolRow): string {
   if (Number(row.remainingQuantity || 0) <= 1) return '件数为 1，不可拆单'
   return ''
 }
-
-const canSplitSelected = computed(
-  () => poolSelected.value.length === 1 && canSplit(poolSelected.value[0])
-)
 
 function confirmOverLimit(rows: PoolRow[]): Promise<boolean> {
   const capacityW = Number(trip.value?.vehicleLoad || 0)
@@ -1402,14 +1616,6 @@ function openSplit(row: PoolRow) {
   }
   splitRow.value = row
   splitVisible.value = true
-}
-
-function openSplitSelected() {
-  if (!canSplitSelected.value || !poolSelected.value.length) {
-    ElMessage.warning('请勾选 1 个件数大于 1 的可拆单元')
-    return
-  }
-  openSplit(poolSelected.value[0])
 }
 
 async function onSplitDone() {
@@ -2043,6 +2249,78 @@ watch(
   text-decoration: underline;
 }
 
+.dest-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dest-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 180px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px dashed var(--color-border-base);
+  border-radius: 12px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-extra-small);
+  line-height: 22px;
+}
+
+.dest-chip.is-editable {
+  cursor: pointer;
+}
+
+.dest-chip.is-editable:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.dest-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dest-chip__x {
+  padding: 0 0 0 2px;
+  border: none;
+  background: none;
+  color: var(--color-text-placeholder);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dest-chip__x:hover {
+  color: var(--color-danger);
+}
+
+.dest-chip__select {
+  width: 150px;
+}
+
+.dest-add {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px dashed var(--color-border-base);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-extra-small);
+  line-height: 22px;
+}
+
+.dest-add:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 .route-arrow {
   color: var(--color-text-placeholder);
 }
@@ -2143,13 +2421,20 @@ watch(
 }
 
 .transfer-col {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 10px;
+  position: relative;
   width: 56px;
   flex: none;
-  padding: 0 6px;
+  padding: 0;
+}
+
+.transfer-group {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transform: translate(-50%, -50%);
 }
 
 .transfer-btn {

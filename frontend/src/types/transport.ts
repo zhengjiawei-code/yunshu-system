@@ -173,6 +173,8 @@ export interface PoolRow {
   remainingWeight?: number
   remainingVolume?: number
   totalFee?: number
+  /** 运费余额：母单余额按剩余金额口径 */
+  remainFee?: number
   rebateTotal?: number
   validFreight?: number
   inventoryTime?: string
@@ -209,8 +211,12 @@ export interface LoadedRow {
   unitType?: number
   splitRatio?: number
   status?: number
+  payMethod?: number
+  /** 0=未结算 1=已结算 2=部分结算 */
+  settleStatus?: number
   loadStatus?: number
   customerName?: string
+  senderName?: string
   receiverName?: string
   destName?: string
   goodsName?: string
@@ -223,6 +229,10 @@ export interface LoadedRow {
   monthlyFee?: number
   totalFee?: number
   rebateTotal?: number
+  /** 装车运费：配载快照金额 */
+  loadFee?: number
+  /** 装车返款：配载快照返款 */
+  loadRebate?: number
   validFreight?: number
   allocatedFee?: number
   profitCost?: number

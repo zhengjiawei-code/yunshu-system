@@ -40,6 +40,8 @@ public class PoolPageVO {
         private BigDecimal remainingWeight;
         private BigDecimal remainingVolume;
         private BigDecimal totalFee;
+        /** 运费余额：母单余额按剩余金额口径；整票/子单即本单元运费合计 */
+        private BigDecimal remainFee;
         private BigDecimal rebateTotal;
         private BigDecimal validFreight;
         private LocalDateTime inventoryTime;
