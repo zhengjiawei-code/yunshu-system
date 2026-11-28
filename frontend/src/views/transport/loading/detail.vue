@@ -933,7 +933,8 @@ const LOADED_UNIT_TYPE_OPTIONS: ColumnOption[] = [
 const SETTLE_STATUS_OPTIONS: ColumnOption[] = [
   { label: '未结算', value: 0 },
   { label: '已结算', value: 1 },
-  { label: '部分结算', value: 2 }
+  { label: '部分结算', value: 2 },
+  { label: '无需结算', value: 3 }
 ]
 
 const poolSchema = reactive<PaneColumn[]>([

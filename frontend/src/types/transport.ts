@@ -212,7 +212,7 @@ export interface LoadedRow {
   splitRatio?: number
   status?: number
   payMethod?: number
-  /** 0=未结算 1=已结算 2=部分结算 */
+  /** 0=未结算 1=已结算 2=部分结算 3=无需结算 */
   settleStatus?: number
   loadStatus?: number
   customerName?: string

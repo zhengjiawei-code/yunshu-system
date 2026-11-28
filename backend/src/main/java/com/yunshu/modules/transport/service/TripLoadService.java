@@ -61,6 +61,15 @@ public class TripLoadService {
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int VOIDED = 900;
     private static final int MAX_PAGE_SIZE = 200;
+    /** 应收金额口径：按支付方式取对应运费科目，多笔付为四科目之和 */
+    private static final String RECEIVABLE_SQL = "CASE pay_method"
+            + " WHEN 1 THEN COALESCE(prepaid_fee, 0)"
+            + " WHEN 2 THEN COALESCE(collect_fee, 0)"
+            + " WHEN 3 THEN COALESCE(monthly_fee, 0)"
+            + " WHEN 4 THEN COALESCE(return_fee, 0)"
+            + " WHEN 5 THEN COALESCE(prepaid_fee, 0) + COALESCE(collect_fee, 0)"
+            + " + COALESCE(monthly_fee, 0) + COALESCE(return_fee, 0)"
+            + " ELSE COALESCE(total_fee, 0) END";
 
     private final TripService tripService;
     private final BizTripMapper tripMapper;
@@ -269,7 +278,7 @@ public class TripLoadService {
                     row.setSplitRatio(tw.getSplitRatio());
                     row.setStatus(wb == null ? null : wb.getStatus());
                     row.setPayMethod(wb == null ? null : wb.getPayMethod());
-                    row.setSettleStatus(wb == null ? 0 : settleStatus(wb.getPayMethod(), wb.getPrepaidFee()));
+                    row.setSettleStatus(wb == null ? 3 : settleStatus(wb));
                     row.setLoadStatus(tw.getLoadStatus());
                     row.setCustomerName(tw.getCustomerName());
                     row.setSenderName(wb == null ? null : wb.getSenderName());
@@ -380,10 +389,11 @@ public class TripLoadService {
         }
         if (query.getSettleStatus() != null && query.getSettleStatus() >= 0) {
             switch (query.getSettleStatus()) {
-                case 1 -> wrapper.eq("pay_method", 1);
-                case 2 -> wrapper.eq("pay_method", 5).gt("prepaid_fee", BigDecimal.ZERO);
-                default -> wrapper.apply("(pay_method IS NULL OR pay_method IN (2, 3, 4)"
-                        + " OR (pay_method = 5 AND COALESCE(prepaid_fee, 0) = 0))");
+                // 应收为 0 即无需结算；应收>0 且无实收为未结算
+                case 3 -> wrapper.apply("(" + RECEIVABLE_SQL + ") = 0");
+                case 0 -> wrapper.apply("(" + RECEIVABLE_SQL + ") > 0");
+                // 已结算/部分结算依赖核销实收金额，核销模块未接入前无数据
+                default -> wrapper.apply("1 = 0");
             }
         }
         if (StringUtils.hasText(query.getSenderName())) {
@@ -429,15 +439,39 @@ public class TripLoadService {
         return summary;
     }
 
-    private int settleStatus(Integer payMethod, BigDecimal prepaidFee) {
+    /** 应收金额：按支付方式取对应运费科目，多笔付为四科目之和 */
+    private BigDecimal receivable(BizWaybill wb) {
+        Integer payMethod = wb.getPayMethod();
         if (payMethod == null) {
-            return 0;
+            return nvl(wb.getTotalFee());
         }
         return switch (payMethod) {
-            case 1 -> 1;
-            case 5 -> nvl(prepaidFee).compareTo(BigDecimal.ZERO) > 0 ? 2 : 0;
-            default -> 0;
+            case 1 -> nvl(wb.getPrepaidFee());
+            case 2 -> nvl(wb.getCollectFee());
+            case 3 -> nvl(wb.getMonthlyFee());
+            case 4 -> nvl(wb.getReturnFee());
+            case 5 -> nvl(wb.getPrepaidFee()).add(nvl(wb.getCollectFee()))
+                    .add(nvl(wb.getMonthlyFee())).add(nvl(wb.getReturnFee()));
+            default -> nvl(wb.getTotalFee());
         };
+    }
+
+    /** 已收款：核销管理接入后取实收金额；当前无核销数据按 0 计 */
+    private BigDecimal receivedFee(BizWaybill wb) {
+        return BigDecimal.ZERO;
+    }
+
+    /** 结算状态：0未结算 1已结算 2部分结算 3无需结算 */
+    private int settleStatus(BizWaybill wb) {
+        BigDecimal due = receivable(wb);
+        if (due.compareTo(BigDecimal.ZERO) <= 0) {
+            return 3;
+        }
+        BigDecimal paid = receivedFee(wb);
+        if (paid.compareTo(BigDecimal.ZERO) <= 0) {
+            return 0;
+        }
+        return paid.compareTo(due) >= 0 ? 1 : 2;
     }
 
     private Number number(Object value) {
