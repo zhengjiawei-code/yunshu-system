@@ -591,7 +591,7 @@
           </div>
           <div class="trip-summary">
             <div class="summary-row">
-              <span class="summary-label">装载</span>
+              <span class="summary-label">装载信息</span>
               <span>票数 <b>{{ loadedSummary.unitCount || 0 }}</b></span>
               <span>件数 <b>{{ formatQuantity(loadedSummary.quantity) }}</b></span>
               <span>重量 <b>{{ formatQuantity(loadedSummary.weight) }}</b> kg</span>
@@ -602,21 +602,19 @@
               <span v-if="overVolume" class="over-text">已超容 {{ formatQuantity(overVolumeValue) }} m³</span>
             </div>
             <div class="summary-row">
-              <span class="summary-label">收入</span>
+              <span class="summary-label">营收信息</span>
               <span>现付 <b>{{ moneyText(trip?.totalPrepaidFreight) }}</b></span>
               <span>到付 <b>{{ moneyText(trip?.totalCollectFreight) }}</b></span>
               <span>回付 <b>{{ moneyText(trip?.totalReturnFreight) }}</b></span>
               <span>月结 <b>{{ moneyText(trip?.totalMonthlyFreight) }}</b></span>
               <span>收入合计 <b class="is-income">{{ moneyText(incomeBriefTotal) }}</b></span>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">成本毛利</span>
               <span>成本合计 <b class="is-cost">{{ moneyText(feePreview?.summary?.costTotal) }}</b></span>
               <span>
                 实时毛利
                 <b :class="(feePreview?.summary?.grossProfit || 0) >= 0 ? 'is-profit' : 'is-loss'">
                   {{ moneyText(feePreview?.summary?.grossProfit) }}
                 </b>
+                <i class="summary-note">（此毛利为实时毛利，仅供参考）</i>
               </span>
             </div>
           </div>
@@ -2816,9 +2814,16 @@ watch(
 }
 
 .summary-label {
-  min-width: 56px;
+  min-width: 64px;
   color: var(--color-text-secondary);
   font-weight: 600;
+}
+
+.summary-note {
+  margin-left: 6px;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-extra-small);
+  font-style: normal;
 }
 
 .summary-row .is-income {
