@@ -938,9 +938,8 @@ const SETTLE_STATUS_OPTIONS: ColumnOption[] = [
 ]
 
 const poolSchema = reactive<PaneColumn[]>([
-  { key: 'waybillNo', label: '运单号/单元号', prop: 'waybillNo', minWidth: 160, kind: 'link', filterType: 'text', filterMode: 'multi', locked: true },
+  { key: 'waybillNo', label: '运单号', prop: 'waybillNo', minWidth: 160, kind: 'link', filterType: 'text', filterMode: 'multi', locked: true },
   { key: 'unitType', label: '单元类型', prop: 'unitType', minWidth: 96, kind: 'unitType', filterType: 'select', filterOptions: UNIT_TYPE_OPTIONS },
-  { key: 'parentNo', label: '母单号', prop: 'parentNo', minWidth: 150, kind: 'text', filterType: 'none' },
   { key: 'customerName', label: '客户名称', prop: 'customerName', minWidth: 150, kind: 'text', filterType: 'text', filterMode: 'multi' },
   { key: 'destName', label: '目的站', prop: 'destName', minWidth: 120, kind: 'text', filterType: 'text' },
   { key: 'nextDeptName', label: '到达网点', prop: 'nextDeptName', minWidth: 140, kind: 'text', filterType: 'select' },
