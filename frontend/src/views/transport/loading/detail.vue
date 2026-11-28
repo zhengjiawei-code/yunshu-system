@@ -506,6 +506,9 @@
                   <el-option v-for="item in ALLOC_METHOD_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                 </el-select>
               </div>
+              <span v-if="feeSaveText" class="fee-save-state" :class="{ 'is-error': feeSaveState === 'error' }">
+                {{ feeSaveText }}
+              </span>
               <el-button link type="primary" class="fee-preview-entry" @click="feePreviewVisible = true">
                 分摊预览
                 <span class="fee-preview-entry__count">{{ feePreview?.units?.length || 0 }} 个单元</span>
@@ -635,7 +638,6 @@
         <div class="detail-foot">
           <div class="acts">
             <el-button @click="activeTab = 'load'">返回装车配载</el-button>
-            <el-button :disabled="!feeEditable" :loading="feeSaving" @click="saveFees">保存费用</el-button>
             <el-button v-if="editable" type="primary" :loading="departSaving" @click="openDepart">发车</el-button>
             <el-button v-else type="danger" plain @click="cancelDepart">取消发车</el-button>
           </div>
@@ -1946,6 +1948,8 @@ const feePreview = ref<FeePreview | null>(null)
 const feePreviewLoading = ref(false)
 const feePreviewVisible = ref(false)
 const feeSaving = ref(false)
+const feeSaveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+const feeSavedAt = ref('')
 const feeInitialized = ref(false)
 /** 到站付运输费：按目的网点录入的金额 */
 const arrivalTransportType = ref<FeeTypeRow | null>(null)
@@ -1954,6 +1958,8 @@ let feeTypesLoaded = false
 let destFeeInitialized = false
 let feePreviewTimer: number | undefined
 let feePreviewToken = 0
+let feeAutoSaveTimer: number | undefined
+let feeAutoSavePending = false
 
 const destFeeRows = computed(() =>
   dests.value.map((dest) => {
@@ -2104,8 +2110,58 @@ function feePayload() {
 }
 
 function onFeeChanged() {
-  scheduleFeePreview()
+  scheduleFeeAutoSave()
 }
+
+/** 输入即自动保存：防抖 700ms，落库同时重算分摊与毛利 */
+function scheduleFeeAutoSave() {
+  if (!feeEditable.value) return
+  if (feeAutoSaveTimer) window.clearTimeout(feeAutoSaveTimer)
+  feeAutoSaveTimer = window.setTimeout(() => {
+    feeAutoSaveTimer = undefined
+    void autoSaveFees()
+  }, 700)
+}
+
+async function autoSaveFees() {
+  if (!feeEditable.value) return
+  if (feeSaving.value) {
+    // 保存进行中又改了值：标记待保存，本轮结束后再存一次，保证最后输入一定落库
+    feeAutoSavePending = true
+    return
+  }
+  if (!costFeeTypes.value.length) return
+  feeSaving.value = true
+  feeSaveState.value = 'saving'
+  try {
+    const result = await saveTripFees(tripId, feePayload())
+    feePreview.value = result
+    initDestFeeAmounts(result)
+    feeSaveState.value = 'saved'
+    feeSavedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+  } catch {
+    feeSaveState.value = 'error'
+  } finally {
+    feeSaving.value = false
+    if (feeAutoSavePending) {
+      feeAutoSavePending = false
+      scheduleFeeAutoSave()
+    }
+  }
+}
+
+const feeSaveText = computed(() => {
+  switch (feeSaveState.value) {
+    case 'saving':
+      return '保存中…'
+    case 'saved':
+      return `已自动保存 ${feeSavedAt.value}`
+    case 'error':
+      return '自动保存失败，修改后重试'
+    default:
+      return ''
+  }
+})
 
 function scheduleFeePreview() {
   if (feePreviewTimer) window.clearTimeout(feePreviewTimer)
@@ -2132,16 +2188,19 @@ async function requestFeePreview() {
 async function saveFees(): Promise<boolean> {
   if (!feeEditable.value) return false
   if (!costFeeTypes.value.length) {
-    ElMessage.warning('未加载到车次级成本项，无法保存费用')
     return false
+  }
+  if (feeAutoSaveTimer) {
+    window.clearTimeout(feeAutoSaveTimer)
+    feeAutoSaveTimer = undefined
   }
   feeSaving.value = true
   try {
     const result = await saveTripFees(tripId, feePayload())
     feePreview.value = result
     initDestFeeAmounts(result)
-    ElMessage.success('费用已保存，分摊与毛利已重算')
-    await loadTripDetail()
+    feeSaveState.value = 'saved'
+    feeSavedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
     return true
   } catch {
     return false
@@ -2792,6 +2851,15 @@ watch(
 
 .fee-preview-entry {
   font-size: var(--font-size-extra-small);
+}
+
+.fee-save-state {
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-extra-small);
+}
+
+.fee-save-state.is-error {
+  color: var(--color-danger);
 }
 
 .fee-preview-entry__count {
