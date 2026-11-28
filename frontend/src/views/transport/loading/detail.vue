@@ -648,7 +648,17 @@
           <el-input v-model="quickVehicle.plateNo" placeholder="如：粤A·12345" />
         </el-form-item>
         <el-form-item label="车型">
-          <el-input v-model="quickVehicle.vehicleType" placeholder="选填" />
+          <el-select
+            v-model="quickVehicle.vehicleType"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            class="w-full"
+            placeholder="选择或输入车型"
+          >
+            <el-option v-for="item in vehicleTypeOptions" :key="item.name" :label="item.name" :value="item.name" />
+          </el-select>
         </el-form-item>
         <el-form-item label="核定载重(kg)">
           <el-input-number v-model="quickVehicle.vehicleLoad" :min="0" :controls="false" class="w-full" />
@@ -1720,6 +1730,7 @@ async function onDestRefresh() {
 
 const vehicleOptions = ref<TripOption[]>([])
 const driverOptions = ref<TripOption[]>([])
+const vehicleTypeOptions = ref<TripOption[]>([])
 const vehicleTouched = ref(false)
 const vehicle = reactive<{
   vehicleId?: number | null
@@ -1806,11 +1817,27 @@ async function loadDriverOptions() {
   }
 }
 
+/** 车型下拉：已有车辆车型 + 常用车型预设，缺省也能直接输入新车型 */
+const VEHICLE_TYPE_PRESETS = ['4.2 米厢车', '6.8 米厢车', '9.6 米厢车', '13 米高栏', '17.5 米平板']
+
+async function loadVehicleTypeOptions() {
+  if (vehicleTypeOptions.value.length) return
+  let names: string[] = []
+  try {
+    names = (await getTripOptions('vehicleType')).map((item) => item.name).filter(Boolean)
+  } catch {
+    // 请求层已提示
+  }
+  vehicleTypeOptions.value = Array.from(new Set([...names, ...VEHICLE_TYPE_PRESETS]))
+    .map((name, index) => ({ id: index + 1, name, type: 'vehicleType' }))
+}
+
 function openQuickVehicle() {
   quickVehicle.plateNo = ''
   quickVehicle.vehicleType = ''
   quickVehicle.vehicleLoad = undefined
   quickVehicle.vehicleVolume = undefined
+  void loadVehicleTypeOptions()
   quickVehicleVisible.value = true
 }
 
